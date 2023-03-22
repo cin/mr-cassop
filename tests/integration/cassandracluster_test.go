@@ -6,24 +6,24 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/labels"
 
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 var _ = Describe("prober, statefulsets and reaper", func() {

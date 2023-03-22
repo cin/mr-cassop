@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )

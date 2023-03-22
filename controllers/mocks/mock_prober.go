@@ -8,8 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	v1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	gomock "github.com/golang/mock/gomock"
-	v1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
 )
 
 // MockProberClient is a mock of ProberClient interface.

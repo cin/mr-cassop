@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cassandra-operator
+  name: mr-cassop
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
-      operator: cassandra-operator
+      operator: mr-cassop
   template:
     metadata:
       labels:
-        operator: cassandra-operator
+        operator: mr-cassop
     spec:
       {{- with .Values.container.imagePullSecret }}
       imagePullSecrets:
       - name:  {{ . | quote }}
       {{- end }}
-      serviceAccountName: cassandra-operator
+      serviceAccountName: mr-cassop
       containers:
-        - name: cassandra-operator
+        - name: mr-cassop
           image: "{{ .Values.container.image }}"
           imagePullPolicy: {{ .Values.container.imagePullPolicy }}
           resources:

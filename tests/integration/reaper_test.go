@@ -1,10 +1,10 @@
 package integration
 
 import (
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/reaper"
 	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -214,7 +214,7 @@ var _ = Describe("repair schedules in reaper", func() {
 				externalRepairSchedule,
 				{
 					ID:                  "id-1",
-					Owner:               "cassandra-operator",
+					Owner:               "mr-cassop",
 					State:               "ACTIVE",
 					Intensity:           1,
 					KeyspaceName:        "system_traces",
@@ -229,7 +229,7 @@ var _ = Describe("repair schedules in reaper", func() {
 				},
 				{
 					ID:                  "id-2",
-					Owner:               "cassandra-operator",
+					Owner:               "mr-cassop",
 					State:               "ACTIVE",
 					Intensity:           1,
 					KeyspaceName:        "system_auth",
@@ -268,7 +268,7 @@ var _ = Describe("repair schedules in reaper", func() {
 				externalRepairSchedule,
 				{
 					ID:                  "id-1",
-					Owner:               "cassandra-operator",
+					Owner:               "mr-cassop",
 					State:               "ACTIVE",
 					Intensity:           1,
 					KeyspaceName:        "system_traces",

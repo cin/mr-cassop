@@ -23,8 +23,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ibm/cassandra-operator/controllers/icarus"
-
 	"github.com/go-logr/zapr"
 	"github.com/gocql/gocql"
 	"go.uber.org/zap"
@@ -40,20 +38,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers"
-	"github.com/ibm/cassandra-operator/controllers/cassandrabackup"
-	"github.com/ibm/cassandra-operator/controllers/cassandrarestore"
-	operatorCfg "github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/jobs"
-	"github.com/ibm/cassandra-operator/controllers/logger"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/nodectl"
-	"github.com/ibm/cassandra-operator/controllers/prober"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
-	"github.com/ibm/cassandra-operator/controllers/webhooks"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers"
+	"github.com/cin/mr-cassop/controllers/cassandrabackup"
+	"github.com/cin/mr-cassop/controllers/cassandrarestore"
+	operatorCfg "github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/icarus"
+	"github.com/cin/mr-cassop/controllers/jobs"
+	"github.com/cin/mr-cassop/controllers/logger"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/nodectl"
+	"github.com/cin/mr-cassop/controllers/prober"
+	"github.com/cin/mr-cassop/controllers/reaper"
+	"github.com/cin/mr-cassop/controllers/webhooks"
 )
 
 var (
@@ -71,7 +70,7 @@ var (
 )
 
 const (
-	leaderElectionID = "cassandra-operator-leader-election-lock"
+	leaderElectionID = "mr-cassop-leader-election-lock"
 
 	healthCheckBindAddress = 8042
 )

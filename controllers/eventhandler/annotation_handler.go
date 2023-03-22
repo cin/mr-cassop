@@ -1,7 +1,7 @@
 package eventhandler
 
 import (
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
+	"github.com/cin/mr-cassop/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"

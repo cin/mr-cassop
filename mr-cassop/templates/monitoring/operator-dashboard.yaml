@@ -7,7 +7,7 @@ metadata:
   labels:
   {{- toYaml .Values.monitoring.grafanaDashboard.labels | nindent 4 }}
 data:
-  cassandra-operator.json: |-
+  mr-cassop.json: |-
     {
       "annotations": {
         "list": [

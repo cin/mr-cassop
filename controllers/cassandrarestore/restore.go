@@ -3,8 +3,8 @@ package cassandrarestore
 import (
 	"context"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/icarus"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/icarus"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 )

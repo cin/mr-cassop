@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cin/mr-cassop/prober/jolokia"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ibm/cassandra-operator/prober/jolokia"
 )
 
 type nodeState struct {

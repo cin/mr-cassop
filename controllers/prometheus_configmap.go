@@ -2,10 +2,11 @@ package controllers
 
 import (
 	"context"
+
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

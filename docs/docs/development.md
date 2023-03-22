@@ -90,7 +90,7 @@ make e2e-tests
 To download and run docs locally, clone the repo and then go to the docs directory:
 
 ```console
-cd ./cassandra-operator/docs
+cd ./mr-cassop/docs
 ```
 
 If `npm` is not already installed it can be installed with:

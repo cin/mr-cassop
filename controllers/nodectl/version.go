@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl/jolokia"
+	"github.com/cin/mr-cassop/controllers/nodectl/jolokia"
 	"github.com/pkg/errors"
 )
 

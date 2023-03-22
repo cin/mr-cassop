@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ibm/cassandra-operator/controllers/certs"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	"github.com/cin/mr-cassop/controllers/certs"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/pkg/errors"
 )
 

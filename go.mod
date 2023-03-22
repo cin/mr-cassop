@@ -1,4 +1,4 @@
-module github.com/ibm/cassandra-operator
+module github.com/cin/mr-cassop
 
 go 1.18
 

@@ -7,8 +7,8 @@ package mocks
 import (
 	reflect "reflect"
 
+	cql "github.com/cin/mr-cassop/controllers/cql"
 	gomock "github.com/golang/mock/gomock"
-	cql "github.com/ibm/cassandra-operator/controllers/cql"
 )
 
 // MockCqlClient is a mock of CqlClient interface.
