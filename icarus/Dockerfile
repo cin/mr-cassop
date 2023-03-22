@@ -1,5 +1,4 @@
-ARG DOCKER_PROXY_REGISTRY=""
-FROM ${DOCKER_PROXY_REGISTRY}openjdk:11-jre-bullseye
+FROM openjdk:11-jre-bullseye
 ARG ICARUS_VERSION=2.0.4
 
 RUN wget https://github.com/instaclustr/icarus/releases/download/icarus-${ICARUS_VERSION}/icarus.jar

@@ -1,5 +1,4 @@
-ARG DOCKER_PROXY_REGISTRY=""
-FROM ${DOCKER_PROXY_REGISTRY}golang:1.18 as builder
+FROM golang:1.18 as builder
 
 WORKDIR /workspace
 
@@ -19,8 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     -a \
     -o bin/mr-cassop main.go
 
-ARG DOCKER_PROXY_REGISTRY=""
-FROM ${DOCKER_PROXY_REGISTRY}debian:buster-slim
+FROM debian:buster-slim
 
 WORKDIR /
 
