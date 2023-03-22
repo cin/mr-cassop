@@ -101,7 +101,6 @@ jobs:
     - name: Authenticate to Docker Proxy Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ secrets.DOCKER_PROXY_REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -111,7 +110,6 @@ jobs:
         file: Dockerfile
         build-args: |
           VERSION=${{ env.GITHUB_REF_SLUG }}
-          DOCKER_PROXY_REGISTRY=${{ secrets.DOCKER_PROXY_REGISTRY }}/
         tags: cinple/${{ env.ICR_NAMESPACE }}/mr-cassop:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=mr-cassop.tar
 
@@ -149,7 +147,6 @@ jobs:
     - name: Authenticate to Docker Proxy Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ secrets.DOCKER_PROXY_REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -159,7 +156,6 @@ jobs:
         file: ./cassandra/Dockerfile
         context: ./cassandra
         tags: cinple/${{ env.ICR_NAMESPACE }}/cassandra:${{ env.GITHUB_REF_SLUG }}
-        build-args: DOCKER_PROXY_REGISTRY=${{ secrets.DOCKER_PROXY_REGISTRY }}/
         outputs: type=docker,dest=cassandra.tar
 
     - name: Run Trivy vulnerability scanner
@@ -196,7 +192,6 @@ jobs:
     - name: Authenticate to Docker Proxy Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ secrets.DOCKER_PROXY_REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -207,7 +202,6 @@ jobs:
         context: ./prober
         build-args: |
           VERSION=${{ env.GITHUB_REF_SLUG }}
-          DOCKER_PROXY_REGISTRY=${{ secrets.DOCKER_PROXY_REGISTRY }}/
         tags: cinple/${{ env.ICR_NAMESPACE }}/prober:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=prober.tar
 
@@ -245,7 +239,6 @@ jobs:
     - name: Authenticate to Docker Proxy Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ secrets.DOCKER_PROXY_REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -254,7 +247,6 @@ jobs:
       with:
         file: ./jolokia/Dockerfile
         context: ./jolokia
-        build-args: DOCKER_PROXY_REGISTRY=${{ secrets.DOCKER_PROXY_REGISTRY }}/
         tags: cinple/${{ env.ICR_NAMESPACE }}/jolokia:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=jolokia.tar
 
@@ -293,7 +285,6 @@ jobs:
     - name: Authenticate to Docker Proxy Registry
       uses: docker/login-action@v3
       with:
-        registry: ${{ secrets.DOCKER_PROXY_REGISTRY }}
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -304,7 +295,6 @@ jobs:
         context: ./icarus
         build-args: |
           ICARUS_VERSION: ${{ env.ICARUS_VERSION }}
-          DOCKER_PROXY_REGISTRY=${{ secrets.DOCKER_PROXY_REGISTRY }}/
         tags: cinple/${{ env.ICR_NAMESPACE }}/icarus:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=icarus.tar
 
