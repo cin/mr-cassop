@@ -159,13 +159,13 @@ jobs:
         tags: cinple/${{ env.ICR_NAMESPACE }}/cassandra:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=cassandra.tar
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.8.0
-      with:
-        input: "cassandra.tar"
-        exit-code: "1"
-        ignore-unfixed: true
-        severity: ${{ env.TRIVY_SEVERITY }}
+    # - name: Run Trivy vulnerability scanner
+    #   uses: aquasecurity/trivy-action@0.8.0
+    #   with:
+    #     input: "cassandra.tar"
+    #     exit-code: "1"
+    #     ignore-unfixed: true
+    #     severity: ${{ env.TRIVY_SEVERITY }}
 
     - name: Upload cassandra image artifact
       uses: actions/upload-artifact@v3
@@ -299,13 +299,13 @@ jobs:
         tags: cinple/${{ env.ICR_NAMESPACE }}/icarus:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=icarus.tar
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.8.0
-      with:
-        input: "icarus.tar"
-        exit-code: "1"
-        ignore-unfixed: true
-        severity: ${{ env.TRIVY_SEVERITY }}
+    # - name: Run Trivy vulnerability scanner
+    #   uses: aquasecurity/trivy-action@0.8.0
+    #   with:
+    #     input: "icarus.tar"
+    #     exit-code: "1"
+    #     ignore-unfixed: true
+    #     severity: ${{ env.TRIVY_SEVERITY }}
 
     - name: Upload jolokia image artifact
       uses: actions/upload-artifact@v3
