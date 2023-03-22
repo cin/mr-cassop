@@ -6,7 +6,7 @@ SHELL ?= bash
 # Current Operator version
 VERSION ?= 0.0.1
 # Default bundle image tag
-IMAGE_TAG_BASE ?= ibmcom/cassandra-operator
+IMAGE_TAG_BASE ?= ibmcom/mr-cassop
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
@@ -82,8 +82,8 @@ deploy: manifests kustomize
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./..." output:crd:artifacts:config=config/crd/bases
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./..." output:crd:artifacts:config=$(ROOT_DIR)cassandra-operator/crds
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=cassandra-operator paths="./..." output:crd:none output:rbac:stdout > $(ROOT_DIR)cassandra-operator/templates/clusterrole.yaml
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./..." output:crd:artifacts:config=$(ROOT_DIR)mr-cassop/crds
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=mr-cassop paths="./..." output:crd:none output:rbac:stdout > $(ROOT_DIR)mr-cassop/templates/clusterrole.yaml
 
 # Run go fmt against code
 fmt:

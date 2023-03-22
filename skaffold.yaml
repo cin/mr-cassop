@@ -2,19 +2,19 @@ apiVersion: skaffold/v2beta25
 kind: Config
 build:
   artifacts:
-  - image: "us.icr.io/cassandra-operator/cassandra-operator"
+  - image: "cinple/mr-cassop/mr-cassop"
     context: .
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/prober"
+  - image: "cinple/mr-cassop/prober"
     context: prober/
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/cassandra"
+  - image: "cinple/mr-cassop/cassandra"
     context: cassandra/
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/jolokia"
+  - image: "cinple/mr-cassop/jolokia"
     context: jolokia/
     docker:
       dockerfile: Dockerfile
@@ -27,7 +27,7 @@ build:
 #    useDockerCLI: true
 #build:
 #  artifacts:
-#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/cassandra-operator"
+#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/mr-cassop"
 #    context: .
 #    docker:
 #      dockerfile: Dockerfile
@@ -52,19 +52,19 @@ build:
 deploy:
   helm:
     releases:
-    - name: "cassandra-operator-{{.USER}}"
-      chartPath: ./cassandra-operator
+    - name: "mr-cassop-{{.USER}}"
+      chartPath: ./mr-cassop
       valuesFiles:
-      - cassandra-operator/values.yaml
+      - mr-cassop/values.yaml
       setValueTemplates:
-        container.image: "us.icr.io/cassandra-operator/cassandra-operator:{{.USER}}"
+        container.image: "cinple/mr-cassop/mr-cassop:{{.USER}}"
         container.imagePullSecret: icm-coreeng-pull-secret
         container.imagePullPolicy: Always
         logLevel: debug
         logFormat: console
-        proberImage: "us.icr.io/cassandra-operator/prober:{{.USER}}"
-        jolokiaImage: "us.icr.io/cassandra-operator/jolokia:{{.USER}}"
-        cassandraImage: "us.icr.io/cassandra-operator/cassandra:{{.USER}}"
+        proberImage: "cinple/mr-cassop/prober:{{.USER}}"
+        jolokiaImage: "cinple/mr-cassop/jolokia:{{.USER}}"
+        cassandraImage: "cinple/mr-cassop/cassandra:{{.USER}}"
         admissionWebhooks.enabled: true
         clusterDashboards.enabled[0]: "datastax"
         clusterDashboards.enabled[1]: "instaclustr"
@@ -96,17 +96,17 @@ profiles:
   deploy:
     helm:
       releases:
-      - name: "cassandra-operator-{{.USER}}"
-        chartPath: ./cassandra-operator
+      - name: "mr-cassop-{{.USER}}"
+        chartPath: ./mr-cassop
         valuesFiles:
-        - cassandra-operator/values.yaml
+        - mr-cassop/values.yaml
         setValueTemplates:
-          container.image: "us.icr.io/cassandra-operator/cassandra-operator:{{.USER}}"
+          container.image: "cinple/mr-cassop/mr-cassop:{{.USER}}"
           container.imagePullPolicy: Never
           logLevel: debug
-          proberImage: "us.icr.io/cassandra-operator/prober:{{.USER}}"
-          jolokiaImage: "us.icr.io/cassandra-operator/jolokia:{{.USER}}"
-          cassandraImage: "us.icr.io/cassandra-operator/cassandra:{{.USER}}"
+          proberImage: "cinple/mr-cassop/prober:{{.USER}}"
+          jolokiaImage: "cinple/mr-cassop/jolokia:{{.USER}}"
+          cassandraImage: "cinple/mr-cassop/cassandra:{{.USER}}"
         createNamespace: true
         wait: true
         packaged:

@@ -3,10 +3,10 @@ package controllers
 import (
 	"context"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/compare"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/compare"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
 
 	"github.com/pkg/errors"
 

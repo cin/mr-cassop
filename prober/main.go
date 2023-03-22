@@ -6,12 +6,12 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/ibm/cassandra-operator/prober/logger"
+	"github.com/cin/mr-cassop/prober/logger"
 
-	"github.com/ibm/cassandra-operator/prober/config"
-	"github.com/ibm/cassandra-operator/prober/prober"
+	"github.com/cin/mr-cassop/prober/config"
+	"github.com/cin/mr-cassop/prober/prober"
 
-	"github.com/ibm/cassandra-operator/prober/jolokia"
+	"github.com/cin/mr-cassop/prober/jolokia"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/caarlos0/env/v6"

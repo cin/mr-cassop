@@ -12,7 +12,7 @@ Example of such secret:
 ```yaml
 apiVersion: v1
 data:
-  admin-role: Y2Fzc2FuZHJhLW9wZXJhdG9y #cassandra-operator
+  admin-role: Y2Fzc2FuZHJhLW9wZXJhdG9y #mr-cassop
   admin-password: ZXhhbXBsZS1wYXNzd29yZA== #example-password
 kind: Secret
 metadata:
@@ -35,7 +35,7 @@ spec:
 You can also create a secret by running a `kubectl` command:
 
 ```bash
-kubectl create secret generic admin-role --from-literal=admin-role=cassandra-operator --from-literal=admin-password=example-password
+kubectl create secret generic admin-role --from-literal=admin-role=mr-cassop --from-literal=admin-password=example-password
 ```
 
 ### Cluster Init

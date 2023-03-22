@@ -6,9 +6,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/gocql/gocql"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
 )
 
 func newCassandraConfig(cc *v1alpha1.CassandraCluster, adminRole string, adminPwd string, logr *zap.SugaredLogger) *gocql.ClusterConfig {

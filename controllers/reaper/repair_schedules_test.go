@@ -10,7 +10,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
+	"github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 func TestRepairSchedules(t *testing.T) {

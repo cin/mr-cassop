@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/labels"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"

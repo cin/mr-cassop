@@ -3,10 +3,10 @@ package cassandrabackup
 import (
 	"fmt"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/icarus"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/icarus"
 )
 
 func createBackupRequest(cc *v1alpha1.CassandraCluster, backup *v1alpha1.CassandraBackup) icarus.BackupRequest {

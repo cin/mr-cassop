@@ -8,8 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	nodectl "github.com/cin/mr-cassop/controllers/nodectl"
 	gomock "github.com/golang/mock/gomock"
-	nodectl "github.com/ibm/cassandra-operator/controllers/nodectl"
 )
 
 // MockNodectl is a mock of Nodectl interface.

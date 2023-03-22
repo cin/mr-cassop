@@ -3,15 +3,15 @@ package e2e
 import (
 	"strings"
 
-	"github.com/ibm/cassandra-operator/controllers/util"
+	"github.com/cin/mr-cassop/controllers/util"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/labels"
 
 	"github.com/gogo/protobuf/proto"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 

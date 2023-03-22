@@ -1,5 +1,5 @@
 {
-  "name": "cassandra-operator",
+  "name": "mr-cassop",
   "version": "1.0.0",
   "private": true,
   "scripts": {
