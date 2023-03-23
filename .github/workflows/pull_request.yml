@@ -441,8 +441,8 @@ jobs:
         docker load -i icarus.tar
     - name: Push Images to ICR
       run: |
-        docker push "cinple/${{ env.ICR_NAMESPACE }}/mr-cassop:$GITHUB_REF_SLUG"
-        docker push "cinple/${{ env.ICR_NAMESPACE }}/prober:$GITHUB_REF_SLUG"
-        docker push "cinple/${{ env.ICR_NAMESPACE }}/cassandra:$GITHUB_REF_SLUG"
-        docker push "cinple/${{ env.ICR_NAMESPACE }}/jolokia:$GITHUB_REF_SLUG"
-        docker push "cinple/${{ env.ICR_NAMESPACE }}/icarus:$GITHUB_REF_SLUG"
+        docker push "cinple/mr-cassop:$GITHUB_REF_SLUG"
+        docker push "cinple/prober:$GITHUB_REF_SLUG"
+        docker push "cinple/cassandra:$GITHUB_REF_SLUG"
+        docker push "cinple/jolokia:$GITHUB_REF_SLUG"
+        docker push "cinple/icarus:$GITHUB_REF_SLUG"
