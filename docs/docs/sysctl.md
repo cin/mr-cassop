@@ -3,7 +3,7 @@ title: Sysctl configuration
 slug: /sysctl
 ---
 
-In order for Cassandra to operate correctly, Cassandra operator sets some [`sysctl`](https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/) parameters by default.
+In order for Cassandra to operate correctly, mr-cassop sets some [`sysctl`](https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/) parameters by default.
 
 They can be overriden by setting the `.spec.cassandra.sysctls` map in the following way:
 

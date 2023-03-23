@@ -1050,7 +1050,7 @@ data:
         ]
       },
       "timezone": "browser",
-      "title": "Cassandra Operator",
+      "title": "mr-cassop",
       "version": null
     }
   {{ end }}

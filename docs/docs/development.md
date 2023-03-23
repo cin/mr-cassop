@@ -77,7 +77,7 @@ if you use Ginkgo CLI.
 
 E2E tests run on a k8s cluster. These tests deploy the C* Custom Resource Definition (CRD) in the k8s cluster.
 
->Note: before running, make sure the Cassandra operator is deployed in your k8s namespace. 
+>Note: before running, make sure the mr-cassop is deployed in your k8s namespace. 
 
 To run e2e tests:
 

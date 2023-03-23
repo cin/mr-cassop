@@ -111,7 +111,7 @@ jobs:
         file: Dockerfile
         build-args: |
           VERSION=${{ env.GITHUB_REF_SLUG }}
-        tags: cinple/${{ env.ICR_NAMESPACE }}/mr-cassop:${{ env.GITHUB_REF_SLUG }}
+        tags: cinple/mr-cassop:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=mr-cassop.tar
 
     - name: Run Trivy vulnerability scanner
@@ -122,7 +122,7 @@ jobs:
         ignore-unfixed: true
         severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload cassandra operator image artifact
+    - name: Upload mr-cassop image artifact
       uses: actions/upload-artifact@v3
       with:
         name: mr-cassop
@@ -156,7 +156,7 @@ jobs:
       with:
         file: ./cassandra/Dockerfile
         context: ./cassandra
-        tags: cinple/${{ env.ICR_NAMESPACE }}/cassandra:${{ env.GITHUB_REF_SLUG }}
+        tags: cinple/cassandra:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=cassandra.tar
 
     # - name: Run Trivy vulnerability scanner
@@ -203,7 +203,7 @@ jobs:
         context: ./prober
         build-args: |
           VERSION=${{ env.GITHUB_REF_SLUG }}
-        tags: cinple/${{ env.ICR_NAMESPACE }}/prober:${{ env.GITHUB_REF_SLUG }}
+        tags: cinple/prober:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=prober.tar
 
     - name: Run Trivy vulnerability scanner
@@ -248,7 +248,7 @@ jobs:
       with:
         file: ./jolokia/Dockerfile
         context: ./jolokia
-        tags: cinple/${{ env.ICR_NAMESPACE }}/jolokia:${{ env.GITHUB_REF_SLUG }}
+        tags: cinple/jolokia:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=jolokia.tar
 
     - name: Run Trivy vulnerability scanner
@@ -296,7 +296,7 @@ jobs:
         context: ./icarus
         build-args: |
           ICARUS_VERSION: ${{ env.ICARUS_VERSION }}
-        tags: cinple/${{ env.ICR_NAMESPACE }}/icarus:${{ env.GITHUB_REF_SLUG }}
+        tags: cinple/icarus:${{ env.GITHUB_REF_SLUG }}
         outputs: type=docker,dest=icarus.tar
 
     # - name: Run Trivy vulnerability scanner

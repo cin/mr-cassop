@@ -26,7 +26,7 @@ jobs:
       id: meta
       with:
         images: |
-          cinple/${{ env.ICR_NAMESPACE }}/mr-cassop
+          cinple/mr-cassop
         tags: type=ref,event=tag
 
     - name: Setup Buildx
@@ -61,7 +61,7 @@ jobs:
       id: meta
       with:
         images: |
-          cinple/${{ env.ICR_NAMESPACE }}/cassandra
+          cinple/cassandra
         tags: type=ref,prefix=${{ env.CASSANDRA_VERSION }}-,event=tag
 
     - name: Setup Buildx
@@ -97,7 +97,7 @@ jobs:
       id: meta
       with:
         images: |
-          cinple/${{ env.ICR_NAMESPACE }}/prober
+          cinple/prober
         tags: type=ref,event=tag
 
     - name: Setup Buildx
@@ -132,7 +132,7 @@ jobs:
       id: meta
       with:
         images: |
-          cinple/${{ env.ICR_NAMESPACE }}/jolokia
+          cinple/jolokia
         tags: type=ref,event=tag
 
     - name: Setup Buildx
@@ -167,7 +167,7 @@ jobs:
       id: meta
       with:
         images: |
-          cinple/${{ env.ICR_NAMESPACE }}/icarus
+          cinple/icarus
         tags: type=ref,event=tag
 
     - name: Setup Buildx
@@ -283,7 +283,7 @@ jobs:
     #              "type": "section",
     #              "text": {
     #                "type": "mrkdwn",
-    #                "text": ":rocket:A new version of the Cassandra Operator has been released *${{ needs.helm-release.outputs.tag }}*"
+    #                "text": ":rocket:A new version of mr-cassop has been released *${{ needs.helm-release.outputs.tag }}*"
     #              }
     #            },
     #            {
@@ -310,7 +310,7 @@ jobs:
     #              "type": "section",
     #              "text": {
     #                "type": "mrkdwn",
-    #                "text": ":rocket:A new version of the Cassandra Operator has been released *${{ needs.helm-release.outputs.tag }}*"
+    #                "text": ":rocket:A new version of mr-cassop has been released *${{ needs.helm-release.outputs.tag }}*"
     #              }
     #            },
     #            {
