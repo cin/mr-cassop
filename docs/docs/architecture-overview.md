@@ -3,7 +3,7 @@ title: Overview
 slug: /architecture-overview
 ---
 
-Cassandra operator deploys and manages Cassandra clusters and a few other components that help maintain the cluster.
+mr-cassop deploys and manages Cassandra clusters and a few other components that help maintain the cluster.
 
 A `CassandraCluster` consists of the following components:
 

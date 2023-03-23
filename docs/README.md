@@ -1,4 +1,4 @@
-# Cassandra Operator Documentation
+# mr-cassop Documentation
 
 ## Running Locally
 

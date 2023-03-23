@@ -3,7 +3,7 @@ title: Keyspace Management
 slug: /keyspace-management
 ---
 
-The Cassandra operator supports configuring replication settings for desired keyspaces. 
+mr-cassop supports configuring replication settings for desired keyspaces. 
 
 For each keyspace defined in `.spec.systemKeyspaces.keyspaces`, the operator will set options from `.spec.systemKeyspaces.dcs`. If the latter is not specified, the default is all DCs, each with replication factor of `3`. 
 

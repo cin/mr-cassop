@@ -16,7 +16,7 @@ var (
 	}
 )
 
-// Config contains the Cassandra Operator configs
+// Config contains mr-cassop configs
 type Config struct {
 	Namespace             string        `env:"NAMESPACE" envDefault:"default"`
 	LeaderElectionEnabled bool          `env:"LEADERELECTION_ENABLED" envDefault:"true"`

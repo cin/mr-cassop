@@ -41,7 +41,7 @@ kubectl create secret docker-registry container-reg-secret \
     --docker-email=<email>
 ```
 
-## Install Cassandra Operator
+## Install mr-cassop
 
 Use the image pull secret created in the previous step to install the operator:
 
@@ -125,7 +125,7 @@ UN  172.30.200.83   924.49 KiB  16           100.0%            dd93c221-a8b1-47f
 
 See the [CassandraCluster field specification reference](cassandracluster-configuration.md) for more details.
 
-## Uninstall Cassandra Operator and the Cluster
+## Uninstall mr-cassop and the Cluster
 
 ```bash
 kubectl delete CassandraCluster/example
