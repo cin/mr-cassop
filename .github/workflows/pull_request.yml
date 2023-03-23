@@ -382,6 +382,12 @@ jobs:
     - name: Modify GITHUB_REF_SLUG
       run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
+    - name: Authenticate to Docker Proxy Registry
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     # - name: Install IBM Cloud CLI
     #   run: |
     #     curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
