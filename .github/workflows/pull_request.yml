@@ -12,40 +12,39 @@ env:
   TRIVY_SEVERITY: CRITICAL
 
 jobs:
-
   run-unit-tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Go Lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        args: --timeout=5m --enable exportloopref
-        skip-pkg-cache: true
-        skip-build-cache: true
+      - name: Go Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout=5m --enable exportloopref
+          skip-pkg-cache: true
+          skip-build-cache: true
 
-    - name: Get dependencies
-      run: go mod download
+      - name: Get dependencies
+        run: go mod download
 
-    - name: Run operator unit tests
-      run: go test ./controllers/... -v -coverprofile=operator_unit.out -coverpkg=./...
+      - name: Run operator unit tests
+        run: go test ./controllers/... -v -coverprofile=operator_unit.out -coverpkg=./...
 
-    - name: Run prober unit tests
-      run: |
-        cd ./prober
-        go test ./... -v -coverprofile=prober_unit.out -coverpkg=./...
+      - name: Run prober unit tests
+        run: |
+          cd ./prober
+          go test ./... -v -coverprofile=prober_unit.out -coverpkg=./...
 
-    - name: Get tests coverage
-      run: |
-        go tool cover -func=operator_unit.out | tail -n1 | awk "{print \"Operator unit tests coverage: \" \$3}"
-        go tool cover -func=prober_unit.out | tail -n1 | awk "{print \"Prober unit tests coverage: \" \$3}"
+      - name: Get tests coverage
+        run: |
+          go tool cover -func=operator_unit.out | tail -n1 | awk "{print \"Operator unit tests coverage: \" \$3}"
+          go tool cover -func=prober_unit.out | tail -n1 | awk "{print \"Prober unit tests coverage: \" \$3}"
 
   run-integration-tests:
     runs-on: ubuntu-latest
@@ -58,30 +57,30 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Setup Kubebuilder assets
-      run: |
-        curl -sSLo envtest-bins.tar.gz "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-$k8s-linux-amd64.tar.gz"
-        mkdir kubebuilder-$k8s
-        tar -C kubebuilder-$k8s/ --strip-components=1 -zvxf envtest-bins.tar.gz && rm -f envtest-bins.tar.gz
-        echo "KUBEBUILDER_ASSETS=$(pwd)/kubebuilder-$k8s/bin" >> $GITHUB_ENV
-        $(pwd)/kubebuilder-$k8s/bin/kube-apiserver --version
-      env:
-        k8s: ${{ matrix.k8s }}
+      - name: Setup Kubebuilder assets
+        run: |
+          curl -sSLo envtest-bins.tar.gz "https://storage.googleapis.com/kubebuilder-tools/kubebuilder-tools-$k8s-linux-amd64.tar.gz"
+          mkdir kubebuilder-$k8s
+          tar -C kubebuilder-$k8s/ --strip-components=1 -zvxf envtest-bins.tar.gz && rm -f envtest-bins.tar.gz
+          echo "KUBEBUILDER_ASSETS=$(pwd)/kubebuilder-$k8s/bin" >> $GITHUB_ENV
+          $(pwd)/kubebuilder-$k8s/bin/kube-apiserver --version
+        env:
+          k8s: ${{ matrix.k8s }}
 
-    - name: Get dependencies
-      run: go mod download
+      - name: Get dependencies
+        run: go mod download
 
-    - name: Run integration tests
-      run: go test ./tests/integration -v -coverprofile=integration.out -coverpkg=./...
+      - name: Run integration tests
+        run: go test ./tests/integration -v -coverprofile=integration.out -coverpkg=./...
 
-    - name: Get tests coverage
-      run: |
-        go tool cover -func=integration.out | tail -n1 | awk "{print \"Integration tests coverage: \" \$3}"
+      - name: Get tests coverage
+        run: |
+          go tool cover -func=integration.out | tail -n1 | awk "{print \"Integration tests coverage: \" \$3}"
 
   build-operator:
     runs-on: ubuntu-latest
@@ -90,11 +89,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
     - name: Setup Buildx
       uses: docker/setup-buildx-action@v3
@@ -105,14 +104,14 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build operator image
-      uses: docker/build-push-action@v4
-      with:
-        file: Dockerfile
-        build-args: |
-          VERSION=${{ env.GITHUB_REF_SLUG }}
-        tags: cinple/mr-cassop:${{ env.GITHUB_REF_SLUG }}
-        outputs: type=docker,dest=mr-cassop.tar
+      - name: Build operator image
+        uses: docker/build-push-action@v4
+        with:
+          file: Dockerfile
+          build-args: |
+            VERSION=${{ env.GITHUB_REF_SLUG }}
+          tags: cinple/mr-cassop:${{ env.GITHUB_REF_SLUG }}
+          outputs: type=docker,dest=mr-cassop.tar
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@0.14.0
@@ -122,12 +121,12 @@ jobs:
         ignore-unfixed: true
         severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload mr-cassop image artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: mr-cassop
-        path: mr-cassop.tar
-        retention-days: 1
+      - name: Upload mr-cassop image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: mr-cassop
+          path: mr-cassop.tar
+          retention-days: 1
 
   build-cassandra:
     runs-on: ubuntu-latest
@@ -136,11 +135,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
     - name: Setup Buildx
       uses: docker/setup-buildx-action@v3
@@ -151,13 +150,13 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build cassandra image
-      uses: docker/build-push-action@v4
-      with:
-        file: ./cassandra/Dockerfile
-        context: ./cassandra
-        tags: cinple/cassandra:${{ env.GITHUB_REF_SLUG }}
-        outputs: type=docker,dest=cassandra.tar
+      - name: Build cassandra image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./cassandra/Dockerfile
+          context: ./cassandra
+          tags: cinple/cassandra:${{ env.GITHUB_REF_SLUG }}
+          outputs: type=docker,dest=cassandra.tar
 
     # - name: Run Trivy vulnerability scanner
     #   uses: aquasecurity/trivy-action@0.8.0
@@ -167,12 +166,12 @@ jobs:
     #     ignore-unfixed: true
     #     severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload cassandra image artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: cassandra
-        path: cassandra.tar
-        retention-days: 1
+      - name: Upload cassandra image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: cassandra
+          path: cassandra.tar
+          retention-days: 1
 
   build-prober:
     runs-on: ubuntu-latest
@@ -181,11 +180,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
     - name: Setup Buildx
       uses: docker/setup-buildx-action@v3
@@ -196,15 +195,15 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build prober image
-      uses: docker/build-push-action@v4
-      with:
-        file: ./prober/Dockerfile
-        context: ./prober
-        build-args: |
-          VERSION=${{ env.GITHUB_REF_SLUG }}
-        tags: cinple/prober:${{ env.GITHUB_REF_SLUG }}
-        outputs: type=docker,dest=prober.tar
+      - name: Build prober image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./prober/Dockerfile
+          context: ./prober
+          build-args: |
+            VERSION=${{ env.GITHUB_REF_SLUG }}
+          tags: cinple/prober:${{ env.GITHUB_REF_SLUG }}
+          outputs: type=docker,dest=prober.tar
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@0.14.0
@@ -214,12 +213,12 @@ jobs:
         ignore-unfixed: true
         severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload prober image artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: prober
-        path: prober.tar
-        retention-days: 1
+      - name: Upload prober image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: prober
+          path: prober.tar
+          retention-days: 1
 
   build-jolokia:
     runs-on: ubuntu-latest
@@ -228,11 +227,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
     - name: Setup Buildx
       uses: docker/setup-buildx-action@v3
@@ -243,13 +242,13 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build jolokia image
-      uses: docker/build-push-action@v4
-      with:
-        file: ./jolokia/Dockerfile
-        context: ./jolokia
-        tags: cinple/jolokia:${{ env.GITHUB_REF_SLUG }}
-        outputs: type=docker,dest=jolokia.tar
+      - name: Build jolokia image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./jolokia/Dockerfile
+          context: ./jolokia
+          tags: cinple/jolokia:${{ env.GITHUB_REF_SLUG }}
+          outputs: type=docker,dest=jolokia.tar
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@0.14.0
@@ -259,13 +258,12 @@ jobs:
         ignore-unfixed: true
         severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload jolokia image artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: jolokia
-        path: jolokia.tar
-        retention-days: 1
-
+      - name: Upload jolokia image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: jolokia
+          path: jolokia.tar
+          retention-days: 1
 
   build-icarus:
     runs-on: ubuntu-latest
@@ -274,11 +272,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Inject slug/short variables
-      uses: rlespinasse/github-slug-action@v4
+      - name: Inject slug/short variables
+        uses: rlespinasse/github-slug-action@v4
 
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
     - name: Setup Buildx
       uses: docker/setup-buildx-action@v3
@@ -289,15 +287,15 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build icarus image
-      uses: docker/build-push-action@v4
-      with:
-        file: ./icarus/Dockerfile
-        context: ./icarus
-        build-args: |
-          ICARUS_VERSION: ${{ env.ICARUS_VERSION }}
-        tags: cinple/icarus:${{ env.GITHUB_REF_SLUG }}
-        outputs: type=docker,dest=icarus.tar
+      - name: Build icarus image
+        uses: docker/build-push-action@v4
+        with:
+          file: ./icarus/Dockerfile
+          context: ./icarus
+          build-args: |
+            ICARUS_VERSION: ${{ env.ICARUS_VERSION }}
+          tags: cinple/icarus:${{ env.GITHUB_REF_SLUG }}
+          outputs: type=docker,dest=icarus.tar
 
     # - name: Run Trivy vulnerability scanner
     #   uses: aquasecurity/trivy-action@0.8.0
@@ -307,13 +305,12 @@ jobs:
     #     ignore-unfixed: true
     #     severity: ${{ env.TRIVY_SEVERITY }}
 
-    - name: Upload jolokia image artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: icarus
-        path: icarus.tar
-        retention-days: 1
-
+      - name: Upload jolokia image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: icarus
+          path: icarus.tar
+          retention-days: 1
 
   validate-helm-charts:
     runs-on: ubuntu-latest
@@ -323,35 +320,35 @@ jobs:
       with:
         fetch-depth: 0 # ct needs history to compare
 
-    - name: Setup Helm
-      uses: azure/setup-helm@v3.5
-      with:
-        version: ${{ env.HELM_VERSION }}
+      - name: Setup Helm
+        uses: azure/setup-helm@v3.5
+        with:
+          version: ${{ env.HELM_VERSION }}
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Setup chart-testing
-      uses: helm/chart-testing-action@v2.4.0
+      - name: Setup chart-testing
+        uses: helm/chart-testing-action@v2.4.0
 
-    - name: Run chart-testing (list-changed)
-      id: list-changed
-      run: |
-        changed=$(ct list-changed --target-branch=main)
-        if [[ -n "$changed" ]]; then
-          echo "::set-output name=changed::true"
-        fi
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --target-branch=main)
+          if [[ -n "$changed" ]]; then
+            echo "::set-output name=changed::true"
+          fi
 
-    - name: Run chart-testing (lint)
-      run: ct lint --target-branch=main --check-version-increment=false
+      - name: Run chart-testing (lint)
+        run: ct lint --target-branch=main --check-version-increment=false
 
     - name: Download Pluto
       uses: FairwindsOps/pluto/github-action@v5.18.6
 
-    - name: Scan for deprecated k8s APIs
-      run: helm template mr-cassop/ | pluto detect -
+      - name: Scan for deprecated k8s APIs
+        run: helm template mr-cassop/ | pluto detect -
 
   check-docs:
     runs-on: ubuntu-latest
@@ -371,78 +368,86 @@ jobs:
 
   push-images-for-e2e:
     if: "!contains(github.event.head_commit.message, 'e2e skip')"
-    needs: [build-operator, build-cassandra, build-prober, build-jolokia, build-icarus, validate-helm-charts]
+    needs:
+      [
+        build-operator,
+        build-cassandra,
+        build-prober,
+        build-jolokia,
+        build-icarus,
+        validate-helm-charts,
+      ]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
 
-    # We have below variable value replacement to prevent re-push of the image within branch during parallel workflows run
-    - name: Modify GITHUB_REF_SLUG
-      run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
+      # We have below variable value replacement to prevent re-push of the image within branch during parallel workflows run
+      - name: Modify GITHUB_REF_SLUG
+        run: echo "GITHUB_REF_SLUG=$GITHUB_REF_SLUG-${{ github.run_id }}" >> $GITHUB_ENV
 
-    - name: Authenticate to Docker Proxy Registry
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Authenticate to Docker Proxy Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # - name: Install IBM Cloud CLI
-    #   run: |
-    #     curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-    #     ibmcloud --version
-    #     ibmcloud config --check-version=false
-    #     ibmcloud plugin install -f container-registry
-    # - name: Authenticate with IBM Cloud CLI
-    #   uses: nick-fields/retry@v2
-    #   id: retry
-    #   continue-on-error: false
-    #   with:
-    #     timeout_seconds: 60
-    #     max_attempts: 3
-    #     retry_on: error
-    #     command: |
-    #       ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBM_CLOUD_REGION" -g "$IBM_CLOUD_RG" --quiet
-    #       ibmcloud cr region-set "$IBM_CLOUD_REGION"
-    #       ibmcloud cr login
+      # - name: Install IBM Cloud CLI
+      #   run: |
+      #     curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+      #     ibmcloud --version
+      #     ibmcloud config --check-version=false
+      #     ibmcloud plugin install -f container-registry
+      # - name: Authenticate with IBM Cloud CLI
+      #   uses: nick-fields/retry@v2
+      #   id: retry
+      #   continue-on-error: false
+      #   with:
+      #     timeout_seconds: 60
+      #     max_attempts: 3
+      #     retry_on: error
+      #     command: |
+      #       ibmcloud login --apikey "$IBM_CLOUD_API_KEY" -r "$IBM_CLOUD_REGION" -g "$IBM_CLOUD_RG" --quiet
+      #       ibmcloud cr region-set "$IBM_CLOUD_REGION"
+      #       ibmcloud cr login
 
-    - name: Download operator image artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: mr-cassop
+      - name: Download operator image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: mr-cassop
 
-    - name: Download cassandra image artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: cassandra
+      - name: Download cassandra image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: cassandra
 
-    - name: Download prober image artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: prober
+      - name: Download prober image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: prober
 
-    - name: Download jolokia image artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: jolokia
+      - name: Download jolokia image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: jolokia
 
-    - name: Download icarus image artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: icarus
+      - name: Download icarus image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: icarus
 
-    - name: Load container images
-      run: |
-        docker load -i mr-cassop.tar
-        docker load -i cassandra.tar
-        docker load -i prober.tar
-        docker load -i jolokia.tar
-        docker load -i icarus.tar
-    - name: Push Images to ICR
-      run: |
-        docker push "cinple/mr-cassop:$GITHUB_REF_SLUG"
-        docker push "cinple/prober:$GITHUB_REF_SLUG"
-        docker push "cinple/cassandra:$GITHUB_REF_SLUG"
-        docker push "cinple/jolokia:$GITHUB_REF_SLUG"
-        docker push "cinple/icarus:$GITHUB_REF_SLUG"
+      - name: Load container images
+        run: |
+          docker load -i mr-cassop.tar
+          docker load -i cassandra.tar
+          docker load -i prober.tar
+          docker load -i jolokia.tar
+          docker load -i icarus.tar
+      - name: Push Images to ICR
+        run: |
+          docker push "cinple/mr-cassop:$GITHUB_REF_SLUG"
+          docker push "cinple/prober:$GITHUB_REF_SLUG"
+          docker push "cinple/cassandra:$GITHUB_REF_SLUG"
+          docker push "cinple/jolokia:$GITHUB_REF_SLUG"
+          docker push "cinple/icarus:$GITHUB_REF_SLUG"
