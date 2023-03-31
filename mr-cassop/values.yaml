@@ -15,7 +15,7 @@ logLevel: info
 logFormat: json
 proberImage: cinple/mr-cassop/prober:0.5.0 # this value will be updated on next release in GHA
 jolokiaImage: cinple/mr-cassop/jolokia:0.5.0 # this value will be updated on next release in GHA
-cassandraImage: cinple/mr-cassop/cassandra:3.11.13-0.5.0 # this value will be updated on next release in GHA
+cassandraImage: cinple/mr-cassop/cassandra:3.11.14-0.5.0 # this value will be updated on next release in GHA
 reaperImage: thelastpickle/cassandra-reaper:3.2.0
 icarusImage: cinple/mr-cassop/icarus:0.5.0
 clusterDashboards:
