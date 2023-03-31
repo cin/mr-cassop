@@ -32,7 +32,6 @@ Default values:
  | net.ipv4.tcp_window_scaling  | 1                   |
  | vm.dirty_background_bytes    | 10485760            |
  | vm.dirty_bytes               | 1073741824          |
- | vm.zone_reclaim_mode         | 0                   |
  | fs.file-max                  | 1073741824          |
  | vm.max_map_count             | 1073741824          |
  | vm.swappiness                | 1                   |
