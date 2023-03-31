@@ -2,19 +2,19 @@ apiVersion: skaffold/v2beta25
 kind: Config
 build:
   artifacts:
-  - image: "cinple/mr-cassop/mr-cassop"
+  - image: "cinple/mr-cassop"
     context: .
     docker:
       dockerfile: Dockerfile
-  - image: "cinple/mr-cassop/prober"
+  - image: "cinple/prober"
     context: prober/
     docker:
       dockerfile: Dockerfile
-  - image: "cinple/mr-cassop/cassandra"
+  - image: "cinple/cassandra"
     context: cassandra/
     docker:
       dockerfile: Dockerfile
-  - image: "cinple/mr-cassop/jolokia"
+  - image: "cinple/jolokia"
     context: jolokia/
     docker:
       dockerfile: Dockerfile
@@ -57,14 +57,14 @@ deploy:
       valuesFiles:
       - mr-cassop/values.yaml
       setValueTemplates:
-        container.image: "cinple/mr-cassop/mr-cassop:{{.USER}}"
+        container.image: "cinple/mr-cassop:{{.USER}}"
         container.imagePullSecret: icm-coreeng-pull-secret
         container.imagePullPolicy: Always
         logLevel: debug
         logFormat: console
-        proberImage: "cinple/mr-cassop/prober:{{.USER}}"
-        jolokiaImage: "cinple/mr-cassop/jolokia:{{.USER}}"
-        cassandraImage: "cinple/mr-cassop/cassandra:{{.USER}}"
+        proberImage: "cinple/prober:{{.USER}}"
+        jolokiaImage: "cinple/jolokia:{{.USER}}"
+        cassandraImage: "cinple/cassandra:{{.USER}}"
         admissionWebhooks.enabled: true
         clusterDashboards.enabled[0]: "datastax"
         clusterDashboards.enabled[1]: "instaclustr"
@@ -101,12 +101,12 @@ profiles:
         valuesFiles:
         - mr-cassop/values.yaml
         setValueTemplates:
-          container.image: "cinple/mr-cassop/mr-cassop:{{.USER}}"
+          container.image: "cinple/mr-cassop:{{.USER}}"
           container.imagePullPolicy: Never
           logLevel: debug
-          proberImage: "cinple/mr-cassop/prober:{{.USER}}"
-          jolokiaImage: "cinple/mr-cassop/jolokia:{{.USER}}"
-          cassandraImage: "cinple/mr-cassop/cassandra:{{.USER}}"
+          proberImage: "cinple/prober:{{.USER}}"
+          jolokiaImage: "cinple/jolokia:{{.USER}}"
+          cassandraImage: "cinple/cassandra:{{.USER}}"
         createNamespace: true
         wait: true
         packaged:
