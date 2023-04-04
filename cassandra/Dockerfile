@@ -1,7 +1,7 @@
 ARG CASSANDRA_VERSION=3.11.14
 FROM cassandra:${CASSANDRA_VERSION}
 ARG JMX_EXPORTER_VERSION=0.17.2
-ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.12
+ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.10
 ENV DATASTAX_CASSANDRA_EXPORTER_VERSION=0.3.4
 
 RUN set -eux; \
@@ -18,8 +18,8 @@ RUN set -eux; \
     wget; \
   wget_jar mx4j mx4j-tools 3.0.1 /mx4j; \
   wget_jar io/prometheus/jmx jmx_prometheus_javaagent ${JMX_EXPORTER_VERSION} /prometheus; \
-  wget https://github.com/instaclustr/cassandra-exporter/releases/download/v${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}/cassandra-exporter-agent-${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}-SNAPSHOT.jar -O /prometheus/cassandra-exporter-agent.jar; \
-  wget https://github.com/datastax/metric-collector-for-apache-cassandra/releases/download/v$DATASTAX_CASSANDRA_EXPORTER_VERSION/datastax-mcac-agent-$DATASTAX_CASSANDRA_EXPORTER_VERSION.tar.gz -O /tmp/datastax-mcac-agent.tgz; \
+  wget https://github.com/instaclustr/cassandra-exporter/releases/download/v${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}/cassandra-exporter-agent-${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}.jar -O /prometheus/cassandra-exporter-agent.jar; \
+  wget https://github.com/datastax/metric-collector-for-apache-cassandra/releases/download/v${DATASTAX_CASSANDRA_EXPORTER_VERSION}/datastax-mcac-agent-${DATASTAX_CASSANDRA_EXPORTER_VERSION}.tar.gz -O /tmp/datastax-mcac-agent.tgz; \
   tar zxf /tmp/datastax-mcac-agent.tgz -C /prometheus; \
   mv /prometheus/datastax-mcac-agent-* /prometheus/datastax-mcac-agent; \
   rm -rf /var/lib/apt/lists/* /tmp/datastax-mcac-agent.tgz /prometheus/datastax-mcac-agent/config; \
