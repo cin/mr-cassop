@@ -344,8 +344,8 @@ jobs:
       - name: Run chart-testing (lint)
         run: ct lint --target-branch=main --check-version-increment=false
 
-      - name: Download Pluto
-        uses: FairwindsOps/pluto/github-action@v5.15.1
+    - name: Download Pluto
+      uses: FairwindsOps/pluto/github-action@v5.16.0
 
       - name: Scan for deprecated k8s APIs
         run: helm template mr-cassop/ | pluto detect -
