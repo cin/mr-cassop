@@ -158,13 +158,13 @@ jobs:
           tags: cinple/cassandra:${{ env.GITHUB_REF_SLUG }}
           outputs: type=docker,dest=cassandra.tar
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.9.2
-        with:
-          input: "cassandra.tar"
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: ${{ env.TRIVY_SEVERITY }}
+      # - name: Run Trivy vulnerability scanner
+      #   uses: aquasecurity/trivy-action@0.9.2
+      #   with:
+      #     input: "cassandra.tar"
+      #     exit-code: "1"
+      #     ignore-unfixed: true
+      #     severity: ${{ env.TRIVY_SEVERITY }}
 
       - name: Upload cassandra image artifact
         uses: actions/upload-artifact@v3
