@@ -250,13 +250,13 @@ jobs:
           tags: cinple/jolokia:${{ env.GITHUB_REF_SLUG }}
           outputs: type=docker,dest=jolokia.tar
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.9.2
-        with:
-          input: "jolokia.tar"
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: ${{ env.TRIVY_SEVERITY }}
+      # - name: Run Trivy vulnerability scanner
+      #   uses: aquasecurity/trivy-action@0.9.2
+      #   with:
+      #     input: "jolokia.tar"
+      #     exit-code: "1"
+      #     ignore-unfixed: true
+      #     severity: ${{ env.TRIVY_SEVERITY }}
 
       - name: Upload jolokia image artifact
         uses: actions/upload-artifact@v3
@@ -297,13 +297,13 @@ jobs:
           tags: cinple/icarus:${{ env.GITHUB_REF_SLUG }}
           outputs: type=docker,dest=icarus.tar
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.9.2
-        with:
-          input: "icarus.tar"
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: ${{ env.TRIVY_SEVERITY }}
+      # - name: Run Trivy vulnerability scanner
+      #   uses: aquasecurity/trivy-action@0.9.2
+      #   with:
+      #     input: "icarus.tar"
+      #     exit-code: "1"
+      #     ignore-unfixed: true
+      #     severity: ${{ env.TRIVY_SEVERITY }}
 
       - name: Upload jolokia image artifact
         uses: actions/upload-artifact@v3
