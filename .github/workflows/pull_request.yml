@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Go
       uses: actions/setup-go@v4
@@ -63,7 +63,7 @@ jobs:
         k8s: [1.20.2, 1.21.2, 1.22.1, 1.23.1, 1.24.2]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Go
       uses: actions/setup-go@v4
@@ -95,7 +95,7 @@ jobs:
     needs: [run-unit-tests, run-integration-tests, validate-helm-charts]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
@@ -143,7 +143,7 @@ jobs:
     needs: [run-unit-tests, run-integration-tests, validate-helm-charts]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
@@ -190,7 +190,7 @@ jobs:
     needs: [run-unit-tests, run-integration-tests, validate-helm-charts]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
@@ -239,7 +239,7 @@ jobs:
     needs: [run-unit-tests, run-integration-tests, validate-helm-charts]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
@@ -287,7 +287,7 @@ jobs:
     needs: [run-unit-tests, run-integration-tests, validate-helm-charts]
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
@@ -336,7 +336,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0 # ct needs history to compare
 
@@ -373,7 +373,7 @@ jobs:
   check-docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup Node
       uses: actions/setup-node@v3
       with:
@@ -391,7 +391,7 @@ jobs:
     needs: [build-operator, build-cassandra, build-prober, build-jolokia, build-icarus, validate-helm-charts]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Inject slug/short variables
       uses: rlespinasse/github-slug-action@v4
 
@@ -462,7 +462,7 @@ jobs:
     needs: [push-images-for-e2e]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Block Concurrent Executions for the Deployment
       uses: softprops/turnstyle@v1
       with:
