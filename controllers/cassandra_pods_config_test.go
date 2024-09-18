@@ -9,16 +9,16 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/ibm/cassandra-operator/controllers/events"
+	"github.com/cin/mr-cassop/controllers/events"
 	"k8s.io/client-go/tools/record"
 
 	"go.uber.org/zap"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/mocks"
+	"github.com/cin/mr-cassop/controllers/prober"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/mock/gomock"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/mocks"
-	"github.com/ibm/cassandra-operator/controllers/prober"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"

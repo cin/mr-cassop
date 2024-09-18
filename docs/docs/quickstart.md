@@ -27,35 +27,35 @@ Helm charts are hosted on a private Artifactory instance, so you will need to [c
 Create a namespace for the operator:
 
 ```bash
-kubectl create ns cassandra-operator
+kubectl create ns mr-cassop
 ```
 
 Images are located in the IBM cloud registry. You need to [create an image pull secret](https://pages.github.ibm.com/TheWeatherCompany/icm-docs/managed-kubernetes/container-registry.html#pulling-an-image-in-kubernetes) in your namespace to load images into the cluster.
 
 ```bash
 kubectl create secret docker-registry container-reg-secret \
-    --namespace cassandra-operator \
+    --namespace mr-cassop \
     --docker-server us.icr.io \
     --docker-username <user-name> \
     --docker-password=<password> \
     --docker-email=<email>
 ```
 
-## Install Cassandra Operator
+## Install mr-cassop
 
 Use the image pull secret created in the previous step to install the operator:
 
 ```bash
-helm install cassandra-operator icm/cassandra-operator --set container.imagePullSecret=container-reg-secret --namespace cassandra-operator
+helm install mr-cassop icm/mr-cassop --set container.imagePullSecret=container-reg-secret --namespace mr-cassop
 ```                                                                                                                        
 
 You should see your operator pod up and running:
 
 ```bash
-kubectl get pods --namespace cassandra-operator
+kubectl get pods --namespace mr-cassop
 
 NAME                              READY   STATUS              RESTARTS   AGE
-cassandra-operator-56997bfc5c-gz788   1/1     Running             0          40s
+mr-cassop-56997bfc5c-gz788   1/1     Running             0          40s
 ```
 
 ## Create an admin role secret
@@ -65,7 +65,7 @@ The operator needs a secret containing the admin role credentials used for Cassa
 > Don't forget to replace `admin-password=pass` with your secure password
 
 ```bash
-kubectl create secret generic admin-role --from-literal=admin-role=cassandra-operator --from-literal=admin-password=pass
+kubectl create secret generic admin-role --from-literal=admin-role=mr-cassop --from-literal=admin-password=pass
 ```
 
 ## Deploy CassandraCluster
@@ -99,7 +99,7 @@ example-cassandra-dc1   ClusterIP   None         <none>        7000/TCP,7001/TCP
 Wait until the cluster is up and running. Now you can execute queries:
 
 ```bash
-kubectl exec -it example-cassandra-dc1-1 -- cqlsh -u cassandra-operator -p pass -e "DESCRIBE keyspaces;"
+kubectl exec -it example-cassandra-dc1-1 -- cqlsh -u mr-cassop -p pass -e "DESCRIBE keyspaces;"
 
 system_traces  system_schema  system_auth  system  system_distributed
 ```
@@ -125,10 +125,10 @@ UN  172.30.200.83   924.49 KiB  16           100.0%            dd93c221-a8b1-47f
 
 See the [CassandraCluster field specification reference](cassandracluster-configuration.md) for more details.
 
-## Uninstall Cassandra Operator and the Cluster
+## Uninstall mr-cassop and the Cluster
 
 ```bash
 kubectl delete CassandraCluster/example
-helm uninstall cassandra-operator
+helm uninstall mr-cassop
 kubectl delete crd cassandraclusters.db.ibm.com
 ```

@@ -5,7 +5,7 @@ slug: /cql-configmaps
 
 ## Description
 
-The Cassandra operator supports running CQL queries through Configmaps by setting the appropriate label.
+mr-cassop supports running CQL queries through Configmaps by setting the appropriate label.
 
 The CQL Configmap can contain multiple entries with queries. In that case they will be executed in lexicographical order. 
 
@@ -25,7 +25,7 @@ Create CQL Configmap:
 kubectl create configmap my-cql-queries --from-literal=test-query="CREATE KEYSPACE IF NOT EXISTS test_keyspace WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'dc1' : 3 };"
 ```
 
-By default, the Cassandra operator is looking for CQL Configmaps with the label `cql-scripts`, but you can override this value in the CassandraCluster resource:
+By default, the mr-cassop is looking for CQL Configmaps with the label `cql-scripts`, but you can override this value in the CassandraCluster resource:
 
 ```yaml
 spec:

@@ -6,20 +6,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ibm/cassandra-operator/controllers/names"
+	"github.com/cin/mr-cassop/controllers/names"
 
 	"github.com/gocql/gocql"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 // We call init function from assigned `Describe` function, in such way we can avoid using init() {} in this file
@@ -84,7 +84,7 @@ var _ = Describe("Reaper test", func() {
 			By("Running cql query: checking Cassandra version...")
 			err = session.Query(`SELECT release_version FROM system.local`).Consistency(gocql.LocalQuorum).Scan(&releaseVersion)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(releaseVersion).To(Equal("3.11.13"))
+			Expect(releaseVersion).To(Equal("3.11.14"))
 
 			By("Running cql query: creating test keyspace...")
 			cqlQuery := `CREATE KEYSPACE IF NOT EXISTS %s WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', '%s' : %v }`

@@ -1,4 +1,4 @@
-module github.com/ibm/cassandra-operator/prober
+module github.com/cin/mr-cassop/prober
 
 go 1.17
 

@@ -21,7 +21,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/ibm/cassandra-operator/controllers/labels"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -29,32 +28,34 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ibm/cassandra-operator/controllers/icarus"
+	"github.com/cin/mr-cassop/controllers/labels"
 
-	"github.com/ibm/cassandra-operator/controllers/cassandrarestore"
+	"github.com/cin/mr-cassop/controllers/icarus"
 
-	"github.com/ibm/cassandra-operator/controllers/cassandrabackup"
+	"github.com/cin/mr-cassop/controllers/cassandrarestore"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl"
+	"github.com/cin/mr-cassop/controllers/cassandrabackup"
+
+	"github.com/cin/mr-cassop/controllers/nodectl"
 
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	"github.com/ibm/cassandra-operator/controllers/webhooks"
+	"github.com/cin/mr-cassop/controllers/webhooks"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	nwv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/logger"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/prober"
+	"github.com/cin/mr-cassop/controllers/reaper"
 	"github.com/go-logr/zapr"
 	"github.com/gocql/gocql"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/logger"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/prober"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
@@ -171,7 +172,7 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zapr.NewLogger(logr))
 
 	clusterRole := &rbac.ClusterRole{}
-	clusterRole.Name = "cassandra-operator"
+	clusterRole.Name = "mr-cassop"
 	clusterRole.UID = "1"
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

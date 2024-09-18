@@ -5,12 +5,12 @@ metadata:
   name: {{ .Release.Name }}-metrics
   namespace: {{ .Release.Namespace }}
   labels:
-    operator: cassandra-operator
+    operator: mr-cassop
 spec:
   ports:
     - name: metrics
       port: 8329
       targetPort: metrics
   selector:
-    operator: cassandra-operator
+    operator: mr-cassop
 {{- end }}

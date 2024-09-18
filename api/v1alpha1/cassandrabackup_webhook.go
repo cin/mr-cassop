@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ibm/cassandra-operator/controllers/util"
+	"github.com/cin/mr-cassop/controllers/util"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"

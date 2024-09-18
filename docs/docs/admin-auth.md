@@ -3,7 +3,7 @@ title: Admin Auth Management
 slug: /admin-auth
 ---
 
-The Cassandra operator requires a separate super role to perform Cassandra management.
+mr-cassop requires a separate super role to perform Cassandra management.
 
 In Kubernetes the role is represented by a secret that needs to be provided by the user. The secret must have two non-empty entries `admin-role` and `admin-password` for role name and password respectively.
 
@@ -12,7 +12,7 @@ Example of such secret:
 ```yaml
 apiVersion: v1
 data:
-  admin-role: Y2Fzc2FuZHJhLW9wZXJhdG9y #cassandra-operator
+  admin-role: Y2Fzc2FuZHJhLW9wZXJhdG9y #mr-cassop
   admin-password: ZXhhbXBsZS1wYXNzd29yZA== #example-password
 kind: Secret
 metadata:
@@ -35,12 +35,12 @@ spec:
 You can also create a secret by running a `kubectl` command:
 
 ```bash
-kubectl create secret generic admin-role --from-literal=admin-role=cassandra-operator --from-literal=admin-password=example-password
+kubectl create secret generic admin-role --from-literal=admin-role=mr-cassop --from-literal=admin-password=example-password
 ```
 
 ### Cluster Init
 
-When a fresh cluster is created, Cassandra will create a default role `cassandra` with password `cassandra`. The Cassandra operator will use that role to create the secure user provided role and drop the default role for security reasons.
+When a fresh cluster is created, Cassandra will create a default role `cassandra` with password `cassandra`. mr-cassop will use that role to create the secure user provided role and drop the default role for security reasons.
 
 #### Creating a previously existed cluster
 
@@ -50,7 +50,7 @@ The PVCs are identified by labels `cassandra-cluster-instance=<cassandracluster-
 
 ### Changing the role
 
-The Cassandra operator also supports changing the admin role password or even creating and switching to a new role. In order to do so, the user just needs to change the role password (and also the role name if desired) in the provided secret.
+mr-cassop also supports changing the admin role password or even creating and switching to a new role. In order to do so, the user just needs to change the role password (and also the role name if desired) in the provided secret.
 
 :::caution
 

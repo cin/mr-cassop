@@ -1,13 +1,13 @@
 const isCI = !!process.env.CI;
 module.exports = {
-  title: 'Cassandra Operator',
+  title: 'mr-cassop',
   githubHost: 'github.com',
-  url: isCI ? 'https://cassandra-operator-docs.dev.sun.weather.com' : 'http://localhost:3000',
+  url: isCI ? 'https://mr-cassop-docs.dev.sun.weather.com' : 'http://localhost:3000',
   baseUrl: '/',
   onBrokenLinks: 'throw',
   favicon: 'images/favicon.png',
   organizationName: 'TheWeatherCompany',
-  projectName: 'cassandra-operator',
+  projectName: 'mr-cassop',
   themeConfig: {
     hideableSidebar: true,
     colorMode: {
@@ -15,14 +15,14 @@ module.exports = {
     },
     navbar: {
       hideOnScroll: false,
-      title: 'Cassandra Operator',
+      title: 'mr-cassop',
       logo: {
         src: 'images/logo.svg',
         srcDark: 'images/logo.svg',
       },
       items: [
         {
-          href: 'https://cassandra-operator-docs.dev.sun.weather.com',
+          href: 'https://mr-cassop-docs.dev.sun.weather.com',
           label: 'GitHub',
           position: 'right',
         },
@@ -35,7 +35,7 @@ module.exports = {
     footer: {
       style: 'dark',
       links: [],
-      copyright: `Cassandra Operator Documentation. Built with Docusaurus.`,
+      copyright: `mr-cassop Documentation. Built with Docusaurus.`,
     },
   },
   presets: [

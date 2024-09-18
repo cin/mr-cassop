@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ibm/cassandra-operator/controllers/util"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"

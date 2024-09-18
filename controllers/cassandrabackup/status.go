@@ -3,9 +3,9 @@ package cassandrabackup
 import (
 	"context"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/icarus"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/icarus"
 )
 
 func (r *CassandraBackupReconciler) reconcileStatus(ctx context.Context, cb *v1alpha1.CassandraBackup, relatedIcarusBackup icarus.Backup) error {

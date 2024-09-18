@@ -6,7 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl/jolokia"
+	"github.com/cin/mr-cassop/controllers/nodectl/jolokia"
 )
 
 type OperationMode string

@@ -2,10 +2,11 @@ package v1alpha1
 
 import (
 	"fmt"
-	"github.com/ibm/cassandra-operator/controllers/util"
+	"strings"
+
+	"github.com/cin/mr-cassop/controllers/util"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

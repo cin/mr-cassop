@@ -4,6 +4,6 @@ hide_title: true
 slug: /
 ---
 
-# Cassandra Operator
+# mr-cassop
 
-Cassandra Operator deploys, configures and manages Cassandra clusters in k8s.
+mr-cassop deploys, configures and manages Cassandra clusters in k8s.

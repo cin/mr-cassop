@@ -6,18 +6,18 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ibm/cassandra-operator/controllers/icarus"
+	"github.com/cin/mr-cassop/controllers/icarus"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl"
+	"github.com/cin/mr-cassop/controllers/nodectl"
 
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/ibm/cassandra-operator/controllers/reaper"
+	"github.com/cin/mr-cassop/controllers/reaper"
 
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/gocql/gocql"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/util"
 	"github.com/pkg/errors"
 )
 

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 const (
-	cassandraOperator = "cassandra-operator"
+	cassandraOperator = "mr-cassop"
 )
 
 func ProberService(clusterName string) string {
