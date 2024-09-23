@@ -464,7 +464,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Block Concurrent Executions for the Deployment
-      uses: softprops/turnstyle@v1
+      uses: softprops/turnstyle@v2
       with:
         poll-interval-seconds: 10
         abort-after-seconds: 7200
