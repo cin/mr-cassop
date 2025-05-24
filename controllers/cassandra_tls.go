@@ -122,7 +122,7 @@ func (r *CassandraClusterReconciler) validateTLSFields(cc *dbv1alpha1.CassandraC
 		errMsg := fmt.Sprintf("TLS Secret `%s` has some empty or missing fields: %v", tlsSecret.Name, emptyFields)
 		r.Log.Warnf(errMsg)
 		r.Events.Warning(cc, events.EventTLSSecretInvalid, errMsg)
-		return errors.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 	return nil
 }

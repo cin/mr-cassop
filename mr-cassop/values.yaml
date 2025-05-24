@@ -2,7 +2,7 @@ replicas: 1
 container:
   image: cinple/mr-cassop/mr-cassop:0.5.0
   # imagePullSecret: container-registry-secret
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Never
   restartPolicy: Always
   resources:
     limits:
@@ -15,7 +15,7 @@ logLevel: info
 logFormat: json
 proberImage: cinple/mr-cassop/prober:0.5.0 # this value will be updated on next release in GHA
 jolokiaImage: cinple/mr-cassop/jolokia:0.5.0 # this value will be updated on next release in GHA
-cassandraImage: cinple/mr-cassop/cassandra:3.11.14-0.5.0 # this value will be updated on next release in GHA
+cassandraImage: cinple/mr-cassop/cassandra:4.1.4-0.6.0 # upgraded to Cassandra 4.1.4, update tag as needed
 reaperImage: thelastpickle/cassandra-reaper:3.2.0
 icarusImage: cinple/mr-cassop/icarus:0.5.0
 clusterDashboards:

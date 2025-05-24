@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 func (cb *CassandraBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -36,31 +38,31 @@ func (cb *CassandraBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-var _ webhook.Validator = &CassandraBackup{}
+var _ webhook.CustomValidator = &CassandraBackup{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (cb *CassandraBackup) ValidateCreate() error {
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cb *CassandraBackup) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	webhookLogger.Debugf("Validating webhook has been called on create request for backup: %s", cb.Name)
 
-	return kerrors.NewAggregate(validateBackupCreateUpdate(cb))
+	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(cb))
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (cb *CassandraBackup) ValidateUpdate(old runtime.Object) error {
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cb *CassandraBackup) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	webhookLogger.Debugf("Validating webhook has been called on update request for backup: %s", cb.Name)
 
-	cbOld, ok := old.(*CassandraBackup)
+	cbOld, ok := oldObj.(*CassandraBackup)
 	if !ok {
-		return fmt.Errorf("old casandra cluster object: (%s) is not of type CassandraBackup", cbOld.Name)
+		return nil, fmt.Errorf("old casandra cluster object: (%s) is not of type CassandraBackup", cbOld.Name)
 	}
 
-	return kerrors.NewAggregate(validateBackupCreateUpdate(cb))
+	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(cb))
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (cb *CassandraBackup) ValidateDelete() error {
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (cb *CassandraBackup) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	webhookLogger.Debugf("Validating webhook has been called on delete request for backup: %s", cb.Name)
-	return nil
+	return nil, nil
 }
 
 func validateBackupCreateUpdate(cb *CassandraBackup) (verrors []error) {

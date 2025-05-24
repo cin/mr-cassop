@@ -90,7 +90,7 @@ func (r *CassandraClusterReconciler) executeCQLCMScripts(cc *dbv1alpha1.Cassandr
 			if err := cqlClient.Query(query); err != nil {
 				msg := fmt.Sprintf("Query #%d from script with key %q in ConfigMap %s/%s failed", index, cmKey, cm.Namespace, cm.Name)
 				r.Events.Warning(cc, events.EventCQLScriptFailed, msg)
-				return errors.Wrapf(err, msg)
+				return errors.Wrap(err, msg)
 			}
 		}
 		msg := fmt.Sprintf("All CQL queries from ConfgiMap %s/%s were executed successfully", cm.Namespace, cm.Name)

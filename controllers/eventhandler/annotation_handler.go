@@ -1,25 +1,34 @@
 package eventhandler
 
 import (
+	"context"
+
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func NewAnnotationEventHandler() *AnnotationEventHandler {
-	return &AnnotationEventHandler{
-		EventHandler: &handler.Funcs{},
-	}
+	return &AnnotationEventHandler{}
 }
 
-type AnnotationEventHandler struct {
-	handler.EventHandler
+type AnnotationEventHandler struct{}
+
+// Create implements handler.TypedEventHandler
+func (h *AnnotationEventHandler) Create(ctx context.Context, e event.TypedCreateEvent[client.Object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+	// No-op for create events
 }
 
-func (h *AnnotationEventHandler) Update(e event.UpdateEvent, ratelimit workqueue.RateLimitingInterface) {
+// Delete implements handler.TypedEventHandler
+func (h *AnnotationEventHandler) Delete(ctx context.Context, e event.TypedDeleteEvent[client.Object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+	// No-op for delete events
+}
+
+// Update implements handler.TypedEventHandler
+func (h *AnnotationEventHandler) Update(ctx context.Context, e event.TypedUpdateEvent[client.Object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	annotations := e.ObjectNew.GetAnnotations()
 	if len(annotations) == 0 {
 		return
@@ -30,10 +39,11 @@ func (h *AnnotationEventHandler) Update(e event.UpdateEvent, ratelimit workqueue
 		return
 	}
 	reconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{Name: ccInstanceName, Namespace: e.ObjectNew.GetNamespace()}}
-	ratelimit.Add(reconcileRequest)
+	q.Add(reconcileRequest)
 }
 
-func (h *AnnotationEventHandler) Generic(e event.GenericEvent, ratelimit workqueue.RateLimitingInterface) {
+// Generic implements handler.TypedEventHandler
+func (h *AnnotationEventHandler) Generic(ctx context.Context, e event.TypedGenericEvent[client.Object], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	annotations := e.Object.GetAnnotations()
 	if len(annotations) == 0 {
 		return
@@ -45,5 +55,5 @@ func (h *AnnotationEventHandler) Generic(e event.GenericEvent, ratelimit workque
 	}
 
 	reconcileRequest := reconcile.Request{NamespacedName: types.NamespacedName{Name: ccInstanceName, Namespace: e.Object.GetNamespace()}}
-	ratelimit.Add(reconcileRequest)
+	q.Add(reconcileRequest)
 }

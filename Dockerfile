@@ -1,4 +1,4 @@
-FROM golang:1.18 as builder
+FROM golang:1.24 AS builder
 
 WORKDIR /workspace
 
@@ -18,10 +18,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     -a \
     -o bin/mr-cassop main.go
 
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 WORKDIR /
-
 
 RUN apt-get update && \
     apt-get install -y ca-certificates && \

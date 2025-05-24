@@ -6,4 +6,55 @@ slug: /
 
 # mr-cassop
 
-mr-cassop deploys, configures and manages Cassandra clusters in k8s.
+A comprehensive Kubernetes operator for deploying and managing Apache Cassandra clusters across multiple regions.
+
+## Overview
+
+mr-cassop automates the complete lifecycle of Cassandra clusters in Kubernetes environments. It provides enterprise-grade features including automated deployment, scaling, backup/restore, monitoring, and repair management, making it ideal for production workloads.
+
+## Key Capabilities
+
+🚀 **Automated Deployment** - Deploy Cassandra clusters with declarative YAML configuration  
+📈 **Dynamic Scaling** - Scale clusters seamlessly with zero-downtime node operations  
+🔄 **Backup & Restore** - Point-in-time recovery with cross-region replication via Icarus  
+🔧 **Repair Management** - Automated repair scheduling and optimization via Cassandra Reaper  
+📊 **Full Observability** - Prometheus metrics, Grafana dashboards, and health monitoring  
+🌍 **Multi-Region Ready** - Cross-region deployment with automatic datacenter awareness  
+🔐 **Enterprise Security** - TLS encryption, RBAC, and network policy integration  
+⚡ **Production Optimized** - Battle-tested for high-performance production workloads
+
+## Architecture
+
+mr-cassop consists of several integrated components:
+
+- **Operator Controller**: Main reconciliation engine managing cluster state
+- **Prober**: Health monitoring and metrics collection service  
+- **Jolokia**: JMX metrics proxy for observability
+- **Icarus**: Backup and restore service
+- **Reaper**: Automated repair management service
+
+## Getting Started
+
+Ready to deploy your first Cassandra cluster? Start with our [Quickstart Guide](quickstart.md) for a step-by-step walkthrough.
+
+For development and customization, check out the [Development Guide](development.md).
+
+## Documentation
+
+- [Quickstart](quickstart.md) - Get up and running quickly
+- [CassandraCluster Configuration](cassandracluster-configuration.md) - Complete configuration reference
+- [Backup & Restore](backup-restore.md) - Data protection strategies
+- [Multi-Region Clusters](multi-region-cluster-configuration.md) - Cross-region deployment
+- [Security](security/) - Authentication and encryption
+- [Development](development.md) - Contributing and customization
+
+## Requirements
+
+- **Kubernetes**: 1.19+ (tested with 1.24+)
+- **Helm**: 3.7+ for installation
+- **Resources**: Minimum 2 CPU cores and 4GB RAM per Cassandra node
+- **Storage**: Persistent volumes for data persistence (recommended)
+
+## License
+
+mr-cassop is licensed under the Apache License 2.0.

@@ -1,5 +1,5 @@
-FROM openjdk:11-jre-bullseye
-ARG ICARUS_VERSION=2.0.4
+FROM openjdk:11-jre
+ARG ICARUS_VERSION=3.0.0
 
 RUN wget https://github.com/instaclustr/icarus/releases/download/icarus-${ICARUS_VERSION}/icarus.jar
 

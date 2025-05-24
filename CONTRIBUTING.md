@@ -1,7 +1,36 @@
 # Contributing Guidelines
 
+Welcome to mr-cassop! We appreciate your interest in contributing to this Kubernetes operator for managing Apache Cassandra clusters.
+
 When contributing to this repository, please first discuss the change you wish to make via an issue. 
 This way we have traceability (including `Resolves`) and can discuss the issue in a documented, open fashion.
+
+## Development Setup
+
+### Prerequisites
+
+- Kubernetes 1.19+ (minikube, kind, or colima for local development)
+- Go 1.24+ with enabled go modules
+- Docker with buildx support
+- Helm 3.7+
+- kubectl configured for your cluster
+
+### Quick Start
+
+1. **Clone and setup**
+   ```bash
+   git clone https://github.com/your-org/mr-cassop.git
+   cd mr-cassop
+   ```
+
+2. **Follow the development guide**
+   
+   For detailed setup instructions, build options, and testing procedures, see the [Development Guide](docs/docs/development.md).
+
+3. **One-line setup** (for the impatient)
+   ```bash
+   ./build-local.sh --cassandra && make install && kubectl create namespace mr-cassop-system && helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
+   ```
 
 ## Pull Requests Welcome
 

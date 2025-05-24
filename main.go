@@ -37,6 +37,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	crWebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers"
@@ -103,8 +105,14 @@ func main() {
 
 	restCfg := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
-		Scheme:                  scheme,
-		MetricsBindAddress:      fmt.Sprintf(":%d", operatorConfig.MetricsPort),
+		Scheme: scheme,
+		Metrics: server.Options{
+			BindAddress: fmt.Sprintf(":%d", operatorConfig.MetricsPort),
+		},
+		WebhookServer: crWebhook.NewServer(crWebhook.Options{
+			Port:    int(operatorConfig.WebhooksPort),
+			CertDir: names.OperatorWebhookTLSDir(),
+		}),
 		LeaderElection:          operatorConfig.LeaderElectionEnabled,
 		LeaderElectionID:        leaderElectionID,
 		LeaderElectionNamespace: operatorConfig.Namespace,
@@ -196,8 +204,6 @@ func main() {
 		}
 
 		logr.Infof("admission webhooks container port: %d", int(operatorConfig.WebhooksPort))
-		mgr.GetWebhookServer().Port = int(operatorConfig.WebhooksPort)
-		mgr.GetWebhookServer().CertDir = names.OperatorWebhookTLSDir()
 		if err = (&dbv1alpha1.CassandraCluster{}).SetupWebhookWithManager(mgr); err != nil {
 			logr.With(zap.Error(err)).Fatal("failed to setup webhook with manager for cassandracluster")
 			os.Exit(1)

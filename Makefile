@@ -19,6 +19,20 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+# Docker registry and image configuration
+REGISTRY ?= cinple/mr-cassop
+DOCKER_VERSION ?= dev-$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+PLATFORM ?= linux/arm64
+MULTI_PLATFORM ?= false
+BUILDX_BUILDER ?= mr-cassop-builder
+
+# Individual image tags
+OPERATOR_IMG ?= $(REGISTRY)/mr-cassop:$(DOCKER_VERSION)
+PROBER_IMG ?= $(REGISTRY)/prober:$(DOCKER_VERSION)
+CASSANDRA_IMG ?= $(REGISTRY)/cassandra:$(DOCKER_VERSION)
+JOLOKIA_IMG ?= $(REGISTRY)/jolokia:$(DOCKER_VERSION)
+ICARUS_IMG ?= $(REGISTRY)/icarus:$(DOCKER_VERSION)
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions=v1"
 
@@ -30,6 +44,35 @@ GOBIN=$(shell go env GOBIN)
 endif
 
 all: manager
+
+# Show help for Docker build targets
+.PHONY: docker-help
+docker-help:
+	@echo "🚀 Docker Build Targets:"
+	@echo ""
+	@echo "  Individual Images (ARM64 by default):"
+	@echo "    make docker-build-operator    # Build operator image"
+	@echo "    make docker-build-prober      # Build prober image"
+	@echo "    make docker-build-cassandra   # Build cassandra image"
+	@echo "    make docker-build-jolokia     # Build jolokia image"
+	@echo "    make docker-build-icarus      # Build icarus image"
+	@echo ""
+	@echo "  Batch Operations:"
+	@echo "    make docker-build-core        # Build core images (operator + prober)"
+	@echo "    make docker-build-essential   # Build essential images (+ cassandra)"
+	@echo "    make docker-build-monitoring  # Build monitoring images (jolokia + icarus)"
+	@echo "    make docker-build-all         # Build all images (ARM64)"
+	@echo "    make docker-build-all-multiplatform  # Build for AMD64+ARM64 and push"
+	@echo ""
+	@echo "  Configuration:"
+	@echo "    PLATFORM=linux/amd64         # Change target platform"
+	@echo "    MULTI_PLATFORM=true          # Enable multi-platform build"
+	@echo "    REGISTRY=myregistry           # Change registry"
+	@echo "    DOCKER_VERSION=v1.0.0         # Change image version"
+	@echo ""
+	@echo "  Examples:"
+	@echo "    make docker-build-operator PLATFORM=linux/amd64"
+	@echo "    make docker-build-all MULTI_PLATFORM=true"
 
 # Run unit tests
 unit-tests:
@@ -81,34 +124,150 @@ deploy: manifests kustomize
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./..." output:crd:artifacts:config=config/crd/bases
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./..." output:crd:artifacts:config=$(ROOT_DIR)mr-cassop/crds
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=mr-cassop paths="./..." output:crd:none output:rbac:stdout > $(ROOT_DIR)mr-cassop/templates/clusterrole.yaml
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./api/..." paths="./controllers/..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role output:rbac:none paths="./api/..." paths="./controllers/..." output:crd:artifacts:config=$(ROOT_DIR)mr-cassop/crds
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=mr-cassop paths="./api/..." paths="./controllers/..." output:crd:none output:rbac:stdout > $(ROOT_DIR)mr-cassop/templates/clusterrole.yaml
 
 # Run go fmt against code
 fmt:
-	go fmt ./...
+	go fmt ./api/... ./controllers/...
+	go fmt ./main.go
 
 # Run go vet against code
 vet:
-	go vet ./...
+	go vet ./api/... ./controllers/...
+	go vet ./main.go
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..." paths="./controllers/..."
 	mockgen -package=mocks -source=./controllers/cql/cql.go -destination=./controllers/mocks/mock_cql.go
 	mockgen -package=mocks -source=./controllers/prober/prober.go -destination=./controllers/mocks/mock_prober.go
 	mockgen -package=mocks -source=./controllers/reaper/reaper.go -destination=./controllers/mocks/mock_reaper.go
 	mockgen -package=mocks -source=./controllers/nodectl/nodectl.go -destination=./controllers/mocks/mock_nodectl.go
 	mockgen -package=mocks -source=./controllers/icarus/icarus.go -destination=./controllers/mocks/mock_icarus.go
 
-# Build the docker image
+# Build the docker image (legacy target)
 docker-build:
 	docker build . -t ${IMG}
 
-# Push the docker image
+# Push the docker image (legacy target)
 docker-push:
 	docker push ${IMG}
+
+# Setup buildx builder
+.PHONY: docker-buildx-setup
+docker-buildx-setup:
+	@if ! docker buildx inspect $(BUILDX_BUILDER) > /dev/null 2>&1; then \
+		echo "📦 Creating buildx builder '$(BUILDX_BUILDER)'..."; \
+		docker buildx create --name $(BUILDX_BUILDER) --use --bootstrap; \
+	else \
+		echo "✅ Using existing buildx builder '$(BUILDX_BUILDER)'"; \
+		docker buildx use $(BUILDX_BUILDER); \
+	fi
+
+# Build individual Docker images
+.PHONY: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus
+
+docker-build-operator: manager docker-buildx-setup
+	@echo "🔨 Building operator image: $(OPERATOR_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/mr-cassop:latest --push .
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/mr-cassop:latest --load .
+endif
+	@echo "✅ Built $(OPERATOR_IMG)"
+
+docker-build-prober: docker-buildx-setup
+	@echo "🔨 Building prober image: $(PROBER_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 --build-arg VERSION=$(DOCKER_VERSION) -f prober/Dockerfile -t $(PROBER_IMG) -t $(REGISTRY)/prober:latest --push prober
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) --build-arg VERSION=$(DOCKER_VERSION) -f prober/Dockerfile -t $(PROBER_IMG) -t $(REGISTRY)/prober:latest --load prober
+endif
+	@echo "✅ Built $(PROBER_IMG)"
+
+docker-build-cassandra: docker-buildx-setup
+	@echo "🔨 Building cassandra image: $(CASSANDRA_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 -t $(CASSANDRA_IMG) -t $(REGISTRY)/cassandra:latest --push cassandra
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) -t $(CASSANDRA_IMG) -t $(REGISTRY)/cassandra:latest --load cassandra
+endif
+	@echo "✅ Built $(CASSANDRA_IMG)"
+
+docker-build-jolokia: docker-buildx-setup
+	@echo "🔨 Building jolokia image: $(JOLOKIA_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 -t $(JOLOKIA_IMG) -t $(REGISTRY)/jolokia:latest --push jolokia
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) -t $(JOLOKIA_IMG) -t $(REGISTRY)/jolokia:latest --load jolokia
+endif
+	@echo "✅ Built $(JOLOKIA_IMG)"
+
+docker-build-icarus: docker-buildx-setup
+	@echo "🔨 Building icarus image: $(ICARUS_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 -t $(ICARUS_IMG) -t $(REGISTRY)/icarus:latest --push icarus
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) -t $(ICARUS_IMG) -t $(REGISTRY)/icarus:latest --load icarus
+endif
+	@echo "✅ Built $(ICARUS_IMG)"
+
+# Build all images
+docker-build-all: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus
+	@echo "🎉 All images built successfully!"
+
+# Build all images for multiple platforms and push
+docker-build-all-multiplatform:
+	$(MAKE) docker-build-all MULTI_PLATFORM=true
+	@echo "🎉 All multi-platform images built and pushed successfully!"
+
+# Build core images for local development (fast)
+docker-build-core: docker-build-operator docker-build-prober
+	@echo "🎉 Core images (operator + prober) built successfully!"
+
+# Build essential images for full local development 
+docker-build-essential: docker-build-operator docker-build-prober docker-build-cassandra
+	@echo "🎉 Essential images (operator + prober + cassandra) built successfully!"
+
+# Build monitoring images
+docker-build-monitoring: docker-build-jolokia docker-build-icarus
+	@echo "🎉 Monitoring images (jolokia + icarus) built successfully!"
+
+# Push individual images
+docker-push-operator:
+	docker push $(OPERATOR_IMG)
+	docker push $(REGISTRY)/mr-cassop:latest
+
+docker-push-prober:
+	docker push $(PROBER_IMG)  
+	docker push $(REGISTRY)/prober:latest
+
+docker-push-cassandra:
+	docker push $(CASSANDRA_IMG)
+	docker push $(REGISTRY)/cassandra:latest
+
+docker-push-jolokia:
+	docker push $(JOLOKIA_IMG)
+	docker push $(REGISTRY)/jolokia:latest
+
+docker-push-icarus:
+	docker push $(ICARUS_IMG)
+	docker push $(REGISTRY)/icarus:latest
+
+# Push all images
+docker-push-all: docker-push-operator docker-push-prober docker-push-cassandra docker-push-jolokia docker-push-icarus
 
 # find or download controller-gen
 # download controller-gen if necessary

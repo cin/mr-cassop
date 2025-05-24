@@ -1,4 +1,4 @@
-FROM golang:1.18 as builder
+FROM golang:1.24 AS builder
 
 LABEL maintainer="coreeng@us.ibm.com" \
       description="This docker image is used for the prober Go application"
@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     -a \
     -o prober .
 
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 
 WORKDIR /
 

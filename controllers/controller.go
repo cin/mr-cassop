@@ -411,9 +411,9 @@ func SetupCassandraReconciler(r reconcile.Reconciler, mgr manager.Manager, logr 
 		Owns(&rbac.Role{}).
 		Owns(&rbac.RoleBinding{}).
 		Owns(&v1.ServiceAccount{}).
-		Watches(&source.Kind{Type: &v1.Secret{}}, eventhandler.NewAnnotationEventHandler()).
-		Watches(&source.Kind{Type: &v1.ConfigMap{}}, eventhandler.NewAnnotationEventHandler()).
-		Watches(&source.Channel{Source: reconcileChan}, &handler.EnqueueRequestForObject{})
+		Watches(&v1.Secret{}, eventhandler.NewAnnotationEventHandler()).
+		Watches(&v1.ConfigMap{}, eventhandler.NewAnnotationEventHandler()).
+		WatchesRawSource(source.Channel(reconcileChan, &handler.EnqueueRequestForObject{}))
 
 	// WithEventFilter(predicate.NewPredicate(logr)) // uncomment to see kubernetes events in the logs, e.g. ConfigMap updates
 
