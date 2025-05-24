@@ -1,0 +1,40 @@
+replicas: 1
+container:
+  image: cinple/mr-cassop/mr-cassop:dev-04ecdb4
+  imagePullPolicy: Never
+  restartPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 200Mi
+    requests:
+      cpu: 500m
+      memory: 200Mi
+logLevel: debug
+logFormat: console
+proberImage: cinple/mr-cassop/prober:dev-04ecdb4
+jolokiaImage: cinple/mr-cassop/jolokia:dev-04ecdb4  
+cassandraImage: cinple/mr-cassop/cassandra:dev-04ecdb4
+reaperImage: thelastpickle/cassandra-reaper:3.8.0
+icarusImage: cinple/mr-cassop/icarus:dev-04ecdb4
+clusterDashboards:
+  enabled: []
+  namespace: ""
+  labels:
+    grafana_dashboard: "1"
+monitoring:
+  enabled: false
+  grafanaDashboard:
+    enabled: false
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+    datasourceName: ""
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels:
+      operator: mr-cassop
+    scrapeInterval: 30s
+admissionWebhooks:
+  enabled: false 
