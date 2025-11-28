@@ -1,10 +1,10 @@
 module github.com/ibm/cassandra-operator/prober
 
-go 1.17
+go 1.23.0
 
 require (
 	github.com/caarlos0/env/v6 v6.9.3
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.9
 	github.com/json-iterator/go v1.1.12
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/onsi/gomega v1.20.0
@@ -44,12 +44,11 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20220722155238-128564f6959c // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
