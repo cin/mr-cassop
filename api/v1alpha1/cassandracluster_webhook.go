@@ -41,9 +41,8 @@ func SetWebhookLogger(l *zap.SugaredLogger) {
 }
 
 func (cc *CassandraCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(cc).
-		WithValidator(cc).
+	return ctrl.NewWebhookManagedBy(mgr, cc).
+		WithCustomValidator(cc).
 		Complete()
 }
 
