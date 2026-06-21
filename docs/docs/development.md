@@ -6,15 +6,15 @@ slug: /development
 ### Requirements:
 
 * Kubernetes 1.28 or newer. You can use [minikube](https://kubernetes.io/docs/setup/minikube/), [kind](https://github.com/kubernetes-sigs/kind), or [colima](https://github.com/abiosoft/colima) for local development.
-* Go 1.24+ with enabled go modules
-* Node.js 20+ for building the documentation site
+* Go 1.26+ with enabled go modules
+* Node.js 24+ for building the documentation site
 * [OperatorSDK](https://github.com/operator-framework/operator-sdk) v1.39.0+
 * [kustomize](https://github.com/kubernetes-sigs/kustomize) 5.8.1+
-* [helm](https://helm.sh/) v3.15+
+* [helm](https://helm.sh/) v3.15.4+
 * [docker](https://docs.docker.com/install/) with buildx support
 * [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports)
 * [GolangCI-Lint](https://github.com/golangci/golangci-lint) 1.64.0+
-* [setup-envtest](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest) to install envtest assets
+* [setup-envtest](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest) to install Kubernetes 1.32.x envtest assets
 * [go.uber.org/mock](https://github.com/uber-go/mock)
 
 ## Run Operator 

@@ -11,7 +11,7 @@ permissions:
 
 env:
   HELM_VERSION: v3.15.4
-  NODE_VERSION: "20"
+  NODE_VERSION: "24"
   ICARUS_VERSION: "3.0.0"
 
 jobs:
