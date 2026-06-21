@@ -1,6 +1,8 @@
 replicas: 1
 container:
-  image: ghcr.io/cin/mr-cassop/operator:0.6.0
+  # Operator image. Leave empty to default to
+  # ghcr.io/cin/mr-cassop/operator:<chart appVersion>. Set to pin or override.
+  image: ""
   # imagePullSecret: container-registry-secret
   imagePullPolicy: IfNotPresent
   restartPolicy: Always
@@ -13,11 +15,14 @@ container:
       memory: 200Mi
 logLevel: info
 logFormat: json
-proberImage: ghcr.io/cin/mr-cassop/prober:0.6.0
-jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:0.6.0
-cassandraImage: ghcr.io/cin/mr-cassop/cassandra:0.6.0
+# Component images. Leave empty to default to
+# ghcr.io/cin/mr-cassop/<component>:<chart appVersion>. Set to pin or override.
+proberImage: ""
+jolokiaImage: ""
+cassandraImage: ""
+# reaper is an external image and is pinned independently of the chart version.
 reaperImage: thelastpickle/cassandra-reaper:4.2.5
-icarusImage: ghcr.io/cin/mr-cassop/icarus:0.6.0
+icarusImage: ""
 clusterDashboards:
   enabled: []
   namespace: ""

@@ -84,15 +84,6 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
-      - name: Pin chart image tags to release
-        run: |
-          # The image jobs publish each image with the git ref as its tag
-          # (type=ref,event=tag), so the packaged chart must reference that same
-          # tag instead of the placeholder values committed to the repo.
-          sed -i -E "s#(ghcr\.io/${{ github.repository }}/(operator|prober|jolokia|cassandra|icarus)):[^[:space:]]+#\1:${GITHUB_REF_NAME}#g" mr-cassop/values.yaml
-          echo "Pinned chart image tags to ${GITHUB_REF_NAME}:"
-          grep -E "ghcr\.io/${{ github.repository }}/" mr-cassop/values.yaml
-
       - name: Package chart
         run: |
           version="${GITHUB_REF_NAME#v}"
