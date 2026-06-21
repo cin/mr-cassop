@@ -1,4 +1,6 @@
 apiVersion: v2
+# Release packages override version and appVersion from the GitHub release tag.
+# Do not bump these manually for ordinary changes.
 appVersion: 0.6.0
 description: A Helm chart for Kubernetes, updated for Cassandra 4.1.11 and Kubernetes 1.28+
 name: mr-cassop

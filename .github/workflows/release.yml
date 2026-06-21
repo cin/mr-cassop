@@ -46,7 +46,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
           tags: |
-            type=ref,event=tag
+            type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Setup Buildx
@@ -69,7 +69,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.event.release.tag_name }}
+            VERSION=${{ steps.meta.outputs.version }}
             ICARUS_VERSION=${{ env.ICARUS_VERSION }}
 
   helm-chart:
@@ -87,7 +87,7 @@ jobs:
       - name: Package chart
         run: |
           version="${GITHUB_REF_NAME#v}"
-          helm package ./mr-cassop --version "$version" --app-version "$GITHUB_REF_NAME"
+          helm package ./mr-cassop --version "$version" --app-version "$version"
 
       - name: Upload chart to release
         uses: softprops/action-gh-release@v3.0.1

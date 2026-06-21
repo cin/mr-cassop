@@ -1,3 +1,5 @@
+{{- $imageRepo := "ghcr.io/cin/mr-cassop" -}}
+{{- $imageTag := .Chart.AppVersion -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: mr-cassop
-          image: "{{ .Values.container.image }}"
+          image: "{{ .Values.container.image | default (printf "%s/operator:%s" $imageRepo $imageTag) }}"
           imagePullPolicy: {{ .Values.container.imagePullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -56,15 +58,15 @@ spec:
             - name: LOGFORMAT
               value: {{ .Values.logFormat | quote }}
             - name: DEFAULT_CASSANDRA_IMAGE
-              value: {{ .Values.cassandraImage | quote }}
+              value: {{ .Values.cassandraImage | default (printf "%s/cassandra:%s" $imageRepo $imageTag) | quote }}
             - name: DEFAULT_PROBER_IMAGE
-              value: {{ .Values.proberImage | quote }}
+              value: {{ .Values.proberImage | default (printf "%s/prober:%s" $imageRepo $imageTag) | quote }}
             - name: DEFAULT_JOLOKIA_IMAGE
-              value: {{ .Values.jolokiaImage | quote }}
+              value: {{ .Values.jolokiaImage | default (printf "%s/jolokia:%s" $imageRepo $imageTag) | quote }}
             - name: DEFAULT_REAPER_IMAGE
               value: {{ .Values.reaperImage | quote }}
             - name: DEFAULT_ICARUS_IMAGE
-              value: {{ .Values.icarusImage | quote }}
+              value: {{ .Values.icarusImage | default (printf "%s/icarus:%s" $imageRepo $imageTag) | quote }}
             - name: WEBHOOKS_ENABLED
               value: {{ .Values.admissionWebhooks.enabled | quote }}
           volumeMounts:
