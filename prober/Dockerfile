@@ -1,4 +1,4 @@
-FROM golang:1.24-trixie AS builder
+FROM golang:1.26-trixie AS builder
 
 LABEL org.opencontainers.image.source="https://github.com/cin/mr-cassop" \
       description="This docker image is used for the prober Go application"

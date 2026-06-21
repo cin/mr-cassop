@@ -8,7 +8,7 @@ mr-cassop automates Cassandra cluster lifecycle management in Kubernetes. It inc
 
 ## Status
 
-This repository has been modernized from the original IBM Cassandra operator codebase and is under active maintenance. The current branch builds with Go 1.24, Kubernetes 1.34 libraries, and controller-runtime v0.22.5.
+This repository has been modernized from the original IBM Cassandra operator codebase and is under active maintenance. The current branch builds with Go 1.26, Kubernetes 1.36 libraries, and controller-runtime v0.24.1.
 
 Unit, prober, and envtest integration tests are expected to pass locally. End-to-end tests still require a real Kubernetes cluster, registry access, and runtime validation of the selected Cassandra/Reaper/Icarus matrix before declaring the project production-ready.
 
@@ -69,9 +69,11 @@ cd docs && npm install && npm start
 
 ## Requirements
 
-- Kubernetes 1.28+ for deployments; envtest coverage uses Kubernetes 1.32 assets.
+- Kubernetes 1.28+ for deployments; envtest coverage uses Kubernetes 1.32.x assets.
 - Cassandra 4.1.11 is the default supported image target.
-- Helm 3.15+ for installation and chart validation.
+- Go 1.26+ for local development.
+- Node.js 24+ for documentation builds.
+- Helm 3.15.4+ for installation and chart validation.
 - Persistent volumes are recommended for Cassandra data.
 - Minimum Cassandra node sizing depends on workload, but start with at least 2 CPU cores and 4 GiB RAM per node for non-trivial testing.
 

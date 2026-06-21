@@ -29,9 +29,8 @@ import (
 )
 
 func (cr *CassandraRestore) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(cr).
-		WithValidator(cr).
+	return ctrl.NewWebhookManagedBy(mgr, cr).
+		WithCustomValidator(cr).
 		Complete()
 }
 

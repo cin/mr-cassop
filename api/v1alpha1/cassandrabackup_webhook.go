@@ -33,9 +33,8 @@ import (
 )
 
 func (cb *CassandraBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(cb).
-		WithValidator(cb).
+	return ctrl.NewWebhookManagedBy(mgr, cb).
+		WithCustomValidator(cb).
 		Complete()
 }
 
