@@ -148,7 +148,7 @@ jobs:
             ICARUS_VERSION=${{ env.ICARUS_VERSION }}
 
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/cin/mr-cassop/${{ matrix.name }}:pr-${{ github.event.pull_request.number }}
           exit-code: "1"
