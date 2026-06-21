@@ -23,6 +23,9 @@ tiller
 
 !vendor/**/zz_generated.*
 
+# Go vendor directory (using go modules instead)
+vendor/
+
 # editor and IDE paraphernalia
 .idea
 **/*.iml

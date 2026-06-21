@@ -2,10 +2,11 @@ package integration
 
 import (
 	"fmt"
+
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -89,6 +90,7 @@ var _ = Describe("pod restart checksum", func() {
 
 			checksumContainer := map[string]string{
 				"cassandra.yaml":          cassandraConfig.Data["cassandra.yaml"],
+				"jvm.options":             cassandraConfig.Data["jvm.options"],
 				"cluster-node-tls-secret": fmt.Sprintf("%v", clusterNodeTLSSecret.Data),
 				"client-node-tls-secret":  fmt.Sprintf("%v", clientNodeTLSSecret.Data),
 			}

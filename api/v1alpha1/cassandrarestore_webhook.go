@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -24,39 +25,48 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 func (cr *CassandraRestore) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(cr).
+		WithValidator(cr).
 		Complete()
 }
 
-var _ webhook.Validator = &CassandraRestore{}
+var _ webhook.CustomValidator = &CassandraRestore{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (cr *CassandraRestore) ValidateCreate() error {
-	webhookLogger.Debugf("Validating webhook has been called on create request for restore: %s", cr.Name)
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cr *CassandraRestore) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	restore, ok := obj.(*CassandraRestore)
+	if !ok {
+		return nil, fmt.Errorf("object is not of type CassandraRestore")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on create request for restore: %s", restore.Name)
 
-	return kerrors.NewAggregate(validateRestoreCreateUpdate(cr))
+	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(restore))
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (cr *CassandraRestore) ValidateUpdate(old runtime.Object) error {
-	webhookLogger.Debugf("Validating webhook has been called on update request for restore: %s", cr.Name)
-
-	cbOld, ok := old.(*CassandraRestore)
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cr *CassandraRestore) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	restore, ok := newObj.(*CassandraRestore)
 	if !ok {
-		return fmt.Errorf("old cassandra cluster object: (%s) is not of type CassandraRestore", cbOld.Name)
+		return nil, fmt.Errorf("new object is not of type CassandraRestore")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on update request for restore: %s", restore.Name)
+
+	if _, ok := oldObj.(*CassandraRestore); !ok {
+		return nil, fmt.Errorf("old object is not of type CassandraRestore")
 	}
 
-	return kerrors.NewAggregate(validateRestoreCreateUpdate(cr))
+	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(restore))
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (cr *CassandraRestore) ValidateDelete() error {
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (cr *CassandraRestore) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	webhookLogger.Debugf("Validating webhook has been called on delete request for restore: %s", cr.Name)
-	return nil
+	return nil, nil
 }
 
 func validateRestoreCreateUpdate(cr *CassandraRestore) (verrors []error) {

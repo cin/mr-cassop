@@ -9,7 +9,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      operator: cassandra-operator
+      operator: mr-cassop
   namespaceSelector:
     matchNames: [{{ .Release.Namespace }}]
   endpoints:

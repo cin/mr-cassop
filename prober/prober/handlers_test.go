@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ibm/cassandra-operator/prober/config"
+	"github.com/cin/mr-cassop/prober/config"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/julienschmidt/httprouter"

@@ -3,7 +3,7 @@ package nodectl
 import (
 	"context"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl/jolokia"
+	"github.com/cin/mr-cassop/controllers/nodectl/jolokia"
 )
 
 func (n *client) Decommission(ctx context.Context, nodeIP string) error {

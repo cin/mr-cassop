@@ -5,19 +5,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/compare"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/compare"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -105,9 +105,9 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 			PodManagementPolicy: appsv1.ParallelPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type:          appsv1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{Partition: proto.Int32(0)},
+				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{Partition: ptr.To[int32](0)},
 			},
-			RevisionHistoryLimit: proto.Int32(10),
+			RevisionHistoryLimit: ptr.To[int32](10),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: stsLabels,
@@ -244,7 +244,7 @@ func maintenanceVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 				LocalObjectReference: v1.LocalObjectReference{
 					Name: names.MaintenanceConfigMap(cc.Name),
 				},
-				DefaultMode: proto.Int32(0700),
+				DefaultMode: ptr.To[int32](0700),
 			},
 		},
 	}
@@ -258,7 +258,7 @@ func podsConfigVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 				LocalObjectReference: v1.LocalObjectReference{
 					Name: names.PodsConfigConfigmap(cc.Name),
 				},
-				DefaultMode: proto.Int32(v1.ConfigMapVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.ConfigMapVolumeSourceDefaultMode),
 			},
 		},
 	}
@@ -300,7 +300,7 @@ func authVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 				SecretName: names.AdminAuthConfigSecret(cc.Name),
 				Items:      items,
 
-				DefaultMode: proto.Int32(v1.SecretVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
 			},
 		},
 	}
@@ -335,7 +335,7 @@ func cassandraServerTLSVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 						Path: cc.Spec.Encryption.Server.NodeTLSSecret.TruststoreFileKey,
 					},
 				},
-				DefaultMode: proto.Int32(v1.SecretVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
 			},
 		},
 	}
@@ -369,7 +369,7 @@ func cassandraClientTLSVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 						Path: cc.Spec.Encryption.Client.NodeTLSSecret.TruststoreFileKey,
 					},
 				},
-				DefaultMode: proto.Int32(v1.SecretVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
 			},
 		},
 	}

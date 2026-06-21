@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/env/v11"
 	"github.com/pkg/errors"
 	"go.uber.org/zap/zapcore"
 )
@@ -16,7 +16,7 @@ var (
 	}
 )
 
-// Config contains the Cassandra Operator configs
+// Config contains mr-cassop configs
 type Config struct {
 	Namespace             string        `env:"NAMESPACE" envDefault:"default"`
 	LeaderElectionEnabled bool          `env:"LEADERELECTION_ENABLED" envDefault:"true"`
@@ -35,7 +35,7 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	c := Config{}
-	if err := env.ParseWithFuncs(&c, parseFuncMap); err != nil {
+	if err := env.ParseWithOptions(&c, env.Options{FuncMap: parseFuncMap}); err != nil {
 		return &c, errors.WithStack(err)
 	}
 

@@ -3,7 +3,7 @@ title: Prober
 slug: /prober
 ---
 
-To properly configure the cluster, Cassandra operator should coordinate C* node readiness.
+To properly configure the cluster, mr-cassop should coordinate C* node readiness.
 
 By default, Kubernetes will say that a node is ready as soon as the process is started. This is not enough for Cassandra since it takes some time for node to start and bootstrap.
 This issue can be fixed by adding readiness probes. For example, we can try to create a CQL session and execute a simple command. If the command is successful, we can assume that the node is ready.
@@ -20,7 +20,7 @@ Even though prober stores the state of the cluster in memory, a restart doesn't 
 
 :::info
 
-Prober does not affect how Cassandra works. It only read states and provides information to Kubernetes and the Cassandra operator to coordinate actions.
+Prober does not affect how Cassandra works. It only read states and provides information to Kubernetes and the mr-cassop to coordinate actions.
 
 :::
 

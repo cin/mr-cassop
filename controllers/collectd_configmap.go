@@ -2,13 +2,14 @@ package controllers
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
+
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -46,7 +47,7 @@ func collectdVolume(cc *v1alpha1.CassandraCluster) v1.Volume {
 				LocalObjectReference: v1.LocalObjectReference{
 					Name: names.CollectdConfigMap(cc.Name),
 				},
-				DefaultMode: proto.Int32(v1.ConfigMapVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.ConfigMapVolumeSourceDefaultMode),
 			},
 		},
 	}

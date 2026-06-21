@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
-	"github.com/ibm/cassandra-operator/controllers/util"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/reaper"
+	"github.com/cin/mr-cassop/controllers/util"
 
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -90,7 +90,7 @@ func (r *CassandraClusterReconciler) executeCQLCMScripts(cc *dbv1alpha1.Cassandr
 			if err := cqlClient.Query(query); err != nil {
 				msg := fmt.Sprintf("Query #%d from script with key %q in ConfigMap %s/%s failed", index, cmKey, cm.Namespace, cm.Name)
 				r.Events.Warning(cc, events.EventCQLScriptFailed, msg)
-				return errors.Wrapf(err, msg)
+				return errors.Wrap(err, msg)
 			}
 		}
 		msg := fmt.Sprintf("All CQL queries from ConfgiMap %s/%s were executed successfully", cm.Namespace, cm.Name)

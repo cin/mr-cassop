@@ -5,22 +5,99 @@ slug: /development
 
 ### Requirements:
 
-* Kubernetes 1.19 or newer. You can use [minikube](https://kubernetes.io/docs/setup/minikube/) or [kind](https://github.com/kubernetes-sigs/kind) for local development.
-* Go 1.18+ with enabled go modules
-* [OperatorSDK](https://github.com/operator-framework/operator-sdk) v1.15.0+
-* [kustomize](https://github.com/kubernetes-sigs/kustomize) 4.4.1+
-* [helm](https://helm.sh/) v3.7.02+
-* [docker](https://docs.docker.com/install/)
+* Kubernetes 1.28 or newer. You can use [minikube](https://kubernetes.io/docs/setup/minikube/), [kind](https://github.com/kubernetes-sigs/kind), or [colima](https://github.com/abiosoft/colima) for local development.
+* Go 1.24+ with enabled go modules
+* Node.js 20+ for building the documentation site
+* [OperatorSDK](https://github.com/operator-framework/operator-sdk) v1.39.0+
+* [kustomize](https://github.com/kubernetes-sigs/kustomize) 5.8.1+
+* [helm](https://helm.sh/) v3.15+
+* [docker](https://docs.docker.com/install/) with buildx support
 * [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports)
-* [GolangCI-Lint](https://github.com/golangci/golangci-lint) 1.43.0+
-* [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) to setup test environment
-* [gomock](https://github.com/golang/mock)
+* [GolangCI-Lint](https://github.com/golangci/golangci-lint) 1.64.0+
+* [setup-envtest](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest) to install envtest assets
+* [go.uber.org/mock](https://github.com/uber-go/mock)
 
-## Run Operator Locally
+## Run Operator 
 
-The operator can be run only using the whole Helm chart with all necessary components. The operator interacts with Cassandra clusters, so it has to live in the cluster. It is not possible to run the operator having the binary locally (the `make run` way).
+There are two ways to run the operator:
 
-To run your code with changes, you need to build the docker image and deploy it to the cluster. It can be done by manually building and pushing the container images, or using [skaffold](https://skaffold.dev/). See details below.
+### 1. In-Cluster Deployment (Recommended)
+
+The operator can be deployed to Kubernetes using Helm charts. This is the recommended approach for both development and production.
+
+### 2. Local Process (Development Only)
+
+For rapid development iteration, the operator can also be run as a local process using `make run` with the `dev-env.sh` environment configuration.
+
+To run your code with changes, you can either:
+- Build Docker images and deploy via Helm (recommended)
+- Run locally using `make run` (fastest iteration)
+- Use [skaffold](https://skaffold.dev/) for automated builds
+
+### Docker Build System
+
+The project includes a comprehensive Docker build system optimized for development:
+
+```bash
+# Fast iteration - core images only (operator + prober)
+./build-local.sh
+
+# Full local development (operator + prober + cassandra)
+./build-local-full.sh
+
+# Build all 5 images
+./build-images.sh
+
+# Individual components
+make docker-build-operator
+make docker-build-prober
+make docker-build-cassandra
+make docker-build-jolokia
+make docker-build-icarus
+
+# Batch operations
+make docker-build-core          # operator + prober
+make docker-build-essential     # operator + prober + cassandra
+make docker-build-monitoring    # jolokia + icarus
+make docker-build-all          # all images
+```
+
+The build system defaults to the local Go platform (`go env GOOS/GOARCH`) and supports explicit multi-platform builds:
+
+```bash
+# Multi-platform builds for production
+MULTI_PLATFORM=true ./build-images.sh
+make docker-build-all-multiplatform
+```
+
+See [DOCKER_BUILD.md](https://github.com/cin/mr-cassop/blob/main/DOCKER_BUILD.md) for comprehensive build documentation.
+
+### Helm Deployment
+
+Deploy the operator using the Helm chart:
+
+```bash
+# Build images first
+./build-local-full.sh
+
+# Create namespace
+kubectl create namespace mr-cassop-system
+
+# Deploy with custom values
+helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
+```
+
+### Local Process Development
+
+For fastest iteration during development:
+
+```bash
+# Set up environment
+source dev-env.sh
+
+# Run operator locally
+make run
+```
 
 ### Skaffold way
 
@@ -77,7 +154,7 @@ if you use Ginkgo CLI.
 
 E2E tests run on a k8s cluster. These tests deploy the C* Custom Resource Definition (CRD) in the k8s cluster.
 
->Note: before running, make sure the Cassandra operator is deployed in your k8s namespace. 
+>Note: before running, make sure the mr-cassop is deployed in your k8s namespace. 
 
 To run e2e tests:
 
@@ -90,7 +167,7 @@ make e2e-tests
 To download and run docs locally, clone the repo and then go to the docs directory:
 
 ```console
-cd ./cassandra-operator/docs
+cd ./mr-cassop/docs
 ```
 
 If `npm` is not already installed it can be installed with:

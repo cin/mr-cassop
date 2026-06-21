@@ -1,0 +1,40 @@
+replicas: 1
+container:
+  image: ghcr.io/cin/mr-cassop/operator:dev
+  imagePullPolicy: Never
+  restartPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 200Mi
+    requests:
+      cpu: 500m
+      memory: 200Mi
+logLevel: debug
+logFormat: console
+proberImage: ghcr.io/cin/mr-cassop/prober:dev
+jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:dev
+cassandraImage: ghcr.io/cin/mr-cassop/cassandra:dev
+reaperImage: thelastpickle/cassandra-reaper:4.2.5
+icarusImage: ghcr.io/cin/mr-cassop/icarus:dev
+clusterDashboards:
+  enabled: []
+  namespace: ""
+  labels:
+    grafana_dashboard: "1"
+monitoring:
+  enabled: false
+  grafanaDashboard:
+    enabled: false
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+    datasourceName: ""
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels:
+      operator: mr-cassop
+    scrapeInterval: 30s
+admissionWebhooks:
+  enabled: false 

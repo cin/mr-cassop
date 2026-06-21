@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
+	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/pkg/errors"
 )
 

@@ -3,7 +3,8 @@ package nodectl
 import (
 	"context"
 	"encoding/json"
-	"github.com/ibm/cassandra-operator/controllers/nodectl/jolokia"
+
+	"github.com/cin/mr-cassop/controllers/nodectl/jolokia"
 )
 
 type ClusterView struct {

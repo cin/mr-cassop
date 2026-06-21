@@ -6,11 +6,10 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/compare"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/compare"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -18,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -74,7 +74,7 @@ func (r *CassandraClusterReconciler) reconcileProberDeployment(ctx context.Conte
 			Labels:    labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: proto.Int32(1),
+			Replicas: ptr.To[int32](1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: proberLabels,
 			},
@@ -85,8 +85,8 @@ func (r *CassandraClusterReconciler) reconcileProberDeployment(ctx context.Conte
 					MaxSurge:       &percent25,
 				},
 			},
-			RevisionHistoryLimit:    proto.Int32(10),
-			ProgressDeadlineSeconds: proto.Int32(600),
+			RevisionHistoryLimit:    ptr.To[int32](10),
+			ProgressDeadlineSeconds: ptr.To[int32](600),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: proberLabels,
@@ -97,7 +97,7 @@ func (r *CassandraClusterReconciler) reconcileProberDeployment(ctx context.Conte
 						jolokiaContainer(cc, clientTLSSecret),
 					},
 					RestartPolicy:                 v1.RestartPolicyAlways,
-					TerminationGracePeriodSeconds: proto.Int64(30),
+					TerminationGracePeriodSeconds: ptr.To[int64](30),
 					DNSPolicy:                     v1.DNSClusterFirst,
 					ServiceAccountName:            names.ProberServiceAccount(cc.Name),
 					SecurityContext:               &v1.PodSecurityContext{},
@@ -128,7 +128,7 @@ func (r *CassandraClusterReconciler) reconcileProberDeployment(ctx context.Conte
 							},
 						},
 
-						DefaultMode: proto.Int32(v1.SecretVolumeSourceDefaultMode),
+						DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
 					},
 				},
 			},

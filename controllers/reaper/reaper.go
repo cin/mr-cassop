@@ -10,14 +10,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 const (
 	RepairStateRunning = "RUNNING"
 	RepairStatePaused  = "PAUSED"
 
-	OwnerCassandraOperator = "cassandra-operator"
+	OwnerCassandraOperator = "mr-cassop"
 )
 
 type reaperClient struct {

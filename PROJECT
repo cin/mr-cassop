@@ -1,12 +1,12 @@
 domain: ibm.com
 layout: go.kubebuilder.io/v3
-repo: github.com/ibm/cassandra-operator
+repo: github.com/cin/mr-cassop
 resources:
 - domain: ibm.com
   controller: true
   group: db
   kind: CassandraCluster
-  path: github.com/ibm/cassandra-operator/api/v1alpha1
+  path: github.com/cin/mr-cassop/api/v1alpha1
   version: v1alpha1
   webhooks:
     validation: true

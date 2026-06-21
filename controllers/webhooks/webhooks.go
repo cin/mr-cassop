@@ -1,7 +1,7 @@
 package webhooks
 
 import (
-	"github.com/ibm/cassandra-operator/controllers/config"
+	"github.com/cin/mr-cassop/controllers/config"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
 )

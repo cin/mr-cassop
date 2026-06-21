@@ -6,15 +6,15 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/ibm/cassandra-operator/prober/logger"
+	"github.com/cin/mr-cassop/prober/logger"
 
-	"github.com/ibm/cassandra-operator/prober/config"
-	"github.com/ibm/cassandra-operator/prober/prober"
+	"github.com/cin/mr-cassop/prober/config"
+	"github.com/cin/mr-cassop/prober/prober"
 
-	"github.com/ibm/cassandra-operator/prober/jolokia"
+	"github.com/cin/mr-cassop/prober/jolokia"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/env/v11"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -28,7 +28,9 @@ var (
 
 func main() {
 	var cfg config.Config
-	err := env.ParseWithFuncs(&cfg, map[reflect.Type]env.ParserFunc{reflect.TypeOf(zapcore.DebugLevel): config.LevelParser})
+	err := env.ParseWithOptions(&cfg, env.Options{
+		FuncMap: map[reflect.Type]env.ParserFunc{reflect.TypeOf(zapcore.DebugLevel): config.LevelParser},
+	})
 	if err != nil {
 		fmt.Printf("unable to read configs: %s", err.Error())
 		os.Exit(1)

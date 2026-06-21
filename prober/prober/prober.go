@@ -6,8 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/ibm/cassandra-operator/prober/config"
-	"github.com/ibm/cassandra-operator/prober/jolokia"
+	"github.com/cin/mr-cassop/prober/config"
+	"github.com/cin/mr-cassop/prober/jolokia"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -52,11 +52,11 @@ func (r *CassandraClusterReconciler) defaultCassandraCluster(cc *dbv1alpha1.Cass
 	}
 
 	if cc.Spec.TopologySpreadByZone == nil {
-		cc.Spec.TopologySpreadByZone = proto.Bool(true)
+		cc.Spec.TopologySpreadByZone = ptr.To(true)
 	}
 
 	if cc.Spec.NetworkPolicies.AllowReaperNodeIPs == nil {
-		cc.Spec.NetworkPolicies.AllowReaperNodeIPs = proto.Bool(true)
+		cc.Spec.NetworkPolicies.AllowReaperNodeIPs = ptr.To(true)
 	}
 
 	r.defaultServerTLS(cc)
@@ -194,7 +194,7 @@ func (r *CassandraClusterReconciler) defaultCassandra(cc *dbv1alpha1.CassandraCl
 	}
 
 	if cc.Spec.Cassandra.PurgeGossip == nil {
-		cc.Spec.Cassandra.PurgeGossip = proto.Bool(true)
+		cc.Spec.Cassandra.PurgeGossip = ptr.To(true)
 	}
 
 	if cc.Spec.Cassandra.LogLevel == "" {
@@ -202,7 +202,7 @@ func (r *CassandraClusterReconciler) defaultCassandra(cc *dbv1alpha1.CassandraCl
 	}
 
 	if cc.Spec.Cassandra.TerminationGracePeriodSeconds == nil {
-		cc.Spec.Cassandra.TerminationGracePeriodSeconds = proto.Int64(300)
+		cc.Spec.Cassandra.TerminationGracePeriodSeconds = ptr.To[int64](300)
 	}
 
 	if cc.Spec.Cassandra.Persistence.DataVolumeClaimSpec.VolumeMode == nil {
@@ -272,7 +272,7 @@ func (r *CassandraClusterReconciler) defaultServerTLS(cc *dbv1alpha1.CassandraCl
 	}
 
 	if cc.Spec.Encryption.Server.RequireClientAuth == nil {
-		cc.Spec.Encryption.Server.RequireClientAuth = proto.Bool(true)
+		cc.Spec.Encryption.Server.RequireClientAuth = ptr.To(true)
 	}
 
 	if cc.Spec.Encryption.Server.Protocol == "" {
@@ -297,7 +297,7 @@ func (r *CassandraClusterReconciler) defaultServerTLS(cc *dbv1alpha1.CassandraCl
 
 func (r *CassandraClusterReconciler) defaultClientTLS(cc *dbv1alpha1.CassandraCluster) {
 	if cc.Spec.Encryption.Client.RequireClientAuth == nil {
-		cc.Spec.Encryption.Client.RequireClientAuth = proto.Bool(true)
+		cc.Spec.Encryption.Client.RequireClientAuth = ptr.To(true)
 	}
 
 	if cc.Spec.Encryption.Client.Protocol == "" {
@@ -344,10 +344,10 @@ func (r *CassandraClusterReconciler) defaultSysctls(cc *dbv1alpha1.CassandraClus
 		"net.ipv4.tcp_window_scaling":  "1",
 		"vm.dirty_background_bytes":    "10485760",
 		"vm.dirty_bytes":               "1073741824",
-		"vm.zone_reclaim_mode":         "0",
-		"fs.file-max":                  "1073741824",
-		"vm.max_map_count":             "1073741824",
-		"vm.swappiness":                "1",
+		// "vm.zone_reclaim_mode":         "0",
+		"fs.file-max":      "1073741824",
+		"vm.max_map_count": "1073741824",
+		"vm.swappiness":    "1",
 	}
 
 	if cc.Spec.Cassandra.Sysctls == nil {

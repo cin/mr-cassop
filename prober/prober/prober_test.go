@@ -8,7 +8,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 
-	"github.com/ibm/cassandra-operator/prober/config"
+	"github.com/cin/mr-cassop/prober/config"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )

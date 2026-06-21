@@ -3,9 +3,9 @@ package cassandrarestore
 import (
 	"context"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/icarus"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/icarus"
 )
 
 func (r *CassandraRestoreReconciler) reconcileStatus(ctx context.Context, cr *v1alpha1.CassandraRestore, relatedIcarusRestore icarus.Restore) error {

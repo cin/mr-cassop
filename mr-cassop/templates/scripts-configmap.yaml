@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cassandra-operator-scripts-configmap
+  name: mr-cassop-scripts-configmap
   namespace: {{ .Release.Namespace }}
 data:
 {{ (.Files.Glob "scripts/*.sh").AsConfig | indent 2 }}

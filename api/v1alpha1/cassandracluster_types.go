@@ -43,7 +43,7 @@ const (
 	CassandraOperatorAdminPassword = "admin-password"
 
 	CassandraOperatorInstance     = "operator"
-	CassandraOperatorInstanceName = "cassandra-operator"
+	CassandraOperatorInstanceName = "mr-cassop"
 
 	ProberServicePort    = 80
 	JolokiaContainerPort = 8080

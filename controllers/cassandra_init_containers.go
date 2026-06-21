@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 func initContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
@@ -103,9 +103,9 @@ func privilegedInitContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 		Image:           cc.Spec.Cassandra.Image,
 		ImagePullPolicy: cc.Spec.Cassandra.ImagePullPolicy,
 		SecurityContext: &v1.SecurityContext{
-			Privileged: proto.Bool(true),
-			RunAsUser:  proto.Int64(0),
-			RunAsGroup: proto.Int64(0),
+			Privileged: ptr.To(true),
+			RunAsUser:  ptr.To[int64](0),
+			RunAsGroup: ptr.To[int64](0),
 		},
 		Resources: v1.ResourceRequirements{
 			Requests: v1.ResourceList{

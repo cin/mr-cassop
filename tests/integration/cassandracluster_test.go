@@ -6,24 +6,24 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/labels"
 
 	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/gogo/protobuf/proto"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 var _ = Describe("prober, statefulsets and reaper", func() {
@@ -102,7 +102,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 					fmt.Sprintf("rm -rf /var/lib/cassandra/data/system/peers*\n" +
 						"echo \"prefer_local=true\" >> $CASSANDRA_CONF/cassandra-rackdc.properties\n" +
 						"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/\n" +
-						"cp /etc/cassandra-configmaps/jvm.options $CASSANDRA_HOME/\n" +
+						"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options\n" +
 						"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh\n" +
 						"replace_address=\"\"\n" +
 						"old_ip=$CASSANDRA_NODE_PREVIOUS_IP\n" +
@@ -116,7 +116,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"else\n" +
 						"  echo not using replace address since the node IP hasn\\'t changed\n" +
 						"fi\n" +
-						"/docker-entrypoint.sh -f -R " +
+						"/usr/local/bin/docker-entrypoint.sh -f -R " +
 						"-Dcassandra.jmx.remote.port=7199 " +
 						"-Dcom.sun.management.jmxremote.rmi.port=7199 " +
 						"-Djava.rmi.server.hostname=$POD_IP " +
@@ -229,7 +229,11 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 					},
 					{
 						Name:  "REAPER_CASS_CONTACT_POINTS",
-						Value: fmt.Sprintf("[ %s ]", names.DC(cc.Name, dc.Name)),
+						Value: fmt.Sprintf(`[{"host":"%s","port":"%d"}]`, names.DC(cc.Name, dc.Name), dbv1alpha1.CqlPort),
+					},
+					{
+						Name:  "REAPER_CASS_LOCAL_DC",
+						Value: dc.Name,
 					},
 					{
 						Name:  "REAPER_CASS_CLUSTER_NAME",
@@ -271,7 +275,29 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						},
 					},
 					{
+						Name: "REAPER_AUTH_USER",
+						ValueFrom: &v1.EnvVarSource{
+							SecretKeyRef: &v1.SecretKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "test-cassandra-cluster-auth-config-admin",
+								},
+								Key: "admin-role",
+							},
+						},
+					},
+					{
 						Name: "REAPER_CASS_AUTH_PASSWORD",
+						ValueFrom: &v1.EnvVarSource{
+							SecretKeyRef: &v1.SecretKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "test-cassandra-cluster-auth-config-admin",
+								},
+								Key: "admin-password",
+							},
+						},
+					},
+					{
+						Name: "REAPER_AUTH_PASSWORD",
 						ValueFrom: &v1.EnvVarSource{
 							SecretKeyRef: &v1.SecretKeySelector{
 								LocalObjectReference: v1.LocalObjectReference{

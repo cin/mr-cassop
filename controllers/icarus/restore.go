@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -102,7 +102,7 @@ func (c *client) Restore(ctx context.Context, restoreRequest RestoreRequest) err
 		return err
 	}
 	if resp.StatusCode != http.StatusCreated {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("backup request failed: code: %d, body: %s", resp.StatusCode, string(b))
 	}
 
@@ -122,10 +122,10 @@ func (c *client) Restores(ctx context.Context) ([]Restore, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("backup request failed: code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

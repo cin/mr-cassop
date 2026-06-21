@@ -1,9 +1,9 @@
 package e2e
 
 import (
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/labels"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -44,7 +44,7 @@ var _ = Describe("single DC region", Serial, func() {
 			Enabled: true,
 			DataVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
 				StorageClassName: proto.String(cfg.storageClassName),
-				Resources: v1.ResourceRequirements{
+				Resources: v1.VolumeResourceRequirements{
 					Requests: v1.ResourceList{
 						v1.ResourceStorage: resource.MustParse("20Gi"),
 					},

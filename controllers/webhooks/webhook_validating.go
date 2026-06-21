@@ -2,24 +2,25 @@ package webhooks
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/certs"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
+
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/certs"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	rbac "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 )
 
 func setupValidatingWebhookConfig(kubeClient *kubernetes.Clientset, operatorConfig *config.Config, caKeypair certs.Keypair) error {
 	var (
 		ctx             = context.Background()
-		clusterRoleName = "cassandra-operator"
+		clusterRoleName = "mr-cassop"
 	)
 
 	clusterRole, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, clusterRoleName, metav1.GetOptions{})
@@ -91,7 +92,7 @@ func CreateValidatingWebhookConf(namespace string, clusterRole *rbac.ClusterRole
 						Namespace: namespace,
 						Name:      names.WebhooksServiceName(),
 						Path:      &ccWebhookPath,
-						Port:      proto.Int32(443),
+						Port:      ptr.To[int32](443),
 					},
 					CABundle: caCrtBytes,
 				},
@@ -122,7 +123,7 @@ func CreateValidatingWebhookConf(namespace string, clusterRole *rbac.ClusterRole
 						Namespace: namespace,
 						Name:      names.WebhooksServiceName(),
 						Path:      &cbWebhookPath,
-						Port:      proto.Int32(443),
+						Port:      ptr.To[int32](443),
 					},
 					CABundle: caCrtBytes,
 				},
@@ -153,7 +154,7 @@ func CreateValidatingWebhookConf(namespace string, clusterRole *rbac.ClusterRole
 						Namespace: namespace,
 						Name:      names.WebhooksServiceName(),
 						Path:      &crWebhookPath,
-						Port:      proto.Int32(443),
+						Port:      ptr.To[int32](443),
 					},
 					CABundle: caCrtBytes,
 				},

@@ -9,11 +9,11 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/icarus"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/icarus"
+	"github.com/cin/mr-cassop/controllers/names"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

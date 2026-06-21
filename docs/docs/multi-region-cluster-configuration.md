@@ -3,7 +3,7 @@ title: Multi Regions Cluster Configurations
 slug: /multi-region-cluster-configuration
 ---
 
-Cassandra Operator supports running Cassandra in multiple regions (Kubernetes clusters). The operator should be deployed in all regions with a C* cluster. Each operator will configure its own CassandraCluster while still communicating with operators in other regions. 
+mr-cassop supports running Cassandra in multiple regions (Kubernetes clusters). The operator should be deployed in all regions with a C* cluster. Each operator will configure its own CassandraCluster while still communicating with operators in other regions. 
 
 In order to automate this process, the operator deploys a component that is used to discover information to correctly configure the cluster (available datacenters, replicas per datacenter, seeds, etc.)
 

@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/google/go-querystring/query"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
 )
 
 type RepairSchedule struct {

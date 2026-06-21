@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/reaper"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
 	"github.com/pkg/errors"
 )
 
@@ -169,22 +169,22 @@ func (r *CassandraClusterReconciler) toReaperRepair(repair dbv1alpha1.RepairSche
 }
 
 /*
-	Reschedules the ScheduleTriggerTime field of the repair job if the timestamp is in the past.
-	The ScheduleTriggerTime field will be set to the next occurrence of the day of week (DOW) in the future,
-	based on the current system time. The hour, minute, and second will remain the same. If the timestamp is
-	already in the future, this function has no affect.
+Reschedules the ScheduleTriggerTime field of the repair job if the timestamp is in the past.
+The ScheduleTriggerTime field will be set to the next occurrence of the day of week (DOW) in the future,
+based on the current system time. The hour, minute, and second will remain the same. If the timestamp is
+already in the future, this function has no affect.
 
-	Examples:
-	Assume system time is 2020-11-18T12:00:00
+Examples:
+Assume system time is 2020-11-18T12:00:00
 
-	input: 2020-11-15T14:00:00
-	output: 2020-11-22T14:00:00
+input: 2020-11-15T14:00:00
+output: 2020-11-22T14:00:00
 
-	input: 2019-01-01T02:00:00
-	output: 2020-11-24T02:00:00
+input: 2019-01-01T02:00:00
+output: 2020-11-24T02:00:00
 
-	input: 2020-11-29T02:00:00
-	output: 2020-11-29T02:00:00
+input: 2020-11-29T02:00:00
+output: 2020-11-29T02:00:00
 */
 func rescheduleTimestamp(repair *dbv1alpha1.RepairSchedule) error {
 

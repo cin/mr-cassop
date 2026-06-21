@@ -18,18 +18,18 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/cql"
-	"github.com/ibm/cassandra-operator/controllers/eventhandler"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/jobs"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/nodectl"
-	"github.com/ibm/cassandra-operator/controllers/prober"
-	"github.com/ibm/cassandra-operator/controllers/reaper"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/cql"
+	"github.com/cin/mr-cassop/controllers/eventhandler"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/jobs"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/nodectl"
+	"github.com/cin/mr-cassop/controllers/prober"
+	"github.com/cin/mr-cassop/controllers/reaper"
 
-	"github.com/gocql/gocql"
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -411,9 +411,9 @@ func SetupCassandraReconciler(r reconcile.Reconciler, mgr manager.Manager, logr 
 		Owns(&rbac.Role{}).
 		Owns(&rbac.RoleBinding{}).
 		Owns(&v1.ServiceAccount{}).
-		Watches(&source.Kind{Type: &v1.Secret{}}, eventhandler.NewAnnotationEventHandler()).
-		Watches(&source.Kind{Type: &v1.ConfigMap{}}, eventhandler.NewAnnotationEventHandler()).
-		Watches(&source.Channel{Source: reconcileChan}, &handler.EnqueueRequestForObject{})
+		Watches(&v1.Secret{}, eventhandler.NewAnnotationEventHandler()).
+		Watches(&v1.ConfigMap{}, eventhandler.NewAnnotationEventHandler()).
+		WatchesRawSource(source.Channel(reconcileChan, &handler.EnqueueRequestForObject{}))
 
 	// WithEventFilter(predicate.NewPredicate(logr)) // uncomment to see kubernetes events in the logs, e.g. ConfigMap updates
 

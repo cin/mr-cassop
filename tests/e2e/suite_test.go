@@ -17,7 +17,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
+	"github.com/cin/mr-cassop/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -89,7 +89,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	cassandraCRD := apixClient.CustomResourceDefinitions()
 	crd, err := cassandraCRD.Get(ctx, "cassandraclusters.db.ibm.com", metav1.GetOptions{TypeMeta: metav1.TypeMeta{}})
 	if err != nil || crd == nil {
-		Fail(fmt.Sprintf("Cassandra operator is not deployed in the cluster. Error: %s", err))
+		Fail(fmt.Sprintf("mr-cassop is not deployed in the cluster. Error: %s", err))
 	}
 
 	// Create clientset to be able to pull logs and exec into pods
@@ -104,7 +104,7 @@ var _ = JustAfterEach(func() {
 		ccList := &v1alpha1.CassandraClusterList{}
 		Expect(kubeClient.List(ctx, ccList)).To(Succeed())
 
-		GinkgoWriter.Println("Gathering log info for Cassandra Operator")
+		GinkgoWriter.Println("Gathering log info for mr-cassop")
 		showPodLogs(v1alpha1.CassandraOperatorPodLabels, cfg.operatorNamespace)
 
 		for _, cc := range ccList.Items {

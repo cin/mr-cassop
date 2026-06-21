@@ -17,18 +17,20 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ibm/cassandra-operator/controllers/util"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 )
 
@@ -41,34 +43,43 @@ func SetWebhookLogger(l *zap.SugaredLogger) {
 func (cc *CassandraCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(cc).
+		WithValidator(cc).
 		Complete()
 }
 
-var _ webhook.Validator = &CassandraCluster{}
+var _ webhook.CustomValidator = &CassandraCluster{}
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (cc *CassandraCluster) ValidateCreate() error {
-	webhookLogger.Infof("Validating webhook has been called on create request for cluster: %s", cc.Name)
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cc *CassandraCluster) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	cluster, ok := obj.(*CassandraCluster)
+	if !ok {
+		return nil, fmt.Errorf("object is not of type CassandraCluster")
+	}
+	webhookLogger.Infof("Validating webhook has been called on create request for cluster: %s", cluster.Name)
 
-	return kerrors.NewAggregate(validateClusterCreateUpdate(cc, nil))
+	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cluster, nil))
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (cc *CassandraCluster) ValidateUpdate(old runtime.Object) error {
-	webhookLogger.Infof("Validating webhook has been called on update request for cluster: %s", cc.Name)
-
-	ccOld, ok := old.(*CassandraCluster)
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+func (cc *CassandraCluster) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	cluster, ok := newObj.(*CassandraCluster)
 	if !ok {
-		return fmt.Errorf("old casandra cluster object: (%s) is not of type CassandraCluster", ccOld.Name)
+		return nil, fmt.Errorf("new object is not of type CassandraCluster")
+	}
+	webhookLogger.Infof("Validating webhook has been called on update request for cluster: %s", cluster.Name)
+
+	ccOld, ok := oldObj.(*CassandraCluster)
+	if !ok {
+		return nil, fmt.Errorf("old object is not of type CassandraCluster")
 	}
 
-	return kerrors.NewAggregate(validateClusterCreateUpdate(cc, ccOld))
+	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cluster, ccOld))
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (cc *CassandraCluster) ValidateDelete() error {
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+func (cc *CassandraCluster) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	webhookLogger.Infof("Validating webhook has been called on delete request for cluster: %s", cc.Name)
-	return nil
+	return nil, nil
 }
 
 func validateClusterCreateUpdate(cc *CassandraCluster, ccOld *CassandraCluster) (errors []error) {

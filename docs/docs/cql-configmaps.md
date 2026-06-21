@@ -5,7 +5,7 @@ slug: /cql-configmaps
 
 ## Description
 
-The Cassandra operator supports running CQL queries through Configmaps by setting the appropriate label.
+mr-cassop supports running CQL queries through Configmaps by setting the appropriate label.
 
 The CQL Configmap can contain multiple entries with queries. In that case they will be executed in lexicographical order. 
 
@@ -25,7 +25,7 @@ Create CQL Configmap:
 kubectl create configmap my-cql-queries --from-literal=test-query="CREATE KEYSPACE IF NOT EXISTS test_keyspace WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'dc1' : 3 };"
 ```
 
-By default, the Cassandra operator is looking for CQL Configmaps with the label `cql-scripts`, but you can override this value in the CassandraCluster resource:
+By default, the mr-cassop is looking for CQL Configmaps with the label `cql-scripts`, but you can override this value in the CassandraCluster resource:
 
 ```yaml
 spec:
@@ -78,6 +78,6 @@ kubectl annotate configmap/my-cql-queries cassandra-cluster-instance=test-cluste
 ```
 
 :::caution
-Under the hood, the operator uses https://github.com/gocql/gocql to execute CQL queries. That imposes restrictions on the kind of CQL queries you can run.
-For example, `USE` queries are not allowed, `INSERT` queries can't be executed (since the [Query](https://pkg.go.dev/github.com/gocql/gocql#Session.Query) function requires the values to be passed to the function), etc.
+Under the hood, the operator uses the [Apache Cassandra Go driver](https://github.com/apache/cassandra-gocql-driver) to execute CQL queries. That imposes restrictions on the kind of CQL queries you can run.
+For example, `USE` queries are not allowed, `INSERT` queries can't be executed (since the [Query](https://pkg.go.dev/github.com/apache/cassandra-gocql-driver/v2#Session.Query) function requires the values to be passed to the function), etc.
 :::

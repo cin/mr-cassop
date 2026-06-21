@@ -1,20 +1,20 @@
-apiVersion: skaffold/v2beta25
+apiVersion: skaffold/v4beta6
 kind: Config
 build:
   artifacts:
-  - image: "us.icr.io/cassandra-operator/cassandra-operator"
+  - image: "ghcr.io/cin/mr-cassop/operator"
     context: .
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/prober"
+  - image: "ghcr.io/cin/mr-cassop/prober"
     context: prober/
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/cassandra"
+  - image: "ghcr.io/cin/mr-cassop/cassandra"
     context: cassandra/
     docker:
       dockerfile: Dockerfile
-  - image: "us.icr.io/cassandra-operator/jolokia"
+  - image: "ghcr.io/cin/mr-cassop/jolokia"
     context: jolokia/
     docker:
       dockerfile: Dockerfile
@@ -24,47 +24,21 @@ build:
   local:
     push: true
     concurrency: 4
-#    useDockerCLI: true
-#build:
-#  artifacts:
-#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/cassandra-operator"
-#    context: .
-#    docker:
-#      dockerfile: Dockerfile
-#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/prober"
-#    context: prober/
-#    docker:
-#      dockerfile: Dockerfile
-#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/cassandra"
-#    context: cassandra/
-#    docker:
-#      dockerfile: Dockerfile
-#  - image: "738806440043.dkr.ecr.us-east-1.amazonaws.com/jolokia"
-#    context: jolokia/
-#    docker:
-#      dockerfile: Dockerfile
-#  tagPolicy:
-#    envTemplate:
-#      template: "{{.USER}}"
-#  local:
-#    push: true
-#    concurrency: 4
 deploy:
   helm:
     releases:
-    - name: "cassandra-operator-{{.USER}}"
-      chartPath: ./cassandra-operator
+    - name: "mr-cassop-{{.USER}}"
+      chartPath: ./mr-cassop
       valuesFiles:
-      - cassandra-operator/values.yaml
+      - mr-cassop/values.yaml
       setValueTemplates:
-        container.image: "us.icr.io/cassandra-operator/cassandra-operator:{{.USER}}"
-        container.imagePullSecret: icm-coreeng-pull-secret
+        container.image: "ghcr.io/cin/mr-cassop/operator:{{.USER}}"
         container.imagePullPolicy: Always
         logLevel: debug
         logFormat: console
-        proberImage: "us.icr.io/cassandra-operator/prober:{{.USER}}"
-        jolokiaImage: "us.icr.io/cassandra-operator/jolokia:{{.USER}}"
-        cassandraImage: "us.icr.io/cassandra-operator/cassandra:{{.USER}}"
+        proberImage: "ghcr.io/cin/mr-cassop/prober:{{.USER}}"
+        jolokiaImage: "ghcr.io/cin/mr-cassop/jolokia:{{.USER}}"
+        cassandraImage: "ghcr.io/cin/mr-cassop/cassandra:{{.USER}}"
         admissionWebhooks.enabled: true
         clusterDashboards.enabled[0]: "datastax"
         clusterDashboards.enabled[1]: "instaclustr"
@@ -96,17 +70,17 @@ profiles:
   deploy:
     helm:
       releases:
-      - name: "cassandra-operator-{{.USER}}"
-        chartPath: ./cassandra-operator
+      - name: "mr-cassop-{{.USER}}"
+        chartPath: ./mr-cassop
         valuesFiles:
-        - cassandra-operator/values.yaml
+        - mr-cassop/values.yaml
         setValueTemplates:
-          container.image: "us.icr.io/cassandra-operator/cassandra-operator:{{.USER}}"
+          container.image: "ghcr.io/cin/mr-cassop/operator:{{.USER}}"
           container.imagePullPolicy: Never
           logLevel: debug
-          proberImage: "us.icr.io/cassandra-operator/prober:{{.USER}}"
-          jolokiaImage: "us.icr.io/cassandra-operator/jolokia:{{.USER}}"
-          cassandraImage: "us.icr.io/cassandra-operator/cassandra:{{.USER}}"
+          proberImage: "ghcr.io/cin/mr-cassop/prober:{{.USER}}"
+          jolokiaImage: "ghcr.io/cin/mr-cassop/jolokia:{{.USER}}"
+          cassandraImage: "ghcr.io/cin/mr-cassop/cassandra:{{.USER}}"
         createNamespace: true
         wait: true
         packaged:

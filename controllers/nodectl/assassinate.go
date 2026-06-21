@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/ibm/cassandra-operator/controllers/nodectl/jolokia"
+	"github.com/cin/mr-cassop/controllers/nodectl/jolokia"
 )
 
 func (n *client) Assassinate(ctx context.Context, execNodeIP, assassinateNodeIP string) error {

@@ -3,7 +3,7 @@ title: Cassandra backup and restore
 slug: /cassandra-backup-restore
 ---
 
-The Cassandra operator uses [Icarus](https://github.com/instaclustr/icarus) to perform backups and restores. 
+mr-cassop uses [Icarus](https://github.com/instaclustr/icarus) to perform backups and restores. 
 Refer to its documentation for more details on how the backup and restore procedures work internally.
 
 Backup and restore creation and configuration is done by creating CassandraBackup and CassandraRestore custom resources.
@@ -70,9 +70,9 @@ spec:
     cassandraBackup: example-backup
     # or the following if no corresponding cassandraBackup available
     # storageLocation: s3://bucket-name/backup/location
-    # snapshotTag: example-backup //the name of the CassandraBackup if the backup was created using the Cassandra Operator
+    # snapshotTag: example-backup //the name of the CassandraBackup if the backup was created using the mr-cassop
 ```
 
-The Cassandra Operator will update the progress of the restore in the status field of CassandraRestores CR object.
+mr-cassop will update the progress of the restore in the status field of CassandraRestores CR object.
 
 See [all fields description](cassandrarestore-configuration.md) for more information.

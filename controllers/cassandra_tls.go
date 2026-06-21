@@ -8,12 +8,12 @@ import (
 	"os"
 	"regexp"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/certs"
-	"github.com/ibm/cassandra-operator/controllers/events"
-	"github.com/ibm/cassandra-operator/controllers/labels"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/certs"
+	"github.com/cin/mr-cassop/controllers/events"
+	"github.com/cin/mr-cassop/controllers/labels"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -122,7 +122,7 @@ func (r *CassandraClusterReconciler) validateTLSFields(cc *dbv1alpha1.CassandraC
 		errMsg := fmt.Sprintf("TLS Secret `%s` has some empty or missing fields: %v", tlsSecret.Name, emptyFields)
 		r.Log.Warnf(errMsg)
 		r.Events.Warning(cc, events.EventTLSSecretInvalid, errMsg)
-		return errors.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 	return nil
 }

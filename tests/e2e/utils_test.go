@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/labels"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/labels"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 )
 
 var (
@@ -272,8 +272,8 @@ func deployCassandraCluster(cassandraCluster *v1alpha1.CassandraCluster) {
 				Namespace: cassandraCluster.Namespace,
 			},
 			Data: map[string][]byte{
-				v1alpha1.CassandraOperatorAdminRole:     []byte("cassandra-operator"),
-				v1alpha1.CassandraOperatorAdminPassword: []byte("cassandra-operator-password"),
+				v1alpha1.CassandraOperatorAdminRole:     []byte("mr-cassop"),
+				v1alpha1.CassandraOperatorAdminPassword: []byte("mr-cassop-password"),
 			},
 		}
 		Expect(kubeClient.Create(ctx, adminSecret)).To(Succeed())

@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/ibm/cassandra-operator/prober/jolokia"
+	"github.com/cin/mr-cassop/prober/jolokia"
 
 	"github.com/onsi/gomega"
 	"go.uber.org/zap"

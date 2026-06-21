@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"time"
@@ -78,7 +78,7 @@ func (j *Client) CassandraNodeState(ip string) (CassandraResponse, error) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	responseBody, err := ioutil.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return CassandraResponse{}, err
 	}

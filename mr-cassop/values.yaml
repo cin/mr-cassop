@@ -1,6 +1,6 @@
 replicas: 1
 container:
-  image: us.icr.io/cassandra-operator/cassandra-operator:0.5.0
+  image: ghcr.io/cin/mr-cassop/operator:0.6.0
   # imagePullSecret: container-registry-secret
   imagePullPolicy: IfNotPresent
   restartPolicy: Always
@@ -13,11 +13,11 @@ container:
       memory: 200Mi
 logLevel: info
 logFormat: json
-proberImage: us.icr.io/cassandra-operator/prober:0.5.0 # this value will be updated on next release in GHA
-jolokiaImage: us.icr.io/cassandra-operator/jolokia:0.5.0 # this value will be updated on next release in GHA
-cassandraImage: us.icr.io/cassandra-operator/cassandra:3.11.13-0.5.0 # this value will be updated on next release in GHA
-reaperImage: thelastpickle/cassandra-reaper:3.2.0
-icarusImage: us.icr.io/cassandra-operator/icarus:0.5.0
+proberImage: ghcr.io/cin/mr-cassop/prober:0.6.0
+jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:0.6.0
+cassandraImage: ghcr.io/cin/mr-cassop/cassandra:4.1.11-0.6.0
+reaperImage: thelastpickle/cassandra-reaper:4.2.5
+icarusImage: ghcr.io/cin/mr-cassop/icarus:0.6.0
 clusterDashboards:
   enabled: []
   namespace: ""
@@ -35,7 +35,7 @@ monitoring:
     enabled: false
     namespace: ""
     labels:
-      operator: cassandra-operator
+      operator: mr-cassop
     scrapeInterval: 30s
 admissionWebhooks:
   enabled: true

@@ -2,23 +2,24 @@ package webhooks
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
-	dbv1alpha1 "github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/config"
-	"github.com/ibm/cassandra-operator/controllers/names"
-	"github.com/ibm/cassandra-operator/controllers/util"
+
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/config"
+	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/util"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 )
 
 func setupWebhookService(kubeClient *kubernetes.Clientset, operatorConfig *config.Config) error {
 	var (
 		ctx            = context.Background()
-		deploymentName = "cassandra-operator"
+		deploymentName = "mr-cassop"
 	)
 
 	operatorDeployment, err := kubeClient.AppsV1().Deployments(operatorConfig.Namespace).Get(ctx, deploymentName, metav1.GetOptions{})
@@ -38,7 +39,7 @@ func setupWebhookService(kubeClient *kubernetes.Clientset, operatorConfig *confi
 					Kind:       "Deployment",
 					Name:       deploymentName,
 					UID:        operatorDeployment.UID,
-					Controller: proto.Bool(true),
+					Controller: ptr.To(true),
 				},
 			},
 		},

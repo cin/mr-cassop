@@ -6,9 +6,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/gocql/gocql"
-	"github.com/ibm/cassandra-operator/api/v1alpha1"
-	"github.com/ibm/cassandra-operator/controllers/names"
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
+	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/names"
 )
 
 func newCassandraConfig(cc *v1alpha1.CassandraCluster, adminRole string, adminPwd string, logr *zap.SugaredLogger) *gocql.ClusterConfig {
@@ -60,4 +60,32 @@ func (w *gocqlLoggerWrapper) Printf(format string, v ...interface{}) {
 
 func (w *gocqlLoggerWrapper) Println(v ...interface{}) {
 	w.SugaredLogger.Debug(v...)
+}
+
+func (w *gocqlLoggerWrapper) Error(msg string, fields ...gocql.LogField) {
+	w.SugaredLogger.Errorw(msg, logFields(fields)...)
+}
+
+func (w *gocqlLoggerWrapper) Warning(msg string, fields ...gocql.LogField) {
+	w.SugaredLogger.Warnw(msg, logFields(fields)...)
+}
+
+func (w *gocqlLoggerWrapper) Info(msg string, fields ...gocql.LogField) {
+	w.SugaredLogger.Infow(msg, logFields(fields)...)
+}
+
+func (w *gocqlLoggerWrapper) Debug(msg string, fields ...gocql.LogField) {
+	w.SugaredLogger.Debugw(msg, logFields(fields)...)
+}
+
+func logFields(fields []gocql.LogField) []interface{} {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	args := make([]interface{}, 0, len(fields)*2)
+	for _, field := range fields {
+		args = append(args, field.Name, field.Value.Any())
+	}
+	return args
 }
