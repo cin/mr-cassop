@@ -58,7 +58,6 @@ const (
 	TlpPort         = 8090
 	CqlPort         = 9042
 	DatastaxPort    = 9103
-	ThriftPort      = 9160
 	InstaclustrPort = 9500
 	IcarusPort      = 4567
 

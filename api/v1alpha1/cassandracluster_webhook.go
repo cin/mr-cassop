@@ -311,7 +311,6 @@ func validateNetworkPolicies(cc *CassandraCluster) (errors []error) {
 		strconv.Itoa(TlsPort),
 		strconv.Itoa(JmxPort),
 		strconv.Itoa(CqlPort),
-		strconv.Itoa(ThriftPort),
 		strconv.Itoa(IcarusPort),
 	}
 

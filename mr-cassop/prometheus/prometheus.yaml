@@ -1,7 +1,7 @@
 ---
 lowercaseOutputLabelNames: false
 lowercaseOutputName: false
-whitelistObjectNames:
+includeObjectNames:
   - 'org.apache.cassandra.metrics:type=Client,*'
   - 'org.apache.cassandra.metrics:type=ClientRequest,*'
   - 'org.apache.cassandra.metrics:type=Table,*' # Required for org_apache_cassandra_metrics_Table_ReadLatency metric
@@ -19,7 +19,7 @@ whitelistObjectNames:
   - 'org.apache.cassandra.metrics:type=ThreadPools,path=transport,*'
   - 'org.apache.cassandra.metrics:type=CQL,*'
   - 'java.lang:type=*,*'
-blacklistObjectNames:
+excludeObjectNames:
   - 'org.apache.cassandra.metrics:type=*,keyspace=system*,*'
   # Blacklisted: TrueSnapshotsSize, EstimatedPartitionCount
   #  Enabling these metrics will cause excessive system load since Cassandra has to hit disk

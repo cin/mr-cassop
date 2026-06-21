@@ -97,7 +97,7 @@ var _ = Describe("network policies", func() {
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{"kubernetes.io/metadata.name": "namespace2"},
 								},
-								Ports: []int32{dbv1alpha1.ThriftPort, dbv1alpha1.TlsPort},
+								Ports: []int32{dbv1alpha1.CqlPort, dbv1alpha1.TlsPort},
 							},
 						},
 						ExtraCassandraIPs: extraCassandraIps,
@@ -374,7 +374,7 @@ var _ = Describe("network policies", func() {
 					{
 						Ports: []nwv1.NetworkPolicyPort{
 							{
-								Port:     &intstr.IntOrString{IntVal: dbv1alpha1.ThriftPort},
+								Port:     &intstr.IntOrString{IntVal: dbv1alpha1.CqlPort},
 								Protocol: &protocolTCP,
 							},
 							{
