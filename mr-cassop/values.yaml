@@ -15,7 +15,7 @@ logLevel: info
 logFormat: json
 proberImage: ghcr.io/cin/mr-cassop/prober:0.6.0
 jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:0.6.0
-cassandraImage: ghcr.io/cin/mr-cassop/cassandra:4.1.11-0.6.0
+cassandraImage: ghcr.io/cin/mr-cassop/cassandra:0.6.0
 reaperImage: thelastpickle/cassandra-reaper:4.2.5
 icarusImage: ghcr.io/cin/mr-cassop/icarus:0.6.0
 clusterDashboards:
