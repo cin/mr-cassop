@@ -116,7 +116,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"else\n" +
 						"  echo not using replace address since the node IP hasn\\'t changed\n" +
 						"fi\n" +
-						"/docker-entrypoint.sh -f -R " +
+						"/usr/local/bin/docker-entrypoint.sh -f -R " +
 						"-Dcassandra.jmx.remote.port=7199 " +
 						"-Dcom.sun.management.jmxremote.rmi.port=7199 " +
 						"-Djava.rmi.server.hostname=$POD_IP " +
@@ -233,7 +233,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 					},
 					{
 						Name:  "REAPER_CASS_LOCAL_DC",
-						Value: "dc1",
+						Value: dc.Name,
 					},
 					{
 						Name:  "REAPER_CASS_CLUSTER_NAME",

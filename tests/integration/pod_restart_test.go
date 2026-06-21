@@ -90,6 +90,7 @@ var _ = Describe("pod restart checksum", func() {
 
 			checksumContainer := map[string]string{
 				"cassandra.yaml":          cassandraConfig.Data["cassandra.yaml"],
+				"jvm.options":             cassandraConfig.Data["jvm.options"],
 				"cluster-node-tls-secret": fmt.Sprintf("%v", clusterNodeTLSSecret.Data),
 				"client-node-tls-secret":  fmt.Sprintf("%v", clientNodeTLSSecret.Data),
 			}
