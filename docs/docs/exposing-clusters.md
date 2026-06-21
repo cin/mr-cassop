@@ -34,7 +34,7 @@ hostPort:
 ```
 
 The config above exposes the `cql` and `tls` ports (9042 and 7001 respectively) through `hostPort`s. Unless you have a failover scenario where you target a remote DC with client connections, the `cql` port should not be exposed.  
-Valid port names are: `intra`, `tls`, `cql`, `thrift`, `jmx`. Ports `jmx`, `intra` and `tls` (if TLS is enabled) are always enabled to ensure cluster functionality.
+Valid port names are: `intra`, `tls`, `cql`, `jmx`. Ports `jmx`, `intra` and `tls` (if TLS is enabled) are always enabled to ensure cluster functionality.
 
 ### Encryption
 

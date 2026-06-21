@@ -1,45 +1,76 @@
-<configuration scan="true">
+<!--
+  mr-cassop logback configuration, aligned with the Cassandra 4.1 default.
+  It keeps console (STDOUT) output so Kubernetes captures pod logs, while also
+  wiring the system.log/debug.log file appenders and the metrics appender the
+  same way upstream Cassandra 4.1 does. The root level is driven by the
+  operator-provided LOG_LEVEL environment variable (defaults to INFO).
+-->
+<configuration scan="true" scanPeriod="60 seconds">
   <jmxConfigurator/>
-  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder>
-      <pattern>%-5level [%thread] %date{ISO8601} - %msg%n</pattern>
-    </encoder>
-  </appender>
-  <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
-    <appender-ref ref="STDOUT" />
-  </appender>
 
-  <!-- DEBUGLOG rolling file appender to debug.log (all levels) -->
-  <appender name="DEBUGLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${cassandra.logdir}/debug.log</file>
-    <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-      <fileNamePattern>${cassandra.logdir}/debug.log.%i.zip</fileNamePattern>
-      <minIndex>1</minIndex>
-      <maxIndex>10</maxIndex>
-    </rollingPolicy>
-    <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-      <maxFileSize>20MB</maxFileSize>
-    </triggeringPolicy>
+  <variable name="LOG_LEVEL" value="${LOG_LEVEL:-INFO}"/>
+
+  <!-- STDOUT console appender (consumed by Kubernetes); INFO and above -->
+  <appender name="STDOUT" target="System.out" class="ch.qos.logback.core.ConsoleAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>INFO</level>
+    </filter>
     <encoder>
       <pattern>%-5level [%thread] %date{ISO8601} %F:%L - %msg%n</pattern>
     </encoder>
   </appender>
 
-  <!-- ASYNCLOG asynchronous appender to debug.log (all levels) -->
+  <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="STDOUT"/>
+  </appender>
+
+  <!-- SYSTEMLOG rolling file appender to system.log; INFO and above -->
+  <appender name="SYSTEMLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>INFO</level>
+    </filter>
+    <file>${cassandra.logdir}/system.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${cassandra.logdir}/system.log.%d{yyyy-MM-dd}.%i.zip</fileNamePattern>
+      <maxFileSize>50MB</maxFileSize>
+      <maxHistory>7</maxHistory>
+      <totalSizeCap>5GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%-5level [%thread] %date{ISO8601} %F:%L - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- DEBUGLOG rolling file appender to debug.log; all levels -->
+  <appender name="DEBUGLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${cassandra.logdir}/debug.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${cassandra.logdir}/debug.log.%d{yyyy-MM-dd}.%i.zip</fileNamePattern>
+      <maxFileSize>50MB</maxFileSize>
+      <maxHistory>7</maxHistory>
+      <totalSizeCap>5GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%-5level [%thread] %date{ISO8601} %F:%L - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- ASYNCDEBUGLOG asynchronous appender wrapping debug.log -->
   <appender name="ASYNCDEBUGLOG" class="ch.qos.logback.classic.AsyncAppender">
     <queueSize>1024</queueSize>
     <discardingThreshold>0</discardingThreshold>
     <includeCallerData>true</includeCallerData>
-    <appender-ref ref="DEBUGLOG" />
+    <appender-ref ref="DEBUGLOG"/>
   </appender>
 
-  <appender name="LogbackMetrics" class="com.codahale.metrics.logback.InstrumentedAppender" />
+  <appender name="LogbackMetrics" class="com.codahale.metrics.logback.InstrumentedAppender"/>
 
-  <variable name="LOG_LEVEL" value="${LOG_LEVEL:-INFO}" />
   <root level="${LOG_LEVEL}">
-    <appender-ref ref="ASYNC" />
+    <appender-ref ref="ASYNC"/>
+    <appender-ref ref="SYSTEMLOG"/>
+    <appender-ref ref="ASYNCDEBUGLOG"/>
+    <appender-ref ref="LogbackMetrics"/>
   </root>
 
-  <logger name="org.apache.cassandra"/>
-  <logger name="com.thinkaurelius.thrift" level="ERROR"/>
+  <logger name="org.apache.cassandra" level="DEBUG"/>
 </configuration>

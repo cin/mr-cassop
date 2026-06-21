@@ -173,12 +173,6 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 			Protocol:      v1.ProtocolTCP,
 			HostPort:      0,
 		},
-		{
-			Name:          "thrift",
-			ContainerPort: dbv1alpha1.ThriftPort,
-			Protocol:      v1.ProtocolTCP,
-			HostPort:      0,
-		},
 	}
 
 	if cc.Spec.HostPort.Enabled {

@@ -56,13 +56,6 @@ func (r *CassandraClusterReconciler) reconcileDCService(ctx context.Context, cc 
 					NodePort:   0,
 				},
 				{
-					Name:       "thrift",
-					Protocol:   v1.ProtocolTCP,
-					Port:       dbv1alpha1.ThriftPort,
-					TargetPort: intstr.FromInt(dbv1alpha1.ThriftPort),
-					NodePort:   0,
-				},
-				{
 					Name:       "icarus",
 					Protocol:   v1.ProtocolTCP,
 					Port:       dbv1alpha1.IcarusPort,
