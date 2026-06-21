@@ -33,7 +33,7 @@ jobs:
         run: go mod download
 
       - name: Vet operator
-        run: go vet ./api/... ./controllers/... ./main.go
+        run: go vet ./api/... ./controllers/... .
 
       - name: Test operator packages
         run: go test ./api/... ./controllers/... -v -coverprofile=operator_unit.out -coverpkg=./...
