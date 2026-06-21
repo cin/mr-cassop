@@ -7,13 +7,13 @@ import (
 	"github.com/cin/mr-cassop/controllers/config"
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/util"
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 )
 
 func setupWebhookService(kubeClient *kubernetes.Clientset, operatorConfig *config.Config) error {
@@ -39,7 +39,7 @@ func setupWebhookService(kubeClient *kubernetes.Clientset, operatorConfig *confi
 					Kind:       "Deployment",
 					Name:       deploymentName,
 					UID:        operatorDeployment.UID,
-					Controller: proto.Bool(true),
+					Controller: ptr.To(true),
 				},
 			},
 		},

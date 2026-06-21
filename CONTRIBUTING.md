@@ -9,10 +9,11 @@ This way we have traceability (including `Resolves`) and can discuss the issue i
 
 ### Prerequisites
 
-- Kubernetes 1.19+ (minikube, kind, or colima for local development)
+- Kubernetes 1.28+ (minikube, kind, or colima for local development)
 - Go 1.24+ with enabled go modules
+- Node.js 20+ for documentation changes
 - Docker with buildx support
-- Helm 3.7+
+- Helm 3.15+
 - kubectl configured for your cluster
 
 ### Quick Start

@@ -31,6 +31,7 @@ import (
 func (cr *CassandraRestore) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(cr).
+		WithValidator(cr).
 		Complete()
 }
 
@@ -38,21 +39,28 @@ var _ webhook.CustomValidator = &CassandraRestore{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cr *CassandraRestore) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Debugf("Validating webhook has been called on create request for restore: %s", cr.Name)
+	restore, ok := obj.(*CassandraRestore)
+	if !ok {
+		return nil, fmt.Errorf("object is not of type CassandraRestore")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on create request for restore: %s", restore.Name)
 
-	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(cr))
+	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(restore))
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cr *CassandraRestore) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Debugf("Validating webhook has been called on update request for restore: %s", cr.Name)
-
-	cbOld, ok := oldObj.(*CassandraRestore)
+	restore, ok := newObj.(*CassandraRestore)
 	if !ok {
-		return nil, fmt.Errorf("old cassandra cluster object: (%s) is not of type CassandraRestore", cbOld.Name)
+		return nil, fmt.Errorf("new object is not of type CassandraRestore")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on update request for restore: %s", restore.Name)
+
+	if _, ok := oldObj.(*CassandraRestore); !ok {
+		return nil, fmt.Errorf("old object is not of type CassandraRestore")
 	}
 
-	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(cr))
+	return nil, kerrors.NewAggregate(validateRestoreCreateUpdate(restore))
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type

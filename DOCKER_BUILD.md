@@ -20,8 +20,8 @@ PLATFORM=linux/amd64 ./build-local.sh --cassandra
 ### 🍎 **Apple Silicon (ARM64)**
 
 ```bash
-# Core images (optimized for Apple M1/M2 Macs)
-./build-local.sh  # Uses ARM64 by default
+# Core images (uses native platform detection, usually linux/arm64 on Apple Silicon)
+./build-local.sh
 
 # Essential images including Cassandra  
 ./build-local.sh --cassandra
@@ -116,7 +116,7 @@ make docker-help                         # Show all Docker build options
 |----------|---------|-------------|
 | `PLATFORM` | Auto-detected | Target platform: `linux/amd64`, `linux/arm64` |
 | `MULTI_PLATFORM` | `false` | Enable multi-platform builds (AMD64+ARM64) |
-| `REGISTRY` | `cinple/mr-cassop` | Docker registry prefix |
+| `REGISTRY` | `ghcr.io/cin/mr-cassop` | Docker registry prefix |
 | `VERSION` | `dev-<git-hash>` | Image version tag |
 
 ### Platform-Specific Examples

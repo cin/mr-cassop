@@ -35,6 +35,7 @@ import (
 func (cb *CassandraBackup) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(cb).
+		WithValidator(cb).
 		Complete()
 }
 
@@ -42,21 +43,28 @@ var _ webhook.CustomValidator = &CassandraBackup{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cb *CassandraBackup) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Debugf("Validating webhook has been called on create request for backup: %s", cb.Name)
+	backup, ok := obj.(*CassandraBackup)
+	if !ok {
+		return nil, fmt.Errorf("object is not of type CassandraBackup")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on create request for backup: %s", backup.Name)
 
-	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(cb))
+	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(backup))
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cb *CassandraBackup) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Debugf("Validating webhook has been called on update request for backup: %s", cb.Name)
-
-	cbOld, ok := oldObj.(*CassandraBackup)
+	backup, ok := newObj.(*CassandraBackup)
 	if !ok {
-		return nil, fmt.Errorf("old casandra cluster object: (%s) is not of type CassandraBackup", cbOld.Name)
+		return nil, fmt.Errorf("new object is not of type CassandraBackup")
+	}
+	webhookLogger.Debugf("Validating webhook has been called on update request for backup: %s", backup.Name)
+
+	if _, ok := oldObj.(*CassandraBackup); !ok {
+		return nil, fmt.Errorf("old object is not of type CassandraBackup")
 	}
 
-	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(cb))
+	return nil, kerrors.NewAggregate(validateBackupCreateUpdate(backup))
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type

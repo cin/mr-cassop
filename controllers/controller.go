@@ -29,7 +29,7 @@ import (
 	"github.com/cin/mr-cassop/controllers/prober"
 	"github.com/cin/mr-cassop/controllers/reaper"
 
-	"github.com/gocql/gocql"
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 

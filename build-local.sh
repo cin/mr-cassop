@@ -7,8 +7,8 @@ set -e
 
 # Configuration
 VERSION=${VERSION:-"dev-$(git rev-parse --short HEAD)"}
-REGISTRY=${REGISTRY:-"cinple/mr-cassop"}
-PLATFORM=${PLATFORM:-"linux/arm64"}
+REGISTRY=${REGISTRY:-"ghcr.io/cin/mr-cassop"}
+PLATFORM=${PLATFORM:-"$(go env GOOS)/$(go env GOARCH)"}
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -107,8 +107,8 @@ for image in "${IMAGES[@]}"; do
             docker buildx build \
                 --platform="${PLATFORM}" \
                 --build-arg="VERSION=${VERSION}" \
-                -t "${REGISTRY}/mr-cassop:${VERSION}" \
-                -t "${REGISTRY}/mr-cassop:latest" \
+                -t "${REGISTRY}/operator:${VERSION}" \
+                -t "${REGISTRY}/operator:latest" \
                 --load \
                 .
             ;;
@@ -144,9 +144,9 @@ echo -e "${GREEN}🎉 ${BUILD_TYPE^} images built successfully!${NC}"
 echo ""
 echo -e "${BLUE}📋 Built images:${NC}"
 if [[ "$CASSANDRA" == "true" ]]; then
-    docker images | grep "${REGISTRY}" | grep -E "(mr-cassop|prober|cassandra)" | head -6
+    docker images | grep "${REGISTRY}" | grep -E "(operator|prober|cassandra)" | head -6
 else
-    docker images | grep "${REGISTRY}" | grep -E "(mr-cassop|prober)" | head -4
+    docker images | grep "${REGISTRY}" | grep -E "(operator|prober)" | head -4
 fi
 
 echo ""

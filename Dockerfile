@@ -1,4 +1,4 @@
-FROM golang:1.24 AS builder
+FROM golang:1.24-trixie AS builder
 
 WORKDIR /workspace
 
@@ -11,14 +11,16 @@ COPY api/ api/
 COPY controllers/ controllers/
 
 ARG VERSION=undefined
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GO111MODULE=on \
     go build \
     -ldflags "-X main.Version=$VERSION" \
     -a \
     -o bin/mr-cassop main.go
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 WORKDIR /
 
@@ -26,8 +28,8 @@ RUN apt-get update && \
     apt-get install -y ca-certificates && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
-    addgroup --gid 901 mr-cassop && \
-    adduser --uid 901 --gid 901 --home /home/mr-cassop mr-cassop
+    groupadd --gid 901 mr-cassop && \
+    useradd --uid 901 --gid 901 --home-dir /home/mr-cassop --create-home mr-cassop
 
 COPY --from=builder /workspace/bin/mr-cassop .
 USER mr-cassop

@@ -229,7 +229,11 @@ func TestReconcileMaintenance(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.cc.Spec.Maintenance = tc.params["maintenance"].([]v1alpha1.Maintenance)
-			tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(k8sResources...).Build()
+			tClient := fake.NewClientBuilder().
+				WithScheme(baseScheme).
+				WithObjects(k8sResources...).
+				WithStatusSubresource(&v1alpha1.CassandraCluster{}).
+				Build()
 			reconciler.Client = tClient
 			err := reconciler.reconcileMaintenance(context.Background(), tc.cc)
 			asserts.Expect(err).To(tc.errorMatcher)
@@ -241,7 +245,11 @@ func TestReconcileMaintenance(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name+" with pod already in maintenance mode", func(t *testing.T) {
 			tc.cc.Spec.Maintenance = tc.params["maintenance"].([]v1alpha1.Maintenance)
-			tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(k8sResources...).Build()
+			tClient := fake.NewClientBuilder().
+				WithScheme(baseScheme).
+				WithObjects(k8sResources...).
+				WithStatusSubresource(&v1alpha1.CassandraCluster{}).
+				Build()
 			reconciler.Client = tClient
 			err := reconciler.reconcileMaintenance(context.Background(), tc.cc)
 			asserts.Expect(err).To(tc.errorMatcher)

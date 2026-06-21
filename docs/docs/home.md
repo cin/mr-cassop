@@ -45,13 +45,13 @@ For development and customization, check out the [Development Guide](development
 - [CassandraCluster Configuration](cassandracluster-configuration.md) - Complete configuration reference
 - [Backup & Restore](backup-restore.md) - Data protection strategies
 - [Multi-Region Clusters](multi-region-cluster-configuration.md) - Cross-region deployment
-- [Security](security/) - Authentication and encryption
+- [Security](security/network-policies.md) - Authentication, encryption, and network policy topics
 - [Development](development.md) - Contributing and customization
 
 ## Requirements
 
-- **Kubernetes**: 1.19+ (tested with 1.24+)
-- **Helm**: 3.7+ for installation
+- **Kubernetes**: 1.28+ for deployments; envtest coverage uses Kubernetes 1.32 assets
+- **Helm**: 3.15+ for installation
 - **Resources**: Minimum 2 CPU cores and 4GB RAM per Cassandra node
 - **Storage**: Persistent volumes for data persistence (recommended)
 

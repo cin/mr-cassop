@@ -136,7 +136,7 @@ var _ = Describe("Network policies in multi-region cluster", Serial, func() {
 					Containers: []v1.Container{
 						{
 							Name:      "test-container",
-							Image:     "cassandra:3.11.17",
+							Image:     "cassandra:4.1.11",
 							Command:   []string{"sleep", "3600"},
 							Stdin:     false,
 							StdinOnce: false,

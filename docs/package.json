@@ -2,6 +2,9 @@
   "name": "mr-cassop",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
@@ -11,14 +14,13 @@
     "serve": "docusaurus serve"
   },
   "dependencies": {
-    "@docusaurus/core": "^2.4.1",
-    "@docusaurus/plugin-client-redirects": "^2.4.1",
-    "@docusaurus/preset-classic": "^2.4.1",
-    "@mdx-js/react": "^2.3.0",
-    "docusaurus-lunr-search": "^3.0.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "remark-toc": "^8.0.0"
+    "@docusaurus/core": "^3.10.1",
+    "@docusaurus/plugin-client-redirects": "^3.10.1",
+    "@docusaurus/preset-classic": "^3.10.1",
+    "@mdx-js/react": "^3.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "remark-toc": "^9.0.0"
   },
   "browserslist": {
     "production": [

@@ -128,7 +128,11 @@ var _ = Describe("reaper deployment", func() {
 				mockReaperClient.err = nil
 				Eventually(mockReaperClient.clusters).Should(BeEquivalentTo([]string{cc.Name}))
 				By("reaper client should schedule all repair jobs")
-				Eventually(mockReaperClient.repairSchedules).Should(HaveLen(len(cc.Spec.Reaper.RepairSchedules.Repairs)))
+				expectedRepairSchedules := 0
+				if cc.Spec.Reaper != nil {
+					expectedRepairSchedules = len(cc.Spec.Reaper.RepairSchedules.Repairs)
+				}
+				Eventually(mockReaperClient.repairSchedules).Should(HaveLen(expectedRepairSchedules))
 			})
 		}
 	})

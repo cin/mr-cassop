@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/caarlos0/env/v11"
 	"github.com/pkg/errors"
 	"go.uber.org/zap/zapcore"
 )
@@ -35,7 +35,7 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	c := Config{}
-	if err := env.ParseWithFuncs(&c, parseFuncMap); err != nil {
+	if err := env.ParseWithOptions(&c, env.Options{FuncMap: parseFuncMap}); err != nil {
 		return &c, errors.WithStack(err)
 	}
 

@@ -133,14 +133,14 @@ var _ = Describe("cassandra statefulset", func() {
 					Labels:          map[string]string{"region": "us-south"},
 					Annotations:     map[string]string{"storage-type": "Performance"},
 					DataVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
-						Resources: v1.ResourceRequirements{
+						Resources: v1.VolumeResourceRequirements{
 							Requests: v1.ResourceList{
 								v1.ResourceStorage: resource.MustParse("20Gi"),
 							},
 						},
 					},
 					CommitLogVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
-						Resources: v1.ResourceRequirements{
+						Resources: v1.VolumeResourceRequirements{
 							Requests: v1.ResourceList{
 								v1.ResourceStorage: resource.MustParse("20Gi"),
 							},
@@ -221,14 +221,14 @@ var _ = Describe("cassandra statefulset", func() {
 					Labels:          map[string]string{"region": "us-south"},
 					Annotations:     map[string]string{"storage-type": "Performance"},
 					DataVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
-						Resources: v1.ResourceRequirements{
+						Resources: v1.VolumeResourceRequirements{
 							Requests: v1.ResourceList{
 								v1.ResourceStorage: resource.MustParse("20Gi"),
 							},
 						},
 					},
 					CommitLogVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
-						Resources: v1.ResourceRequirements{
+						Resources: v1.VolumeResourceRequirements{
 							Requests: v1.ResourceList{
 								v1.ResourceStorage: resource.MustParse("20Gi"),
 							},

@@ -44,7 +44,7 @@ var _ = Describe("single DC region", Serial, func() {
 			Enabled: true,
 			DataVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
 				StorageClassName: proto.String(cfg.storageClassName),
-				Resources: v1.ResourceRequirements{
+				Resources: v1.VolumeResourceRequirements{
 					Requests: v1.ResourceList{
 						v1.ResourceStorage: resource.MustParse("20Gi"),
 					},

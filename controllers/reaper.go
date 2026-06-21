@@ -13,7 +13,6 @@ import (
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/reaper"
 	"github.com/cin/mr-cassop/controllers/util"
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -21,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -97,7 +97,7 @@ func (r *CassandraClusterReconciler) reconcileReaperDeployment(ctx context.Conte
 			Labels:    reaperLabels,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: proto.Int32(dbv1alpha1.ReaperReplicasNumber),
+			Replicas: ptr.To[int32](dbv1alpha1.ReaperReplicasNumber),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: reaperLabels,
 			},
@@ -108,8 +108,8 @@ func (r *CassandraClusterReconciler) reconcileReaperDeployment(ctx context.Conte
 					MaxSurge:       &percent25,
 				},
 			},
-			RevisionHistoryLimit:    proto.Int32(10),
-			ProgressDeadlineSeconds: proto.Int32(1200),
+			RevisionHistoryLimit:    ptr.To[int32](10),
+			ProgressDeadlineSeconds: ptr.To[int32](1200),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: reaperLabels,
@@ -123,7 +123,7 @@ func (r *CassandraClusterReconciler) reconcileReaperDeployment(ctx context.Conte
 					Tolerations:                   cc.Spec.Reaper.Tolerations,
 					NodeSelector:                  cc.Spec.Reaper.NodeSelector,
 					RestartPolicy:                 v1.RestartPolicyAlways,
-					TerminationGracePeriodSeconds: proto.Int64(30),
+					TerminationGracePeriodSeconds: ptr.To[int64](30),
 					DNSPolicy:                     v1.DNSClusterFirst,
 					SecurityContext:               &v1.PodSecurityContext{},
 				},
@@ -313,7 +313,7 @@ func reaperVolumes(cc *dbv1alpha1.CassandraCluster) []v1.Volume {
 					LocalObjectReference: v1.LocalObjectReference{
 						Name: names.ShiroConfigMap(cc.Name),
 					},
-					DefaultMode: proto.Int32(v1.ConfigMapVolumeSourceDefaultMode),
+					DefaultMode: ptr.To[int32](v1.ConfigMapVolumeSourceDefaultMode),
 				},
 			},
 		},
@@ -336,7 +336,7 @@ func reaperVolumes(cc *dbv1alpha1.CassandraCluster) []v1.Volume {
 						},
 					},
 
-					DefaultMode: proto.Int32(v1.SecretVolumeSourceDefaultMode),
+					DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
 				},
 			},
 		})

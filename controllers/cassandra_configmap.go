@@ -11,10 +11,10 @@ import (
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/util"
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/yaml"
 )
@@ -112,13 +112,12 @@ func (r *CassandraClusterReconciler) reconcileCassandraConfigMap(ctx context.Con
 	restartChecksum["cassandra.yaml"] = string(cassandraYamlBytes) //to restart cassandra pods on change
 	data["cassandra.yaml"] = string(cassandraYamlBytes)
 
+	data["jvm.options"] = "### OVERRIDES PROVIDED BY THE USER\n\n"
 	if len(cc.Spec.Cassandra.JVMOptions) > 0 {
-		data["jvm.options"] += "\n\n### OVERRIDES PROVIDED BY THE USER\n\n\n"
 		data["jvm.options"] += strings.Join(cc.Spec.Cassandra.JVMOptions, "\n")
 		data["jvm.options"] += "\n"
-
-		restartChecksum["jvm.options"] = data["jvm.options"] //to restart cassandra pods on change
 	}
+	restartChecksum["jvm.options"] = data["jvm.options"] //to restart cassandra pods on change
 
 	desiredCM.Data = data
 
@@ -137,7 +136,7 @@ func cassandraConfigVolume(cc *v1alpha1.CassandraCluster) v1.Volume {
 				LocalObjectReference: v1.LocalObjectReference{
 					Name: names.ConfigMap(cc.Name),
 				},
-				DefaultMode: proto.Int32(v1.ConfigMapVolumeSourceDefaultMode),
+				DefaultMode: ptr.To[int32](v1.ConfigMapVolumeSourceDefaultMode),
 			},
 		},
 	}

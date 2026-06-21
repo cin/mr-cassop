@@ -5,8 +5,8 @@ slug: /quickstart
 
 ## Prerequisites
 
-* Kubernetes 1.19+
-* Helm
+* Kubernetes 1.28+
+* Helm 3.15+
 * kubectl configured to communicate with your cluster
 
 ## Build Images
@@ -21,7 +21,7 @@ For local development, you'll need to build the Docker images. Choose based on y
 ./build-local.sh --cassandra
 ```
 
-> 💡 **For comprehensive build options**, see the [Development Guide](development.md) and [Docker Build Documentation](../../DOCKER_BUILD.md).
+> 💡 **For comprehensive build options**, see the [Development Guide](development.md) and [Docker Build Documentation](https://github.com/cin/mr-cassop/blob/main/DOCKER_BUILD.md).
 
 ## Install mr-cassop
 

@@ -1,6 +1,6 @@
-FROM golang:1.24 AS builder
+FROM golang:1.24-trixie AS builder
 
-LABEL maintainer="coreeng@us.ibm.com" \
+LABEL org.opencontainers.image.source="https://github.com/cin/mr-cassop" \
       description="This docker image is used for the prober Go application"
 
 WORKDIR /build
@@ -9,13 +9,15 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=undefined
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GO111MODULE=on \
     go build \
     -ldflags "-X main.Version=$VERSION" \
     -a \
     -o prober .
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 WORKDIR /
 
@@ -24,7 +26,8 @@ RUN apt-get update && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN addgroup --gid 901 prober && adduser --uid 901 --gid 901 prober
+RUN groupadd --gid 901 prober && \
+    useradd --uid 901 --gid 901 --create-home prober
 
 USER prober
 

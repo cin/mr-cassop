@@ -102,7 +102,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 					fmt.Sprintf("rm -rf /var/lib/cassandra/data/system/peers*\n" +
 						"echo \"prefer_local=true\" >> $CASSANDRA_CONF/cassandra-rackdc.properties\n" +
 						"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/\n" +
-						"cp /etc/cassandra-configmaps/jvm.options $CASSANDRA_HOME/\n" +
+						"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options\n" +
 						"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh\n" +
 						"replace_address=\"\"\n" +
 						"old_ip=$CASSANDRA_NODE_PREVIOUS_IP\n" +
@@ -229,7 +229,11 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 					},
 					{
 						Name:  "REAPER_CASS_CONTACT_POINTS",
-						Value: fmt.Sprintf("[ %s ]", names.DC(cc.Name, dc.Name)),
+						Value: fmt.Sprintf(`[{"host":"%s","port":"%d"}]`, names.DC(cc.Name, dc.Name), dbv1alpha1.CqlPort),
+					},
+					{
+						Name:  "REAPER_CASS_LOCAL_DC",
+						Value: "dc1",
 					},
 					{
 						Name:  "REAPER_CASS_CLUSTER_NAME",
@@ -271,7 +275,29 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						},
 					},
 					{
+						Name: "REAPER_AUTH_USER",
+						ValueFrom: &v1.EnvVarSource{
+							SecretKeyRef: &v1.SecretKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "test-cassandra-cluster-auth-config-admin",
+								},
+								Key: "admin-role",
+							},
+						},
+					},
+					{
 						Name: "REAPER_CASS_AUTH_PASSWORD",
+						ValueFrom: &v1.EnvVarSource{
+							SecretKeyRef: &v1.SecretKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "test-cassandra-cluster-auth-config-admin",
+								},
+								Key: "admin-password",
+							},
+						},
+					},
+					{
+						Name: "REAPER_AUTH_PASSWORD",
 						ValueFrom: &v1.EnvVarSource{
 							SecretKeyRef: &v1.SecretKeySelector{
 								LocalObjectReference: v1.LocalObjectReference{

@@ -44,6 +44,11 @@ var _ = Describe("cassandracluster validation", func() {
 		Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
 		Expect(err.(*errors.StatusError).ErrStatus.Reason == metav1.StatusReasonInvalid).To(BeTrue())
 	}
+	expectWebhookError := func(err error, message string) {
+		Expect(err).NotTo(BeNil())
+		Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
+		Expect(err.(*errors.StatusError).ErrStatus.Message).To(ContainSubstring(message))
+	}
 	Context("with all valid parameters", func() {
 		It("should pass validation", func() {
 			cc := &v1alpha1.CassandraCluster{
@@ -386,8 +391,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason == "repairParallelism must be only `PARALLEL` if incrementalRepair is true").To(BeTrue())
+			expectWebhookError(err, "repairParallelism must be only `PARALLEL` if incrementalRepair is true")
 		})
 	})
 	Context("with invalid repair intensity values", func() {
@@ -414,8 +418,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason).To(BeEquivalentTo("[reaper repairIntensity value 0.0 must be between 0.1 and 1.0, reaper repairIntensity value 1.1 must be between 0.1 and 1.0]"))
+			expectWebhookError(err, "[reaper repairIntensity value 0.0 must be between 0.1 and 1.0, reaper repairIntensity value 1.1 must be between 0.1 and 1.0]")
 		})
 	})
 	Context("with invalid repair schedule time", func() {
@@ -452,8 +455,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason).To(BeEquivalentTo("[reaper repair schedule `20200327T04:00:00` has invalid format, should be `2000-01-31T00:00:00`, reaper repair schedule `2020-03-27T04:00` has invalid format, should be `2000-01-31T00:00:00`]"))
+			expectWebhookError(err, "[reaper repair schedule `20200327T04:00:00` has invalid format, should be `2000-01-31T00:00:00`, reaper repair schedule `2020-03-27T04:00` has invalid format, should be `2000-01-31T00:00:00`]")
 		})
 	})
 	Context(".spec.maintenance[].dc", func() {
@@ -574,8 +576,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason).To(BeEquivalentTo("cassandra config override should be a string with valid YAML: error converting YAML to JSON: yaml: line 1: did not find expected key"))
+			expectWebhookError(err, "cassandra config override should be a string with valid YAML: error converting YAML to JSON: yaml: line 1: did not find expected key")
 		})
 	})
 	Context("with invalid seeds config", func() {
@@ -586,8 +587,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason).To(BeEquivalentTo("number of seeds (4) is greater than number of replicas (3) for dc dc1"))
+			expectWebhookError(err, "number of seeds (4) is greater than number of replicas (3) for dc dc1")
 		})
 	})
 	Context("with invalid rf config", func() {
@@ -601,8 +601,7 @@ var _ = Describe("cassandracluster validation", func() {
 			}
 			markMocksAsReady(cc)
 			err := k8sClient.Create(ctx, cc)
-			Expect(err).To(BeAssignableToTypeOf(&errors.StatusError{}))
-			Expect(err.(*errors.StatusError).ErrStatus.Reason).To(BeEquivalentTo("replication factor (4) is greater than number of replicas (3) for dc dc1"))
+			expectWebhookError(err, "replication factor (4) is greater than number of replicas (3) for dc dc1")
 		})
 	})
 })

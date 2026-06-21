@@ -1,4 +1,4 @@
-ARG CASSANDRA_VERSION=3.11.19
+ARG CASSANDRA_VERSION=4.1.11
 FROM cassandra:${CASSANDRA_VERSION}
 ARG JMX_EXPORTER_VERSION=1.0.1
 ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.14
@@ -10,6 +10,7 @@ RUN set -eux; \
     curl -sSf https://repo1.maven.org/maven2/$1/$2/$3/$2-$3.jar --create-dirs -o $4/$2.jar; \
   }; \
   apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     dnsutils \
     jq \
     net-tools \

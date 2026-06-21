@@ -8,7 +8,7 @@ import (
 
 	"github.com/cin/mr-cassop/controllers/names"
 
-	"github.com/gocql/gocql"
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -84,7 +84,7 @@ var _ = Describe("Reaper test", func() {
 			By("Running cql query: checking Cassandra version...")
 			err = session.Query(`SELECT release_version FROM system.local`).Consistency(gocql.LocalQuorum).Scan(&releaseVersion)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(releaseVersion).To(Equal("3.11.17"))
+			Expect(releaseVersion).To(Equal("4.1.11"))
 
 			By("Running cql query: creating test keyspace...")
 			cqlQuery := `CREATE KEYSPACE IF NOT EXISTS %s WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', '%s' : %v }`

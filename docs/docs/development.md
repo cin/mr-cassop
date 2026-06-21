@@ -5,16 +5,17 @@ slug: /development
 
 ### Requirements:
 
-* Kubernetes 1.19 or newer. You can use [minikube](https://kubernetes.io/docs/setup/minikube/), [kind](https://github.com/kubernetes-sigs/kind), or [colima](https://github.com/abiosoft/colima) for local development.
+* Kubernetes 1.28 or newer. You can use [minikube](https://kubernetes.io/docs/setup/minikube/), [kind](https://github.com/kubernetes-sigs/kind), or [colima](https://github.com/abiosoft/colima) for local development.
 * Go 1.24+ with enabled go modules
-* [OperatorSDK](https://github.com/operator-framework/operator-sdk) v1.15.0+
-* [kustomize](https://github.com/kubernetes-sigs/kustomize) 4.4.1+
-* [helm](https://helm.sh/) v3.7.02+
+* Node.js 20+ for building the documentation site
+* [OperatorSDK](https://github.com/operator-framework/operator-sdk) v1.39.0+
+* [kustomize](https://github.com/kubernetes-sigs/kustomize) 5.8.1+
+* [helm](https://helm.sh/) v3.15+
 * [docker](https://docs.docker.com/install/) with buildx support
 * [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports)
-* [GolangCI-Lint](https://github.com/golangci/golangci-lint) 1.43.0+
-* [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) to setup test environment
-* [gomock](https://github.com/golang/mock)
+* [GolangCI-Lint](https://github.com/golangci/golangci-lint) 1.64.0+
+* [setup-envtest](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest) to install envtest assets
+* [go.uber.org/mock](https://github.com/uber-go/mock)
 
 ## Run Operator 
 
@@ -61,7 +62,7 @@ make docker-build-monitoring    # jolokia + icarus
 make docker-build-all          # all images
 ```
 
-The build system is optimized for Apple Silicon with ARM64 by default, but supports multi-platform builds:
+The build system defaults to the local Go platform (`go env GOOS/GOARCH`) and supports explicit multi-platform builds:
 
 ```bash
 # Multi-platform builds for production
@@ -69,7 +70,7 @@ MULTI_PLATFORM=true ./build-images.sh
 make docker-build-all-multiplatform
 ```
 
-See [DOCKER_BUILD.md](../../DOCKER_BUILD.md) for comprehensive build documentation.
+See [DOCKER_BUILD.md](https://github.com/cin/mr-cassop/blob/main/DOCKER_BUILD.md) for comprehensive build documentation.
 
 ### Helm Deployment
 

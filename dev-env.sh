@@ -14,11 +14,11 @@ export METRICS_PORT="8329"
 export RETRY_DELAY="10s"
 
 # Default images - using the values from values.yaml
-export DEFAULT_CASSANDRA_IMAGE="cinple/mr-cassop/cassandra:4.1.4-0.6.0"
-export DEFAULT_PROBER_IMAGE="cinple/mr-cassop/prober:0.5.0"
-export DEFAULT_JOLOKIA_IMAGE="cinple/mr-cassop/jolokia:0.5.0"
-export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:3.2.0"
-export DEFAULT_ICARUS_IMAGE="cinple/mr-cassop/icarus:0.5.0"
+export DEFAULT_CASSANDRA_IMAGE="ghcr.io/cin/mr-cassop/cassandra:4.1.11-0.6.0"
+export DEFAULT_PROBER_IMAGE="ghcr.io/cin/mr-cassop/prober:0.6.0"
+export DEFAULT_JOLOKIA_IMAGE="ghcr.io/cin/mr-cassop/jolokia:0.6.0"
+export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:4.2.5"
+export DEFAULT_ICARUS_IMAGE="ghcr.io/cin/mr-cassop/icarus:0.6.0"
 
 echo "✅ Environment variables set for local development"
 echo "📋 Key settings:"

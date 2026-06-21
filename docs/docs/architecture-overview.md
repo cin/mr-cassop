@@ -138,4 +138,4 @@ The architecture supports comprehensive monitoring through:
 - Kubernetes native health checks
 - Custom alerts and notifications
 
-See [Monitoring Documentation](monitoring.md) for configuration details.
+See [Prober Documentation](prober.md) for monitoring and health-check details.

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/cin/mr-cassop/controllers/cql"
-	"github.com/gocql/gocql"
 
 	appsv1 "k8s.io/api/apps/v1"
 
@@ -52,7 +52,7 @@ var _ = Describe("scaling", func() {
 			Enabled: true,
 			DataVolumeClaimSpec: v1.PersistentVolumeClaimSpec{
 				StorageClassName: proto.String(cfg.storageClassName),
-				Resources: v1.ResourceRequirements{
+				Resources: v1.VolumeResourceRequirements{
 					Requests: v1.ResourceList{
 						v1.ResourceStorage: resource.MustParse("20Gi"),
 					},

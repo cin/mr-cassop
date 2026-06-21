@@ -10,12 +10,12 @@ import (
 	"github.com/cin/mr-cassop/controllers/events"
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/names"
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -249,7 +249,7 @@ func (r *CassandraClusterReconciler) reconcileActiveAdminSecret(ctx context.Cont
 			Namespace: cc.Namespace,
 			Labels:    labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 		},
-		Immutable: proto.Bool(true),
+		Immutable: ptr.To(true),
 		Type:      v1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			dbv1alpha1.CassandraOperatorAdminRole:     []byte(auth.activeRole),

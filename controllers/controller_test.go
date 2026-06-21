@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"testing"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/config"
 	"github.com/cin/mr-cassop/controllers/cql"
@@ -11,8 +12,7 @@ import (
 	"github.com/cin/mr-cassop/controllers/mocks"
 	"github.com/cin/mr-cassop/controllers/prober"
 	"github.com/cin/mr-cassop/controllers/reaper"
-	"github.com/gocql/gocql"
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"

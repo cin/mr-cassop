@@ -210,7 +210,7 @@ func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1
 	args = append(args,
 		"echo \"prefer_local=true\" >> $CASSANDRA_CONF/cassandra-rackdc.properties",
 		"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/",
-		"cp /etc/cassandra-configmaps/jvm.options $CASSANDRA_HOME/",
+		"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options",
 		"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh",
 		`replace_address=""
 old_ip=$CASSANDRA_NODE_PREVIOUS_IP
@@ -234,7 +234,7 @@ fi`,
 	}
 
 	cassandraRunCommand := []string{
-		"/docker-entrypoint.sh -f -R",
+		"/usr/local/bin/docker-entrypoint.sh -f -R",
 		fmt.Sprintf("-Dcassandra.jmx.remote.port=%d", dbv1alpha1.JmxPort),
 		fmt.Sprintf("-Dcom.sun.management.jmxremote.rmi.port=%d", dbv1alpha1.JmxPort),
 		"-Djava.rmi.server.hostname=$POD_IP",

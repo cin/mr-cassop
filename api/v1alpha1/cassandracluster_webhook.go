@@ -43,6 +43,7 @@ func SetWebhookLogger(l *zap.SugaredLogger) {
 func (cc *CassandraCluster) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(cc).
+		WithValidator(cc).
 		Complete()
 }
 
@@ -50,21 +51,29 @@ var _ webhook.CustomValidator = &CassandraCluster{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cc *CassandraCluster) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Infof("Validating webhook has been called on create request for cluster: %s", cc.Name)
+	cluster, ok := obj.(*CassandraCluster)
+	if !ok {
+		return nil, fmt.Errorf("object is not of type CassandraCluster")
+	}
+	webhookLogger.Infof("Validating webhook has been called on create request for cluster: %s", cluster.Name)
 
-	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cc, nil))
+	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cluster, nil))
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (cc *CassandraCluster) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	webhookLogger.Infof("Validating webhook has been called on update request for cluster: %s", cc.Name)
+	cluster, ok := newObj.(*CassandraCluster)
+	if !ok {
+		return nil, fmt.Errorf("new object is not of type CassandraCluster")
+	}
+	webhookLogger.Infof("Validating webhook has been called on update request for cluster: %s", cluster.Name)
 
 	ccOld, ok := oldObj.(*CassandraCluster)
 	if !ok {
-		return nil, fmt.Errorf("old casandra cluster object: (%s) is not of type CassandraCluster", ccOld.Name)
+		return nil, fmt.Errorf("old object is not of type CassandraCluster")
 	}
 
-	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cc, ccOld))
+	return nil, kerrors.NewAggregate(validateClusterCreateUpdate(cluster, ccOld))
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type

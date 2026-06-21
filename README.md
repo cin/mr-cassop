@@ -1,50 +1,42 @@
-# MIGRATION IN PROGRESS! Not ready for use...yet
-
 # mr-cassop
 
-A production-ready Kubernetes operator for deploying and managing Apache Cassandra clusters across multiple regions.
+mr-cassop is a Kubernetes operator for deploying and managing Apache Cassandra clusters.
 
 ## Overview
 
-mr-cassop automates the deployment, configuration, and management of Cassandra instances in Kubernetes clusters. It provides comprehensive cluster lifecycle management, backup/restore capabilities, monitoring integration, and multi-region support.
+mr-cassop automates Cassandra cluster lifecycle management in Kubernetes. It includes controller-driven deployment, backup and restore integration through Icarus, repair scheduling through Reaper, Jolokia-based observability hooks, and Helm packaging.
 
 ## Status
 
-✅ **Active Development** - The operator is functional and ready for use  
-✅ **Production Ready** - Successfully managing Cassandra clusters in production environments  
-✅ **Modern Codebase** - Updated to Go 1.24 and controller-runtime v0.20.4  
-✅ **Comprehensive Testing** - Unit, integration, and e2e test coverage  
-✅ **Docker Build System** - Optimized multi-platform builds for development and production
+This repository has been modernized from the original IBM Cassandra operator codebase and is under active maintenance. The current branch builds with Go 1.24, Kubernetes 1.34 libraries, and controller-runtime v0.22.5.
+
+Unit, prober, and envtest integration tests are expected to pass locally. End-to-end tests still require a real Kubernetes cluster, registry access, and runtime validation of the selected Cassandra/Reaper/Icarus matrix before declaring the project production-ready.
 
 ## Key Features
 
-- 🚀 **Automated Deployment** - Declarative cluster configuration via Custom Resources
-- 📈 **Dynamic Scaling** - Seamless cluster scaling with automatic token rebalancing  
-- 🔄 **Backup & Restore** - Integrated backup capabilities via Icarus with point-in-time recovery
-- 🔧 **Repair Management** - Automated repair scheduling via Cassandra Reaper
-- 📊 **Monitoring** - Built-in metrics collection with Jolokia and Prometheus integration
-- 🌍 **Multi-Region** - Cross-region cluster deployment with automatic datacenter awareness
-- 🔐 **Security** - Role-based authentication, TLS encryption, and network policies
-- ⚡ **High Performance** - Optimized for production workloads
+- Automated deployment through `CassandraCluster` custom resources
+- Backup and restore resources backed by Icarus
+- Repair scheduling through Cassandra Reaper
+- Jolokia and Prometheus monitoring integration
+- Optional TLS, authentication, network policies, and multi-region topology support
 
 ## Quick Start
 
-Ready to get started? Follow our comprehensive guides:
+Start with the project documentation:
 
-- 📚 **New Users**: Start with the [Quickstart Guide](docs/docs/quickstart.md)
-- 👨‍💻 **Developers**: See the [Development Guide](docs/docs/development.md)  
-- 🏗️ **Building**: Check the [Docker Build Guide](DOCKER_BUILD.md)
+- New users: [Quickstart Guide](docs/docs/quickstart.md)
+- Developers: [Development Guide](docs/docs/development.md)
+- Building images: [Docker Build Guide](DOCKER_BUILD.md)
 
-### One-Command Demo
+### Local Demo
 
 ```bash
-# For the impatient - full local setup:
 ./build-local.sh --cassandra && \
-kubectl create namespace mr-cassop-system cassop && \
+kubectl create namespace mr-cassop-system && \
 helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
 ```
 
-See the [Quickstart Guide](docs/docs/quickstart.md) for detailed steps and explanations.
+See the [Quickstart Guide](docs/docs/quickstart.md) for detailed setup steps.
 
 ## Architecture
 
@@ -61,15 +53,13 @@ See the [Architecture Overview](docs/docs/architecture-overview.md) for detailed
 
 ## Documentation
 
-| Topic | Description |
-|-------|-------------|
-| [🚀 Quickstart](docs/docs/quickstart.md) | Get up and running in minutes |
-| [🏗️ Development](docs/docs/development.md) | Contributing and development setup |
-| [⚙️ Configuration](docs/docs/cassandracluster-configuration.md) | Complete configuration reference |
-| [💾 Backup & Restore](docs/docs/backup-restore.md) | Data protection strategies |
-| [🌍 Multi-Region](docs/docs/multi-region-cluster-configuration.md) | Cross-region deployment |
-| [🔐 Security](docs/docs/security/) | Authentication and encryption |
-| [🏗️ Docker Builds](DOCKER_BUILD.md) | Build system documentation |
+- [Quickstart](docs/docs/quickstart.md)
+- [Development](docs/docs/development.md)
+- [CassandraCluster configuration](docs/docs/cassandracluster-configuration.md)
+- [Backup and restore](docs/docs/backup-restore.md)
+- [Multi-region cluster configuration](docs/docs/multi-region-cluster-configuration.md)
+- [Security](docs/docs/security/)
+- [Docker builds](DOCKER_BUILD.md)
 
 ### Run Documentation Locally
 
@@ -79,10 +69,11 @@ cd docs && npm install && npm start
 
 ## Requirements
 
-- **Kubernetes**: 1.19+ (tested with 1.24+)
-- **Helm**: 3.7+ for installation  
-- **Resources**: Minimum 2 CPU cores and 4GB RAM per Cassandra node
-- **Storage**: Persistent volumes recommended for production
+- Kubernetes 1.28+ for deployments; envtest coverage uses Kubernetes 1.32 assets.
+- Cassandra 4.1.11 is the default supported image target.
+- Helm 3.15+ for installation and chart validation.
+- Persistent volumes are recommended for Cassandra data.
+- Minimum Cassandra node sizing depends on workload, but start with at least 2 CPU cores and 4 GiB RAM per node for non-trivial testing.
 
 ## Contributing
 

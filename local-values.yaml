@@ -1,6 +1,6 @@
 replicas: 1
 container:
-  image: cinple/mr-cassop/mr-cassop:dev-04ecdb4
+  image: ghcr.io/cin/mr-cassop/operator:dev
   imagePullPolicy: Never
   restartPolicy: Always
   resources:
@@ -12,11 +12,11 @@ container:
       memory: 200Mi
 logLevel: debug
 logFormat: console
-proberImage: cinple/mr-cassop/prober:dev-04ecdb4
-jolokiaImage: cinple/mr-cassop/jolokia:dev-04ecdb4  
-cassandraImage: cinple/mr-cassop/cassandra:dev-04ecdb4
-reaperImage: thelastpickle/cassandra-reaper:3.8.0
-icarusImage: cinple/mr-cassop/icarus:dev-04ecdb4
+proberImage: ghcr.io/cin/mr-cassop/prober:dev
+jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:dev
+cassandraImage: ghcr.io/cin/mr-cassop/cassandra:dev
+reaperImage: thelastpickle/cassandra-reaper:4.2.5
+icarusImage: ghcr.io/cin/mr-cassop/icarus:dev
 clusterDashboards:
   enabled: []
   namespace: ""

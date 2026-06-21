@@ -6,7 +6,7 @@ SHELL ?= bash
 # Current Operator version
 VERSION ?= 0.0.1
 # Default bundle image tag
-IMAGE_TAG_BASE ?= ibmcom/mr-cassop
+IMAGE_TAG_BASE ?= ghcr.io/cin/mr-cassop/operator
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
@@ -17,23 +17,23 @@ BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
 BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
-# Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+# Image URL to use for legacy build/push targets
+IMG ?= $(REGISTRY)/operator:latest
 # Docker registry and image configuration
-REGISTRY ?= cinple/mr-cassop
+REGISTRY ?= ghcr.io/cin/mr-cassop
 DOCKER_VERSION ?= dev-$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-PLATFORM ?= linux/arm64
+PLATFORM ?= $(OS)/$(ARCH)
 MULTI_PLATFORM ?= false
 BUILDX_BUILDER ?= mr-cassop-builder
 
 # Individual image tags
-OPERATOR_IMG ?= $(REGISTRY)/mr-cassop:$(DOCKER_VERSION)
+OPERATOR_IMG ?= $(REGISTRY)/operator:$(DOCKER_VERSION)
 PROBER_IMG ?= $(REGISTRY)/prober:$(DOCKER_VERSION)
 CASSANDRA_IMG ?= $(REGISTRY)/cassandra:$(DOCKER_VERSION)
 JOLOKIA_IMG ?= $(REGISTRY)/jolokia:$(DOCKER_VERSION)
 ICARUS_IMG ?= $(REGISTRY)/icarus:$(DOCKER_VERSION)
 
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+# Produce Kubernetes v1 CRDs.
 CRD_OPTIONS ?= "crd:crdVersions=v1"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -50,7 +50,7 @@ all: manager
 docker-help:
 	@echo "🚀 Docker Build Targets:"
 	@echo ""
-	@echo "  Individual Images (ARM64 by default):"
+	@echo "  Individual Images ($(PLATFORM) by default):"
 	@echo "    make docker-build-operator    # Build operator image"
 	@echo "    make docker-build-prober      # Build prober image"
 	@echo "    make docker-build-cassandra   # Build cassandra image"
@@ -61,7 +61,7 @@ docker-help:
 	@echo "    make docker-build-core        # Build core images (operator + prober)"
 	@echo "    make docker-build-essential   # Build essential images (+ cassandra)"
 	@echo "    make docker-build-monitoring  # Build monitoring images (jolokia + icarus)"
-	@echo "    make docker-build-all         # Build all images (ARM64)"
+	@echo "    make docker-build-all         # Build all images for $(PLATFORM)"
 	@echo "    make docker-build-all-multiplatform  # Build for AMD64+ARM64 and push"
 	@echo ""
 	@echo "  Configuration:"
@@ -141,11 +141,11 @@ vet:
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..." paths="./controllers/..."
-	mockgen -package=mocks -source=./controllers/cql/cql.go -destination=./controllers/mocks/mock_cql.go
-	mockgen -package=mocks -source=./controllers/prober/prober.go -destination=./controllers/mocks/mock_prober.go
-	mockgen -package=mocks -source=./controllers/reaper/reaper.go -destination=./controllers/mocks/mock_reaper.go
-	mockgen -package=mocks -source=./controllers/nodectl/nodectl.go -destination=./controllers/mocks/mock_nodectl.go
-	mockgen -package=mocks -source=./controllers/icarus/icarus.go -destination=./controllers/mocks/mock_icarus.go
+	go run go.uber.org/mock/mockgen -package=mocks -source=./controllers/cql/cql.go -destination=./controllers/mocks/mock_cql.go
+	go run go.uber.org/mock/mockgen -package=mocks -source=./controllers/prober/prober.go -destination=./controllers/mocks/mock_prober.go
+	go run go.uber.org/mock/mockgen -package=mocks -source=./controllers/reaper/reaper.go -destination=./controllers/mocks/mock_reaper.go
+	go run go.uber.org/mock/mockgen -package=mocks -source=./controllers/nodectl/nodectl.go -destination=./controllers/mocks/mock_nodectl.go
+	go run go.uber.org/mock/mockgen -package=mocks -source=./controllers/icarus/icarus.go -destination=./controllers/mocks/mock_icarus.go
 
 # Build the docker image (legacy target)
 docker-build:
@@ -173,10 +173,10 @@ docker-build-operator: manager docker-buildx-setup
 	@echo "🔨 Building operator image: $(OPERATOR_IMG)"
 ifeq ($(MULTI_PLATFORM),true)
 	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
-	docker buildx build --platform=linux/amd64,linux/arm64 --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/mr-cassop:latest --push .
+	docker buildx build --platform=linux/amd64,linux/arm64 --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/operator:latest --push .
 else
 	@echo "   Building for platform: $(PLATFORM)"
-	docker buildx build --platform=$(PLATFORM) --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/mr-cassop:latest --load .
+	docker buildx build --platform=$(PLATFORM) --build-arg VERSION=$(DOCKER_VERSION) -t $(OPERATOR_IMG) -t $(REGISTRY)/operator:latest --load .
 endif
 	@echo "✅ Built $(OPERATOR_IMG)"
 
@@ -248,7 +248,7 @@ docker-build-monitoring: docker-build-jolokia docker-build-icarus
 # Push individual images
 docker-push-operator:
 	docker push $(OPERATOR_IMG)
-	docker push $(REGISTRY)/mr-cassop:latest
+	docker push $(REGISTRY)/operator:latest
 
 docker-push-prober:
 	docker push $(PROBER_IMG)  
@@ -293,7 +293,7 @@ ifeq (, $(shell which kustomize))
 	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go install sigs.k8s.io/kustomize/kustomize/v3@$(KUSTOMIZE_VERSION) ;\
+	go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION) ;\
 	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
 	}
 KUSTOMIZE=$(GOBIN)/kustomize

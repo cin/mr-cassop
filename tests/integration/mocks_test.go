@@ -14,10 +14,10 @@ import (
 
 	"github.com/cin/mr-cassop/controllers/reaper"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/cql"
 	"github.com/cin/mr-cassop/controllers/util"
-	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
 )
 

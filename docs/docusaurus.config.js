@@ -2,14 +2,18 @@ const isCI = !!process.env.CI;
 module.exports = {
   title: 'mr-cassop',
   githubHost: 'github.com',
-  url: isCI ? 'https://mr-cassop-docs.dev.sun.weather.com' : 'http://localhost:3000',
-  baseUrl: '/',
+  url: isCI ? 'https://cin.github.io' : 'http://localhost:3000',
+  baseUrl: isCI ? '/mr-cassop/' : '/',
   onBrokenLinks: 'throw',
   favicon: 'images/favicon.png',
-  organizationName: 'TheWeatherCompany',
+  organizationName: 'cin',
   projectName: 'mr-cassop',
   themeConfig: {
-    hideableSidebar: true,
+    docs: {
+      sidebar: {
+        hideable: true,
+      },
+    },
     colorMode: {
       defaultMode: 'dark',
     },
@@ -22,7 +26,7 @@ module.exports = {
       },
       items: [
         {
-          href: 'https://mr-cassop-docs.dev.sun.weather.com',
+          href: 'https://github.com/cin/mr-cassop',
           label: 'GitHub',
           position: 'right',
         },
@@ -48,7 +52,7 @@ module.exports = {
           sidebarPath: require.resolve('./sidebars.js'),
           showLastUpdateTime: true,
           remarkPlugins: [
-            [require('remark-toc'), { tight: true }],
+            [require('remark-toc').default, { tight: true }],
           ],
         },
         theme: {
@@ -58,7 +62,6 @@ module.exports = {
     ],
   ],
   plugins: [
-    [require.resolve('docusaurus-lunr-search'), { languages: ['en'], indexBaseUrl: true }],
     [require.resolve('@docusaurus/plugin-client-redirects'), { fromExtensions: ['html', 'md'] }],
   ],
 };

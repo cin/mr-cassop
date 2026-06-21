@@ -45,6 +45,7 @@ import (
 	nwv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers"
 	"github.com/cin/mr-cassop/controllers/config"
@@ -55,7 +56,6 @@ import (
 	"github.com/cin/mr-cassop/controllers/prober"
 	"github.com/cin/mr-cassop/controllers/reaper"
 	"github.com/go-logr/zapr"
-	"github.com/gocql/gocql"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
@@ -73,7 +73,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -210,12 +212,16 @@ var _ = BeforeSuite(func() {
 	// start webhook server using Manager
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:             scheme.Scheme,
-		Host:               webhookInstallOptions.LocalServingHost,
-		Port:               webhookInstallOptions.LocalServingPort,
-		CertDir:            webhookInstallOptions.LocalServingCertDir,
-		LeaderElection:     false,
-		MetricsBindAddress: "0",
+		Scheme: scheme.Scheme,
+		WebhookServer: crwebhook.NewServer(crwebhook.Options{
+			Host:    webhookInstallOptions.LocalServingHost,
+			Port:    webhookInstallOptions.LocalServingPort,
+			CertDir: webhookInstallOptions.LocalServingCertDir,
+		}),
+		LeaderElection: false,
+		Metrics: server.Options{
+			BindAddress: "0",
+		},
 	})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -295,7 +301,19 @@ var _ = BeforeSuite(func() {
 	testRestoreReconciler := SetupTestReconcile(cassandraRestoreCtrl)
 	Expect(cassandrarestore.SetupCassandraRestoreReconciler(testRestoreReconciler, mgr)).To(Succeed())
 
-	mgrStopCh = StartTestManager(mgr)
+	var mgrErr <-chan error
+	mgrStopCh, mgrErr = StartTestManager(mgr)
+	Eventually(func() error {
+		select {
+		case err := <-mgrErr:
+			if err != nil {
+				return err
+			}
+			return errors.New("manager stopped before webhook server started")
+		default:
+			return mgr.GetWebhookServer().StartedChecker()(nil)
+		}
+	}, longTimeout, shortRetry).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
@@ -359,13 +377,19 @@ func SetupTestReconcile(inner reconcile.Reconciler) reconcile.Reconciler {
 	return fn
 }
 
-func StartTestManager(mgr manager.Manager) chan struct{} {
+func StartTestManager(mgr manager.Manager) (chan struct{}, <-chan error) {
 	stop := make(chan struct{})
+	errCh := make(chan error, 1)
+	mgrCtx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer GinkgoRecover()
-		Expect(mgr.Start(ctx)).To(BeNil())
+		errCh <- mgr.Start(mgrCtx)
 	}()
-	return stop
+	go func() {
+		<-stop
+		cancel()
+	}()
+	return stop, errCh
 }
 
 func createOperatorConfigMaps() {
@@ -633,7 +657,7 @@ func createCassandraPods(cc *v1alpha1.CassandraCluster) {
 				actualPod := &v1.Pod{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, actualPod)).To(Succeed())
 				actualPod.Status.PodIP = fmt.Sprintf("172.0.%d.%d", dcID, replicaID)
-				actualPod.Status.HostIP = fmt.Sprintf(nodeIPs[0])
+				actualPod.Status.HostIP = nodeIPs[0]
 				actualPod.Status.ContainerStatuses = []v1.ContainerStatus{
 					{
 						Name:  "cassandra",
@@ -679,7 +703,7 @@ func createReaperPods(cc *v1alpha1.CassandraCluster) {
 			actualPod := &v1.Pod{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, actualPod)).To(Succeed())
 			actualPod.Status.PodIP = fmt.Sprintf("172.0.0.%d", dcID+1)
-			actualPod.Status.HostIP = fmt.Sprintf(nodeIPs[0])
+			actualPod.Status.HostIP = nodeIPs[0]
 			actualPod.Status.ContainerStatuses = []v1.ContainerStatus{
 				{
 					Name:  "reaper",

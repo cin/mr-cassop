@@ -26,7 +26,8 @@ func reaperEnvironment(cc *v1alpha1.CassandraCluster, dc v1alpha1.DC, adminSecre
 		{Name: "REAPER_REPAIR_INTENSITY", Value: fmt.Sprint(cc.Spec.Reaper.RepairIntensity)},
 		{Name: "REAPER_REPAIR_MANAGER_SCHEDULING_INTERVAL_SECONDS", Value: fmt.Sprint(cc.Spec.Reaper.RepairManagerSchedulingIntervalSeconds)},
 		{Name: "REAPER_BLACKLIST_TWCS", Value: strconv.FormatBool(cc.Spec.Reaper.BlacklistTWCS)},
-		{Name: "REAPER_CASS_CONTACT_POINTS", Value: fmt.Sprintf("[ %s ]", names.DC(cc.Name, dc.Name))},
+		{Name: "REAPER_CASS_CONTACT_POINTS", Value: fmt.Sprintf(`[{"host":"%s","port":"%d"}]`, names.DC(cc.Name, dc.Name), dbv1alpha1.CqlPort)},
+		{Name: "REAPER_CASS_LOCAL_DC", Value: dc.Name},
 		{Name: "REAPER_CASS_CLUSTER_NAME", Value: cc.Name},
 		{Name: "REAPER_STORAGE_TYPE", Value: "cassandra"},
 		{Name: "REAPER_CASS_KEYSPACE", Value: cc.Spec.Reaper.Keyspace},
@@ -90,7 +91,27 @@ func reaperEnvironment(cc *v1alpha1.CassandraCluster, dc v1alpha1.DC, adminSecre
 	})
 
 	reaperEnv = append(reaperEnv, v1.EnvVar{
+		Name: "REAPER_AUTH_USER",
+		ValueFrom: &v1.EnvVarSource{
+			SecretKeyRef: &v1.SecretKeySelector{
+				LocalObjectReference: v1.LocalObjectReference{Name: names.AdminAuthConfigSecret(cc.Name)},
+				Key:                  v1alpha1.CassandraOperatorAdminRole,
+			},
+		},
+	})
+
+	reaperEnv = append(reaperEnv, v1.EnvVar{
 		Name: "REAPER_CASS_AUTH_PASSWORD",
+		ValueFrom: &v1.EnvVarSource{
+			SecretKeyRef: &v1.SecretKeySelector{
+				LocalObjectReference: v1.LocalObjectReference{Name: names.AdminAuthConfigSecret(cc.Name)},
+				Key:                  v1alpha1.CassandraOperatorAdminPassword,
+			},
+		},
+	})
+
+	reaperEnv = append(reaperEnv, v1.EnvVar{
+		Name: "REAPER_AUTH_PASSWORD",
 		ValueFrom: &v1.EnvVarSource{
 			SecretKeyRef: &v1.SecretKeySelector{
 				LocalObjectReference: v1.LocalObjectReference{Name: names.AdminAuthConfigSecret(cc.Name)},

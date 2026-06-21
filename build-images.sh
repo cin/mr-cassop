@@ -7,8 +7,8 @@ set -e
 
 # Configuration
 VERSION=${VERSION:-"dev-$(git rev-parse --short HEAD)"}
-REGISTRY=${REGISTRY:-"cinple/mr-cassop"}
-PLATFORM=${PLATFORM:-"linux/arm64"}
+REGISTRY=${REGISTRY:-"ghcr.io/cin/mr-cassop"}
+PLATFORM=${PLATFORM:-"$(go env GOOS)/$(go env GOARCH)"}
 MULTI_PLATFORM=${MULTI_PLATFORM:-"false"}
 
 # Colors for output
@@ -81,7 +81,7 @@ build_image() {
 
 # Build main operator
 echo -e "${BLUE}🔨 Building main operator...${NC}"
-build_image "mr-cassop" "Dockerfile" "."
+build_image "operator" "Dockerfile" "."
 
 # Build prober
 echo -e "${BLUE}🔨 Building prober...${NC}"
@@ -113,7 +113,7 @@ else
     echo -e "   MULTI_PLATFORM=true ./build-images.sh"
     echo ""
     echo -e "${BLUE}🔧 Or push individual images:${NC}"
-    echo -e "   docker push ${REGISTRY}/mr-cassop:${VERSION}"
+    echo -e "   docker push ${REGISTRY}/operator:${VERSION}"
     echo -e "   docker push ${REGISTRY}/prober:${VERSION}"
     echo -e "   docker push ${REGISTRY}/cassandra:${VERSION}"
     echo -e "   docker push ${REGISTRY}/jolokia:${VERSION}"

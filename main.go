@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/go-logr/zapr"
-	"github.com/gocql/gocql"
 	"go.uber.org/zap"
 
 	"k8s.io/apimachinery/pkg/runtime"

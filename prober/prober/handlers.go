@@ -3,7 +3,6 @@ package prober
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,7 +35,7 @@ func (p *Prober) getRegionReady(w http.ResponseWriter, _ *http.Request, _ httpro
 
 func (p *Prober) putRegionReady(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var ready bool
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.log.Error(err, "can't ready body")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -54,7 +53,7 @@ func (p *Prober) getReaperReady(w http.ResponseWriter, _ *http.Request, _ httpro
 
 func (p *Prober) putReaperReady(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var ready bool
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.log.Error(err, "can't ready body")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -73,7 +72,7 @@ func (p *Prober) getSeeds(w http.ResponseWriter, _ *http.Request, _ httprouter.P
 
 func (p *Prober) putSeeds(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var s []string
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else if json.Unmarshal(body, &s) != nil {
@@ -90,7 +89,7 @@ func (p *Prober) getDCs(w http.ResponseWriter, _ *http.Request, _ httprouter.Par
 
 func (p *Prober) putDCs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var dcs []dc
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else if json.Unmarshal(body, &dcs) != nil {
@@ -114,7 +113,7 @@ func (p *Prober) getRegionIPs(w http.ResponseWriter, _ *http.Request, _ httprout
 
 func (p *Prober) putRegionIPs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var ips []string
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -133,7 +132,7 @@ func (p *Prober) getReaperIPs(w http.ResponseWriter, _ *http.Request, _ httprout
 
 func (p *Prober) putReaperIPs(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var ips []string
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		p.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)

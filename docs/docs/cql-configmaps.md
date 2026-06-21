@@ -78,6 +78,6 @@ kubectl annotate configmap/my-cql-queries cassandra-cluster-instance=test-cluste
 ```
 
 :::caution
-Under the hood, the operator uses https://github.com/gocql/gocql to execute CQL queries. That imposes restrictions on the kind of CQL queries you can run.
-For example, `USE` queries are not allowed, `INSERT` queries can't be executed (since the [Query](https://pkg.go.dev/github.com/gocql/gocql#Session.Query) function requires the values to be passed to the function), etc.
+Under the hood, the operator uses the [Apache Cassandra Go driver](https://github.com/apache/cassandra-gocql-driver) to execute CQL queries. That imposes restrictions on the kind of CQL queries you can run.
+For example, `USE` queries are not allowed, `INSERT` queries can't be executed (since the [Query](https://pkg.go.dev/github.com/apache/cassandra-gocql-driver/v2#Session.Query) function requires the values to be passed to the function), etc.
 :::
