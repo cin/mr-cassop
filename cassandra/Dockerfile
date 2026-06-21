@@ -1,8 +1,19 @@
 ARG CASSANDRA_VERSION=4.1.11
+ARG GO_VERSION=1.24.13
+ARG GOSU_VERSION=1.19
+FROM golang:${GO_VERSION}-bookworm AS gosu-builder
+ARG GOSU_VERSION
+
+RUN set -eux; \
+  GOBIN=/out go install github.com/tianon/gosu@${GOSU_VERSION}; \
+  /out/gosu --version
+
 FROM cassandra:${CASSANDRA_VERSION}
 ARG JMX_EXPORTER_VERSION=1.0.1
 ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.14
 ENV DATASTAX_CASSANDRA_EXPORTER_VERSION=0.3.6
+
+COPY --from=gosu-builder /out/gosu /usr/local/bin/gosu
 
 RUN set -eux; \
   # wget_jar org name version dest_dir
