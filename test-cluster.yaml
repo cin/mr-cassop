@@ -13,14 +13,14 @@ spec:
       enabled: false
     resources:
       limits:
-        cpu: "500m"
-        memory: 1Gi
+        cpu: "2"
+        memory: 2Gi
       requests:
-        memory: 1Gi
-        cpu: "500m"
+        memory: 1536Mi
+        cpu: "750m"
     jvmOptions:
-    - -Xmx512M
-    - -Xms512M
+    - -Xmx1024M
+    - -Xms1024M
     monitoring:
       enabled: false
   dcs:
