@@ -42,10 +42,10 @@ The project includes a comprehensive Docker build system optimized for developme
 # Fast iteration - core images only (operator + prober)
 ./build-local.sh
 
-# Full local development (operator + prober + cassandra)
-./build-local-full.sh
+# Essential local development images (operator + prober + cassandra)
+./build-local.sh --cassandra
 
-# Build all 5 images
+# Build all 5 images (operator, prober, cassandra, jolokia, icarus)
 ./build-images.sh
 
 # Individual components
@@ -78,12 +78,12 @@ Deploy the operator using the Helm chart:
 
 ```bash
 # Build images first
-./build-local-full.sh
+VERSION=dev ./build-images.sh
 
 # Create namespace
 kubectl create namespace mr-cassop-system
 
-# Deploy with custom values
+# Deploy with local image overrides
 helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
 ```
 
@@ -101,15 +101,16 @@ make run
 
 ### Skaffold way
 
-Prepare configs and deploy C* cluster
+Build and deploy the operator with skaffold:
 ```bash
-cp config/samples/cassandracluster.yaml config/samples/cassandracluster_local.yaml
 skaffold run
 ```
 
+Then create the required secrets and `CassandraCluster` resource from the [Quickstart](quickstart.md).
+
 ### Manual way
 
-After you have your image with the code changes in the cluster, override the default container image through Helm values override. If you're pulling the image from a private container registry, you also need to specify the image pull secret. An another option would be to get the image to the cluster and set the `imagePullPolicy` to `Never`.
+After you have your image with the code changes in the cluster, override the default container image through Helm values. If you're pulling the image from a private container registry, specify the image pull secret. Another option is to load the image directly into the cluster and set `imagePullPolicy` to `Never`.
 
 Your values override could look the following:
 
@@ -122,9 +123,7 @@ logLevel: debug
 logFormat: json
 ```
 
-Once the cluster is up and running, use the sample in `config/samples/cassandracluster.yaml` to run your cluster. The sample can be run without additional configuration, except you need to set your image pull secret name in the spec.
-
-`kubectl apply -f config/samples/cassandracluster.yaml`
+Once the operator is up, apply a `CassandraCluster` manifest. The [Quickstart](quickstart.md) contains a minimal 3-node example you can adapt for local development.
 
 If all set correctly, you should see the components getting created.
 

@@ -36,7 +36,7 @@ A `CassandraCluster` managed by mr-cassop consists of the following integrated c
   - Metrics collection and exposition
   - Inter-datacenter health monitoring
   - Node status aggregation
-- **Deployment**: Sidecar container in each Cassandra pod
+- **Deployment**: Deployment per `CassandraCluster`
 - **Documentation**: [Prober Details](/prober.md)
 
 ### 📊 **Jolokia**
@@ -45,8 +45,9 @@ A `CassandraCluster` managed by mr-cassop consists of the following integrated c
   - Exposes Cassandra JMX metrics over HTTP
   - Provides secure access to management operations
   - Enables monitoring integrations
-- **Deployment**: Sidecar container in each Cassandra pod
+- **Deployment**: Container in the prober Deployment
 - **Website**: [jolokia.org](https://jolokia.org/)
+- **Documentation**: [Jolokia Details](/jolokia.md)
 
 ### 🔧 **Reaper**
 - **Purpose**: Automated repair management and scheduling
@@ -83,8 +84,8 @@ A `CassandraCluster` managed by mr-cassop consists of the following integrated c
 │  Application namespace (e.g., cassop)                          │
 │                                                                 │
 │  ┌─────────────────┐    ┌─────────────────┐                   │
-│  │     Reaper      │    │   Monitoring    │                   │
-│  │   (Repairs)     │    │   Dashboard     │                   │
+│  │     Reaper      │    │     Prober      │                   │
+│  │   (Repairs)     │    │  + Jolokia JMX  │                   │
 │  └─────────────────┘    └─────────────────┘                   │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
@@ -95,12 +96,6 @@ A `CassandraCluster` managed by mr-cassop consists of the following integrated c
 │  │  │         │  │         │  │         │                 │   │
 │  │  │ ┌─────┐ │  │ ┌─────┐ │  │ ┌─────┐ │                 │   │
 │  │  │ │ C*  │ │  │ │ C*  │ │  │ │ C*  │ │                 │   │
-│  │  │ └─────┘ │  │ └─────┘ │  │ └─────┘ │                 │   │
-│  │  │ ┌─────┐ │  │ ┌─────┐ │  │ ┌─────┐ │                 │   │
-│  │  │ │Prober│ │  │ │Prober│ │  │ │Prober│ │                 │   │
-│  │  │ └─────┘ │  │ └─────┘ │  │ └─────┘ │                 │   │
-│  │  │ ┌─────┐ │  │ ┌─────┐ │  │ ┌─────┐ │                 │   │
-│  │  │ │Jolokia│ │  │ │Jolokia│ │  │ │Jolokia│ │                 │   │
 │  │  │ └─────┘ │  │ └─────┘ │  │ └─────┘ │                 │   │
 │  │  │ ┌─────┐ │  │ ┌─────┐ │  │ ┌─────┐ │                 │   │
 │  │  │ │Icarus│ │  │ │Icarus│ │  │ │Icarus│ │                 │   │
@@ -114,8 +109,8 @@ A `CassandraCluster` managed by mr-cassop consists of the following integrated c
 
 1. **Operator Controller** continuously watches for CassandraCluster resources
 2. **StatefulSets** are created/updated based on cluster specifications
-3. **Prober** containers monitor Cassandra health and report status
-4. **Jolokia** exposes JMX metrics for monitoring and management
+3. **Prober** monitors Cassandra health and reports readiness through a service
+4. **Jolokia** provides JMX-over-HTTP access for prober and management flows
 5. **Reaper** automatically schedules and executes repairs
 6. **Icarus** handles backup operations based on configured schedules
 7. **Services** provide stable networking for client connections
@@ -133,7 +128,7 @@ See [Multi-Region Configuration](multi-region-cluster-configuration.md) for deta
 ## Monitoring Integration
 
 The architecture supports comprehensive monitoring through:
-- Prometheus metrics from Jolokia and Prober
+- Prometheus metrics from Cassandra JMX exporter, Prober, and Reaper
 - Grafana dashboards for visualization
 - Kubernetes native health checks
 - Custom alerts and notifications

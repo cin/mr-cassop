@@ -9,34 +9,27 @@ slug: /quickstart
 * Helm 3.15+
 * kubectl configured to communicate with your cluster
 
-## Build Images
-
-For local development, you'll need to build the Docker images. Choose based on your needs:
-
-```bash
-# Core images only (fastest - operator + prober)
-./build-local.sh
-
-# Essential images (complete local development - + cassandra)
-./build-local.sh --cassandra
-```
-
-> 💡 **For comprehensive build options**, see the [Development Guide](development.md) and [Docker Build Documentation](https://github.com/cin/mr-cassop/blob/main/DOCKER_BUILD.md).
-
 ## Install mr-cassop
 
-### 1. Create Namespace
+Released mr-cassop images are published to GitHub Container Registry under `ghcr.io/cin/mr-cassop`, and each release attaches a Helm chart archive.
+
+Set the release you want to install:
 
 ```bash
+export MR_CASSOP_VERSION=0.6.0
+```
+
+Download the chart and create the operator namespace:
+
+```bash
+curl -LO "https://github.com/cin/mr-cassop/releases/download/${MR_CASSOP_VERSION}/mr-cassop-${MR_CASSOP_VERSION}.tgz"
 kubectl create namespace mr-cassop-system
 ```
 
-### 2. Install via Helm
-
-The operator is installed using the local Helm chart:
+Install the operator:
 
 ```bash
-helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
+helm install mr-cassop "./mr-cassop-${MR_CASSOP_VERSION}.tgz" -n mr-cassop-system
 ```
 
 You should see your operator pod up and running:
@@ -47,6 +40,18 @@ kubectl get pods --namespace mr-cassop-system
 NAME                         READY   STATUS    RESTARTS   AGE
 mr-cassop-56997bfc5c-gz788   1/1     Running   0          40s
 ```
+
+### Local Development Install
+
+If you are developing locally, build images and install from the checked-out chart with `local-values.yaml`:
+
+```bash
+VERSION=dev ./build-images.sh
+kubectl create namespace mr-cassop-system
+helm install mr-cassop ./mr-cassop -n mr-cassop-system -f local-values.yaml
+```
+
+For more build options, see the [Development Guide](development.md) and [Docker Build Documentation](https://github.com/cin/mr-cassop/blob/main/DOCKER_BUILD.md).
 
 ## Create Required Secrets
 
@@ -60,7 +65,7 @@ kubectl create namespace cassop
 
 The operator needs a secret containing the admin role credentials used for Cassandra management.
 
-> Don't forget to replace `admin-password=admin123` with your secure password
+Do not use the example password in a real environment.
 
 ```bash
 kubectl create secret generic admin-secret \
@@ -71,7 +76,7 @@ kubectl create secret generic admin-secret \
 
 ### 3. Image Pull Secret
 
-For local development, create a minimal image pull secret:
+`imagePullSecretName` is part of the `CassandraCluster` spec. For public GHCR images, a minimal placeholder secret is enough:
 
 ```bash
 kubectl create secret generic test-secret \
@@ -80,9 +85,11 @@ kubectl create secret generic test-secret \
   -n cassop
 ```
 
+If you override the default images with a private registry, create this as a real registry pull secret instead.
+
 ## Deploy CassandraCluster
 
-Use the image pull secret and admin role secret created before to deploy the cluster:
+Use the image pull secret and admin role secret created above to deploy a 3-node Cassandra cluster:
 
 ```bash
 kubectl apply -f - <<EOF
@@ -102,15 +109,20 @@ spec:
       enabled: false
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 750m
+        memory: 1536Mi
       limits:
-        cpu: 500m
-        memory: 1Gi
+        cpu: "2"
+        memory: 2Gi
+    jvmOptions:
+    - -Xmx1024M
+    - -Xms1024M
 EOF
 ```
 
 **Note: you must define at least one DC.**
+
+The resource values above are intended for a small demo cluster. Cassandra can start with less, but under constrained CPU it may fail liveness checks during bootstrap. Use persistent storage and size the pods for your workload before using this outside a demo environment.
 
 Check the deployment progress:
 
@@ -119,13 +131,13 @@ kubectl get cassandraclusters -n cassop
 kubectl get pods -n cassop
 ```
 
-Wait until the cluster is up and running. You'll see services created:
+Wait until all Cassandra pods are `2/2 Running`. You should see services created:
 
 ```bash
 kubectl get svc -n cassop
 
-NAME                    TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                                        AGE
-example-cassandra-dc1   ClusterIP   None         <none>        7000/TCP,7001/TCP,7199/TCP,9042/TCP,9160/TCP   3m
+NAME                    TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                              AGE
+example-cassandra-dc1   ClusterIP   None         <none>        7000/TCP,7001/TCP,7199/TCP,9042/TCP   3m
 ```
 
 Now you can execute queries:
@@ -134,33 +146,34 @@ Now you can execute queries:
 kubectl exec -it example-cassandra-dc1-0 -n cassop -c cassandra -- \
   cqlsh -u admin -p admin123 -e "DESCRIBE keyspaces;"
 
-system_traces  system_schema  system_auth  system  system_distributed
+system_traces  system_schema  system_auth  system  system_distributed  reaper
 ```
 
-You can also execute `cqlsh` and `nodetool` commands:
+You can also inspect cluster health with `nodetool`:
 
 ```bash
-kubectl exec -it example-cassandra-dc1-0 -n cassop -c cassandra -- bash
-cassandra@example-cassandra-dc1-0:~$ cqlsh -e "DESCRIBE keyspaces;"
+kubectl exec -it example-cassandra-dc1-0 -n cassop -c cassandra -- bash -c \
+  'nodetool -u "$(cat /etc/cassandra-auth-config/admin-role)" -pw "$(cat /etc/cassandra-auth-config/admin-password)" status'
+```
 
-system_schema  system_auth  system  reaper  system_distributed  system_traces
+Healthy nodes show `UN` (`Up`/`Normal`):
 
-cassandra@example-cassandra-dc1-0:~$ nodetool status
+```text
 Datacenter: dc1
 ===============
 Status=Up/Down
 |/ State=Normal/Leaving/Joining/Moving
---  Address         Load       Tokens       Owns (effective)  Host ID                               Rack
-UN  172.30.200.204  919.86 KiB  16           100.0%            01b26cc1-4870-4617-97ab-adfa566cccee  rack1
-UN  172.30.16.197   926.94 KiB  16           100.0%            f3a861ae-848d-4e52-a7bf-dc63cb87ef57  rack1
-UN  172.30.200.83   924.49 KiB  16           100.0%            dd93c221-a8b1-47fd-aa63-40282863bf57  rack1
+--  Address      Load        Tokens  Owns (effective)  Host ID                               Rack
+UN  10.244.1.16  116.9 KiB   16      100.0%            aa08a631-1800-44c3-9cba-e23507a6e43f  rack1
+UN  10.244.3.8   114.45 KiB  16      100.0%            ae5cfa8c-43e9-4112-9aef-d4911c27599d  rack1
+UN  10.244.2.8   97.3 KiB    16      100.0%            6f422689-2995-42a1-a0d0-39b6a1ba6b16  rack1
 ```
 
 See the [CassandraCluster field specification reference](cassandracluster-configuration.md) for more details.
 
 ## Scaling the Cluster
 
-You can easily scale your cluster by updating the replicas:
+You can scale your cluster by updating the replicas:
 
 ```bash
 kubectl patch cassandracluster example -n cassop --type='merge' -p='{"spec":{"dcs":[{"name":"dc1","replicas":5}]}}'

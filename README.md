@@ -1,10 +1,10 @@
 # mr-cassop
 
-mr-cassop is a Kubernetes operator for deploying and managing Apache Cassandra clusters.
+mr-cassop is a multi-region Kubernetes operator for deploying and managing Apache Cassandra clusters.
 
 ## Overview
 
-mr-cassop automates Cassandra cluster lifecycle management in Kubernetes. It includes controller-driven deployment, backup and restore integration through Icarus, repair scheduling through Reaper, Jolokia-based observability hooks, and Helm packaging.
+mr-cassop automates Cassandra cluster lifecycle management in Kubernetes. Its distinguishing feature is support for Cassandra deployments that span multiple Kubernetes clusters/regions. It also includes controller-driven deployment, backup and restore integration through Icarus, repair scheduling through Reaper, Jolokia/Prober-based health checks, and Helm packaging.
 
 ## Status
 
@@ -17,13 +17,16 @@ Unit, prober, and envtest integration tests are expected to pass locally. End-to
 - Automated deployment through `CassandraCluster` custom resources
 - Backup and restore resources backed by Icarus
 - Repair scheduling through Cassandra Reaper
-- Jolokia and Prometheus monitoring integration
-- Optional TLS, authentication, network policies, and multi-region topology support
+- Multi-region topology support across Kubernetes clusters
+- Prober-driven readiness and cross-region coordination
+- Jolokia, Prometheus, and Grafana monitoring integration
+- Optional TLS, authentication, and network policies
 
 ## Quick Start
 
 Start with the project documentation:
 
+- Live docs: [https://cin.github.io/mr-cassop/](https://cin.github.io/mr-cassop/)
 - New users: [Quickstart Guide](docs/docs/quickstart.md)
 - Developers: [Development Guide](docs/docs/development.md)
 - Building images: [Docker Build Guide](DOCKER_BUILD.md)
@@ -44,8 +47,8 @@ mr-cassop consists of integrated components working together:
 
 - **Operator Controller** - Manages cluster lifecycle and reconciliation
 - **Cassandra Nodes** - Core database instances in StatefulSets
-- **Prober** - Health monitoring and metrics collection
-- **Jolokia** - JMX-to-HTTP bridge for observability  
+- **Prober** - Health monitoring, readiness coordination, and multi-region discovery
+- **Jolokia** - JMX-to-HTTP bridge used by prober and management flows
 - **Reaper** - Automated repair management
 - **Icarus** - Backup and restore service
 

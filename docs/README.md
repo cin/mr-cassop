@@ -1,5 +1,7 @@
 # mr-cassop Documentation
 
+Published docs are available at https://cin.github.io/mr-cassop/.
+
 ## Running Locally
 
 To download and run this locally, clone the repo and then go to the docs directory:
