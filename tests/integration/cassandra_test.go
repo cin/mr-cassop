@@ -101,10 +101,10 @@ var _ = Describe("cassandra statefulset deployment", func() {
 					[]string{
 						"bash",
 						"-c",
-						`chown cassandra:cassandra /var/lib/cassandra
-sysctl -w fs.file-max="1073741824" net.core.somaxconn="65000" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_ecn="0" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_window_scaling="1" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1073741824" vm.swappiness="1"`,
-					},
-				))
+					`chown cassandra:cassandra /var/lib/cassandra
+sysctl -w net.core.optmem_max="40960" net.core.rmem_default="16777216" net.core.rmem_max="16777216" net.core.somaxconn="65535" net.core.wmem_default="16777216" net.core.wmem_max="16777216" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1048575" vm.swappiness="1"`,
+				},
+			))
 			}
 		})
 	})
@@ -332,10 +332,10 @@ var _ = Describe("cassandra statefulset", func() {
 					[]string{
 						"bash",
 						"-c",
-						`chown cassandra:cassandra /var/lib/cassandra
-sysctl -w fs.file-max="1073741824" net.core.somaxconn="65000" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_ecn="0" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_window_scaling="1" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1073741824" vm.swappiness="1"`},
+					`chown cassandra:cassandra /var/lib/cassandra
+sysctl -w net.core.optmem_max="40960" net.core.rmem_default="16777216" net.core.rmem_max="16777216" net.core.somaxconn="65535" net.core.wmem_default="16777216" net.core.wmem_max="16777216" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1048575" vm.swappiness="1"`},
 				),
-				)
+			)
 			}
 		})
 	})
