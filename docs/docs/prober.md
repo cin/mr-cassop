@@ -3,13 +3,13 @@ title: Prober
 slug: /prober
 ---
 
-To properly configure the cluster, mr-cassop should coordinate C* node readiness.
+To properly configure the cluster, mr-cassop coordinates Cassandra node readiness.
 
-By default, Kubernetes will say that a node is ready as soon as the process is started. This is not enough for Cassandra since it takes some time for node to start and bootstrap.
+By default, Kubernetes can mark a pod ready as soon as the Cassandra process starts. This is not enough for Cassandra because a node can take time to bootstrap, join gossip, and become visible as healthy to its peers.
 This issue can be fixed by adding readiness probes. For example, we can try to create a CQL session and execute a simple command. If the command is successful, we can assume that the node is ready.
 However, this approach has a major flaw because of the distributed nature of Cassandra - a node can see itself as ready while other nodes see it as unready. This is important because the CQL queries can fail with an error stating that there are not enough healthy nodes to achieve QUORUM consistency. This can also lead to issues with rolling restarts as it will lead to multiple Cassandra pods being down at once.
 
-For this reason, the operator deploys a special component called prober that continuously monitors the status of all nodes. Prober makes JMX calls to each node and gathers information about the cluster from each node's perspective (e.g. recording the result of `nodetool status` on each node).
+For this reason, the operator deploys a component called prober that continuously monitors the status of all nodes. Prober makes JMX calls to each node and gathers information about the cluster from each node's perspective, similar to recording the result of `nodetool status` on each node.
 By using the recorded states (that update every few seconds), prober can tell if a Cassandra node is viewed as ready by all other nodes.
 
 This process is similar to Kubernetes [readiness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-readiness-probes). The pod sends readiness probe requests to prober to check its status. Prober receives that request, checks the state of the node and returns either a success or failure response.
@@ -20,9 +20,15 @@ Even though prober stores the state of the cluster in memory, a restart doesn't 
 
 :::info
 
-Prober does not affect how Cassandra works. It only read states and provides information to Kubernetes and the mr-cassop to coordinate actions.
+Prober does not affect how Cassandra works. It reads state and provides information to Kubernetes and mr-cassop so they can coordinate readiness, rolling operations, and multi-region initialization.
 
 :::
+
+### Deployment Model
+
+For each `CassandraCluster`, mr-cassop creates a prober Deployment. The prober pod also runs a Jolokia container that provides JMX-over-HTTP access for prober and operator management flows.
+
+Cassandra pods use the prober service in their readiness probe. This lets the operator gate Cassandra readiness on the cluster's view of each node instead of only the local process state.
 
 ### Cross region communication
 

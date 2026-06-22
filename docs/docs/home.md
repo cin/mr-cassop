@@ -6,22 +6,22 @@ slug: /
 
 # mr-cassop
 
-A comprehensive Kubernetes operator for deploying and managing Apache Cassandra clusters across multiple regions.
+A Kubernetes operator for deploying and managing Apache Cassandra clusters across multiple regions.
 
 ## Overview
 
-mr-cassop automates the complete lifecycle of Cassandra clusters in Kubernetes environments. It provides enterprise-grade features including automated deployment, scaling, backup/restore, monitoring, and repair management, making it ideal for production workloads.
+mr-cassop automates Cassandra cluster lifecycle management in Kubernetes. Its distinguishing feature is multi-region support: operators in separate Kubernetes clusters coordinate datacenter discovery, seed configuration, and region readiness so a single Cassandra deployment can span regions.
 
 ## Key Capabilities
 
 🚀 **Automated Deployment** - Deploy Cassandra clusters with declarative YAML configuration  
 📈 **Dynamic Scaling** - Scale clusters seamlessly with zero-downtime node operations  
-🔄 **Backup & Restore** - Point-in-time recovery with cross-region replication via Icarus  
+🔄 **Backup & Restore** - Backup and restore workflows backed by Icarus  
 🔧 **Repair Management** - Automated repair scheduling and optimization via Cassandra Reaper  
 📊 **Full Observability** - Prometheus metrics, Grafana dashboards, and health monitoring  
 🌍 **Multi-Region Ready** - Cross-region deployment with automatic datacenter awareness  
 🔐 **Enterprise Security** - TLS encryption, RBAC, and network policy integration  
-⚡ **Production Optimized** - Battle-tested for high-performance production workloads
+⚙️ **Operational Tooling** - Coordinated bootstrapping, rolling operations, and maintenance mode
 
 ## Architecture
 

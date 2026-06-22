@@ -335,19 +335,25 @@ func (r *CassandraClusterReconciler) defaultMonitoring(cc *dbv1alpha1.CassandraC
 }
 
 func (r *CassandraClusterReconciler) defaultSysctls(cc *dbv1alpha1.CassandraCluster) {
+	// Defaults align with the Apache Cassandra 4.1 recommended production
+	// settings. net.core.*_max must be raised alongside tcp_rmem/tcp_wmem,
+	// otherwise the per-socket buffers are capped below their configured max.
+	// vm.max_map_count matches the upstream recommendation (~1M); Cassandra's
+	// mmap-heavy SSTable access fails with too few mapping areas.
 	defaultSysctls := map[string]string{
 		"net.ipv4.ip_local_port_range": "1025 65535",
 		"net.ipv4.tcp_rmem":            "4096 87380 16777216",
 		"net.ipv4.tcp_wmem":            "4096 65536 16777216",
-		"net.core.somaxconn":           "65000",
-		"net.ipv4.tcp_ecn":             "0",
-		"net.ipv4.tcp_window_scaling":  "1",
+		"net.core.rmem_max":            "16777216",
+		"net.core.wmem_max":            "16777216",
+		"net.core.rmem_default":        "16777216",
+		"net.core.wmem_default":        "16777216",
+		"net.core.optmem_max":          "40960",
+		"net.core.somaxconn":           "65535",
 		"vm.dirty_background_bytes":    "10485760",
 		"vm.dirty_bytes":               "1073741824",
-		// "vm.zone_reclaim_mode":         "0",
-		"fs.file-max":      "1073741824",
-		"vm.max_map_count": "1073741824",
-		"vm.swappiness":    "1",
+		"vm.max_map_count":             "1048575",
+		"vm.swappiness":                "1",
 	}
 
 	if cc.Spec.Cassandra.Sysctls == nil {

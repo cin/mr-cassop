@@ -46,6 +46,7 @@ module.exports = {
         'architecture-overview',
         'cassandracluster-lifecycle',
         'prober',
+        'jolokia',
       ],
     },
     'development',

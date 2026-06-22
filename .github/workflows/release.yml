@@ -108,6 +108,12 @@ jobs:
           cache: npm
           cache-dependency-path: docs/package-lock.json
 
+      - name: Pin quickstart to release version
+        working-directory: docs
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sed -i "s/^export MR_CASSOP_VERSION=.*/export MR_CASSOP_VERSION=${version}/" docs/quickstart.md
+
       - name: Publish docs website
         working-directory: docs
         env:

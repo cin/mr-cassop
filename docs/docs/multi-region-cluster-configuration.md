@@ -1,11 +1,11 @@
 ---
-title: Multi Regions Cluster Configurations
+title: Multi-Region Cluster Configuration
 slug: /multi-region-cluster-configuration
 ---
 
-mr-cassop supports running Cassandra in multiple regions (Kubernetes clusters). The operator should be deployed in all regions with a C* cluster. Each operator will configure its own CassandraCluster while still communicating with operators in other regions. 
+mr-cassop supports running one Cassandra cluster across multiple regions (Kubernetes clusters). Deploy the operator in every region that will host Cassandra nodes. Each operator manages the local `CassandraCluster` resource while coordinating with the operators in the other regions.
 
-In order to automate this process, the operator deploys a component that is used to discover information to correctly configure the cluster (available datacenters, replicas per datacenter, seeds, etc.)
+The prober component is used for cross-region coordination and discovery, including available datacenters, replicas per datacenter, seed nodes, and region readiness.
 
 Since the regions need to communicate with each other, the cluster should be exposed to the outside world. By default, this is not the case. To expose the cluster, you will need to set `hostPort` and `ingress`.
  
@@ -54,7 +54,7 @@ There are a few prerequisites for deploying a cluster in multiple regions.
 * Ensure reaper repairs (or nodetool repairs) aren't going to overlap or start running while pairing clusters.
 The only point of contact defined in the CassandraCluster spec is the `.spec.externalRegions.managed` field. This is an array where the ingress domains to other regions are defined.
 
-For example, consider two regions - `us-east` and `us-south`. The multi-cluster configuration could look like the following:
+For example, consider two regions: `us-east` and `us-south`. The multi-region configuration could look like the following:
 
 `us-east` region:
 
@@ -79,7 +79,7 @@ spec:
     - domain: us-south.my-cluster.my-cloud.com
 ```
 
-`us-south` regions:
+`us-south` region:
 ```yaml
 apiVersion: db.ibm.com/v1alpha1
 kind: CassandraCluster
@@ -111,28 +111,29 @@ Regions initialize one at a time according to the ingress domain names' lexicogr
 
 As a part of cluster bootstrapping process, the operator configures the keyspaces options by executing CQL queries.
 
-By default, the operator configures `system_auth`, `system_distributed`, `system_traces` and Reaper's keyspace to use the `NetworkTopologyStrategy` replication class with a replication factor of 3 for every DC (or number of replicas if there's less than 3).
+By default, the operator configures `system_auth`, `system_distributed`, `system_traces`, and Reaper's keyspace to use `NetworkTopologyStrategy` with a replication factor of 3 for every DC (or the number of replicas if the DC has fewer than 3 replicas).
 
 #### Overriding keyspaces options
-You can define your own replication settings in the `.spec.systemKeyspaces` object in the `CassandraCluster`'s definition.
+You can define your own replication settings in the `.spec.systemKeyspaces` object in the `CassandraCluster` definition.
 
 Simply define the keyspaces you want to override and the replication settings for DCs:
 
 ```yaml
 spec:
-  keyspaces:
-  - system_traces
-  - system_auth
-  dcs:
-  - name: dc1
-    rf: 5
-  - name: dc2
-    rf: 4
+  systemKeyspaces:
+    keyspaces:
+    - system_traces
+    - system_auth
+    dcs:
+    - name: dc1
+      rf: 5
+    - name: dc2
+      rf: 4
 ```
 
 :::caution
 
-Since the operator executes CQL queries to configure the cluster, it is important to correctly set the replication options for `system_auth` keyspaces, so you do not get quorum errors.
+Since the operator executes CQL queries to configure the cluster, it is important to set replication options for `system_auth` correctly so authentication queries do not fail with quorum errors.
 
 :::
 
@@ -157,8 +158,8 @@ spec:
         rf: 3
 ```
 
-As you can see, the operator can connect regions both managed by other Cassandra operators (using the `.spec.spec.externalRegions.managed` array) and by setting the seed nodes of an unmanaged region by using the `.spec.spec.externalRegions.unmanaged[].seeds` field. 
-The `.spec.spec.externalRegions.unmanaged[].dcs` field is also required to correctly configure the replication options for the keyspaces.
+The operator can connect regions managed by other mr-cassop operators using `.spec.externalRegions.managed`, and it can connect to unmanaged Cassandra regions using `.spec.externalRegions.unmanaged[].seeds`.
+The `.spec.externalRegions.unmanaged[].dcs` field is also required so the operator can configure keyspace replication correctly.
 
 ## Treat Zones as Racks
 
