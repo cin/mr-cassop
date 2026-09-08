@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkmr_cassop=globalThis.webpackChunkmr_cassop||[]).push([[977],{1536(a){a.exports=JSON.parse('{"metadata":{"permalink":"/mr-cassop/blog","page":1,"postsPerPage":10,"totalPages":1,"totalCount":0,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
