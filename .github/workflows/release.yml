@@ -90,7 +90,7 @@ jobs:
           helm package ./mr-cassop --version "$version" --app-version "$version"
 
       - name: Upload chart to release
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           files: mr-cassop-*.tgz
 
