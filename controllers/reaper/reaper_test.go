@@ -15,9 +15,13 @@ import (
 )
 
 var (
-	testError            = errors.New("test error message")
-	nilContextError      = errors.New("net/http: nil Context")
-	timeoutExceededError = errors.New("(Client.Timeout exceeded while awaiting headers)")
+	testError       = errors.New("test error message")
+	nilContextError = errors.New("net/http: nil Context")
+	// Wrapping the client's Transport in authTransport means net/http no longer recognizes it as a
+	// "known" *http.Transport for its optimized Client.Timeout bookkeeping, so a timed-out request
+	// surfaces as a plain context error instead of being annotated with
+	// "(Client.Timeout exceeded while awaiting headers)". The request still fails as expected.
+	timeoutExceededError = errors.New("context deadline exceeded")
 	defaultClient        = http.DefaultClient
 )
 
@@ -45,16 +49,20 @@ func TestNewReaperClient(t *testing.T) {
 		reaperUrl, err := url.Parse("http://127.0.0.1:12345")
 		asserts.Expect(err).To(BeNil())
 		clusterName := "test_cluster"
-		rc := NewReaperClient(reaperUrl, clusterName, defaultClient, 1)
-		asserts.Expect(rc).To(Equal(&reaperClient{
-			baseUrl: &url.URL{
-				Scheme: "http",
-				Host:   "127.0.0.1:12345",
-			},
-			client:            defaultClient,
-			clusterName:       clusterName,
-			repairThreadCount: 1,
+		rc := NewReaperClient(reaperUrl, clusterName, "user", "pass", defaultClient, 1)
+		client, ok := rc.(*reaperClient)
+		asserts.Expect(ok).To(BeTrue())
+		asserts.Expect(client.baseUrl).To(Equal(&url.URL{
+			Scheme: "http",
+			Host:   "127.0.0.1:12345",
 		}))
+		asserts.Expect(client.clusterName).To(Equal(clusterName))
+		asserts.Expect(client.repairThreadCount).To(Equal(int32(1)))
+		authTransport, ok := client.client.Transport.(*authTransport)
+		asserts.Expect(ok).To(BeTrue())
+		asserts.Expect(authTransport.username).To(Equal("user"))
+		asserts.Expect(authTransport.password).To(Equal("pass"))
+		asserts.Expect(authTransport.loginURL).To(Equal("http://127.0.0.1:12345/login"))
 	})
 }
 
@@ -88,7 +96,7 @@ func TestIsRunning(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			reaperUrl, err := url.Parse(ts.URL)
 			asserts.Expect(err).To(BeNil())
-			rc := NewReaperClient(reaperUrl, "testCluster", defaultClient, 1)
+			rc := NewReaperClient(reaperUrl, "testCluster", "", "", defaultClient, 1)
 			result, err := rc.IsRunning(tc.context)
 			asserts.Expect(result).To(Equal(tc.expectedResult))
 			asserts.Expect(err).To(tc.errorMatcher)
@@ -106,7 +114,7 @@ func TestIsRunning(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
 		reaperUrl, err := url.Parse(ts.URL)
 		asserts.Expect(err).To(BeNil())
-		rc := NewReaperClient(reaperUrl, "testCluster", &http.Client{
+		rc := NewReaperClient(reaperUrl, "testCluster", "", "", &http.Client{
 			Timeout: 1 * time.Microsecond,
 		}, 1)
 		result, err := rc.IsRunning(tc.context)
@@ -154,7 +162,7 @@ func TestClusterExists(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			reaperUrl, err := url.Parse(ts.URL)
 			asserts.Expect(err).To(BeNil())
-			rc := NewReaperClient(reaperUrl, clusterName, defaultClient, 1)
+			rc := NewReaperClient(reaperUrl, clusterName, "", "", defaultClient, 1)
 			result, err := rc.ClusterExists(tc.context)
 			asserts.Expect(result).To(Equal(tc.expectedResult))
 			asserts.Expect(err).To(tc.errorMatcher)
@@ -172,7 +180,7 @@ func TestClusterExists(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
 		reaperUrl, err := url.Parse(ts.URL)
 		asserts.Expect(err).To(BeNil())
-		rc := NewReaperClient(reaperUrl, clusterName, &http.Client{
+		rc := NewReaperClient(reaperUrl, clusterName, "", "", &http.Client{
 			Timeout: 1 * time.Microsecond,
 		}, 1)
 		result, err := rc.ClusterExists(tc.context)
@@ -217,7 +225,7 @@ func TestAddCluster(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			reaperUrl, err := url.Parse(ts.URL)
 			asserts.Expect(err).To(BeNil())
-			rc := NewReaperClient(reaperUrl, clusterName, defaultClient, 1)
+			rc := NewReaperClient(reaperUrl, clusterName, "", "", defaultClient, 1)
 			err = rc.AddCluster(tc.context, seed)
 			asserts.Expect(err).To(tc.errorMatcher)
 			ts.Close()
@@ -233,7 +241,7 @@ func TestAddCluster(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
 		reaperUrl, err := url.Parse(ts.URL)
 		asserts.Expect(err).ToNot(HaveOccurred())
-		rc := NewReaperClient(reaperUrl, clusterName, &http.Client{
+		rc := NewReaperClient(reaperUrl, clusterName, "", "", &http.Client{
 			Timeout: 1 * time.Microsecond,
 		}, 1)
 		err = rc.AddCluster(tc.context, seed)

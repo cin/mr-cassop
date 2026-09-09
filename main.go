@@ -145,8 +145,8 @@ func main() {
 		NodectlClient: func(jolokiaAddr, jmxUser, jmxPassword string, logr *zap.SugaredLogger) nodectl.Nodectl {
 			return nodectl.NewClient(jolokiaAddr, jmxUser, jmxPassword, logr)
 		},
-		ReaperClient: func(url *url.URL, clusterName string, defaultRepairThreadCount int32) reaper.ReaperClient {
-			return reaper.NewReaperClient(url, clusterName, httpClient, defaultRepairThreadCount)
+		ReaperClient: func(url *url.URL, clusterName, username, password string, defaultRepairThreadCount int32) reaper.ReaperClient {
+			return reaper.NewReaperClient(url, clusterName, username, password, httpClient, defaultRepairThreadCount)
 		},
 		Jobs: jobs.NewJobManager(reconcileChan, logr),
 	}

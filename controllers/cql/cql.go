@@ -97,7 +97,12 @@ func (c *cassandraClient) GetRoles() ([]Role, error) {
 	var isSuperuser bool
 	var login bool
 	var options map[string]string
-	for iter.Scan(&role, &isSuperuser, &login, &options) {
+	// Cassandra 4.0+ adds a `datacenters` column to LIST ROLES output (populated by the configured
+	// INetworkAuthorizer - a plain "ALL" string for the default AllowAllNetworkAuthorizer, or a
+	// set<text> of DC names for CassandraNetworkAuthorizer). It's not used here, so scan it into an
+	// interface{} to accept either representation rather than assuming one.
+	var datacenters interface{}
+	for iter.Scan(&role, &isSuperuser, &login, &options, &datacenters) {
 		cassandraRoles = append(cassandraRoles, Role{Role: role, Super: isSuperuser})
 	}
 

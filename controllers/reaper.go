@@ -387,6 +387,21 @@ func reaperServiceURL(cc *dbv1alpha1.CassandraCluster) *url.URL {
 	return reaperURL
 }
 
+// reaperClientForCluster builds a reaper client authenticated with the same credentials
+// injected into the Reaper deployment's REAPER_AUTH_USER/REAPER_AUTH_PASSWORD env vars
+// (see reaperEnvironment), since Reaper's REST API requires them once its own access
+// control is enabled.
+func (r *CassandraClusterReconciler) reaperClientForCluster(ctx context.Context, cc *dbv1alpha1.CassandraCluster) (reaper.ReaperClient, error) {
+	adminAuthSecret := &v1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: cc.Namespace, Name: names.AdminAuthConfigSecret(cc.Name)}, adminAuthSecret)
+	if err != nil {
+		return nil, errors.Wrap(err, "can't get admin auth config secret")
+	}
+	username := string(adminAuthSecret.Data[dbv1alpha1.CassandraOperatorAdminRole])
+	password := string(adminAuthSecret.Data[dbv1alpha1.CassandraOperatorAdminPassword])
+	return r.ReaperClient(reaperServiceURL(cc), cc.Name, username, password, cc.Spec.Reaper.RepairThreadCount), nil
+}
+
 func (r *CassandraClusterReconciler) reInitReaperIfNeeded(ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient, seed string) error {
 	r.Log.Infof("Checking if cluster exists in the list of clusters")
 	clusters, err := reaperClient.Clusters(ctx)

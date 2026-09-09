@@ -143,12 +143,14 @@ func (r *CassandraClusterReconciler) reconcileSystemAuthKeyspace(ctx context.Con
 		}
 
 		// reaper may be already running (in case of adding a new DC) so try to run a repair for the updated keyspace
-		reaperClient := r.ReaperClient(reaperServiceURL(cc), cc.Name, cc.Spec.Reaper.RepairThreadCount)
-		if isRunning, err := reaperClient.IsRunning(ctx); err == nil && isRunning {
-			r.Log.Infof("Running repair for keyspace system_auth")
-			err := reaperClient.RunRepair(ctx, keyspaceSystemAuth, repairCauseKeyspacesInit)
-			if err != nil {
-				return errors.Wrap(err, "Can't run repair for system_auth keyspace")
+		reaperClient, err := r.reaperClientForCluster(ctx, cc)
+		if err == nil {
+			if isRunning, err := reaperClient.IsRunning(ctx); err == nil && isRunning {
+				r.Log.Infof("Running repair for keyspace system_auth")
+				err := reaperClient.RunRepair(ctx, keyspaceSystemAuth, repairCauseKeyspacesInit)
+				if err != nil {
+					return errors.Wrap(err, "Can't run repair for system_auth keyspace")
+				}
 			}
 		}
 	}

@@ -96,7 +96,7 @@ func TestRepairSchedules(t *testing.T) {
 			ts := httptest.NewServer(tc.handler)
 			reaperUrl, err := url.Parse(ts.URL)
 			asserts.Expect(err).To(BeNil())
-			rc := NewReaperClient(reaperUrl, tc.params["clusterName"].(string), defaultClient, 1)
+			rc := NewReaperClient(reaperUrl, tc.params["clusterName"].(string), "", "", defaultClient, 1)
 			err = rc.CreateRepairSchedule(tc.context, tc.params["repair"].(v1alpha1.RepairSchedule))
 			asserts.Expect(err).To(tc.errorMatcher)
 			ts.Close()
@@ -112,7 +112,7 @@ func TestRepairSchedules(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
 		reaperUrl, err := url.Parse(ts.URL)
 		asserts.Expect(err).To(BeNil())
-		rc := NewReaperClient(reaperUrl, clusterName, &http.Client{
+		rc := NewReaperClient(reaperUrl, clusterName, "", "", &http.Client{
 			Timeout: 100 * time.Microsecond,
 		}, 1)
 		err = rc.CreateRepairSchedule(tc.context, repair)

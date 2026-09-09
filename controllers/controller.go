@@ -84,7 +84,7 @@ type CassandraClusterReconciler struct {
 	Jobs          *jobs.JobManager
 	ProberClient  func(url *url.URL, user, password string) prober.ProberClient
 	CqlClient     func(cluster *gocql.ClusterConfig) (cql.CqlClient, error)
-	ReaperClient  func(url *url.URL, clusterName string, defaultRepairThreadCount int32) reaper.ReaperClient
+	ReaperClient  func(url *url.URL, clusterName, username, password string, defaultRepairThreadCount int32) reaper.ReaperClient
 	NodectlClient func(jolokiaAddr, jmxUser, jmxPassword string, logr *zap.SugaredLogger) nodectl.Nodectl
 }
 
@@ -345,7 +345,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return res, err
 	}
 
-	reaperClient := r.ReaperClient(reaperServiceURL(cc), cc.Name, cc.Spec.Reaper.RepairThreadCount)
+	reaperClient, err := r.reaperClientForCluster(ctx, cc)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "Failed to build reaper client")
+	}
 	isRunning, err := reaperClient.IsRunning(ctx)
 	if err != nil {
 		if updErr := proberClient.UpdateReaperStatus(ctx, false); updErr != nil {

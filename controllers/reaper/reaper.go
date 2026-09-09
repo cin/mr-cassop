@@ -53,10 +53,12 @@ func (e *requestFailedWithStatus) Error() string {
 	return fmt.Sprintf("Request failed with status code %d. Response body: %s", e.code, e.message)
 }
 
-func NewReaperClient(url *url.URL, clusterName string, client *http.Client, defaultRepairThreadCount int32) ReaperClient {
+func NewReaperClient(url *url.URL, clusterName, username, password string, client *http.Client, defaultRepairThreadCount int32) ReaperClient {
+	authedClient := *client
+	authedClient.Transport = newAuthTransport(client.Transport, url, username, password)
 	return &reaperClient{
 		baseUrl:           url,
-		client:            client,
+		client:            &authedClient,
 		clusterName:       clusterName,
 		repairThreadCount: defaultRepairThreadCount,
 	}
