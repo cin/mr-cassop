@@ -22,11 +22,20 @@ type CassandraNodeState struct {
 	SimpleStates map[string]string
 	// AllEndpointStates maps node IPs to a struct with the extended states defined in EndpointState.
 	AllEndpointStates AllEndpointStates
+	// TokenToEndpointMap maps each owned token (as a signed int64 string) to the IP that owns it,
+	// as reported by org.apache.cassandra.db:type=StorageService. It's cluster-wide, not per-node --
+	// every node returns the same map. Best-effort: left nil if the read failed, so callers must not
+	// assume it's populated.
+	TokenToEndpointMap map[string]string
 }
 
 // EndpointState of useful properties of a node's state
 type EndpointState struct {
 	Status, DC, Rack, Internal_IP, RPC_Address string
+	Load, Host_ID, Release_Version             string
+	// Tokens are this node's owned tokens (signed int64 strings), derived from TokenToEndpointMap.
+	// With vnodes, a node typically owns many (e.g. 16 by default) non-contiguous tokens.
+	OwnedTokens []string
 }
 
 // AllEndpointStates implements UnmarshalText to transform the Cassandra MBean to a Go struct.

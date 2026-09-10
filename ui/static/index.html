@@ -1,0 +1,2133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mr-cassop nodetool status</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --up: #3ecf8e;
+    --down: #e5484d;
+    --unknown: #f5a623;
+    --accent: #5b8def;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+  header .meta {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  select {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: 5px; }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1300px;
+    margin: 0 auto;
+    align-items: start;
+  }
+  .sidebar {
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .rings {
+    min-width: 0;
+  }
+  .dc-block {
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .dc-block h2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 0;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dc-block h2 .rack-select {
+    text-transform: none;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .ring-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+  }
+  svg.ring { overflow: visible; }
+  .ring-track { fill: none; stroke: var(--border); stroke-width: 1; }
+  .node-dot {
+    cursor: pointer;
+    stroke: var(--panel);
+    stroke-width: 2;
+    transition: r 0.1s ease;
+  }
+  .node-dot.up { fill: var(--up); }
+  .node-dot.down { fill: var(--down); }
+  .node-dot.unknown { fill: var(--unknown); }
+  .node-dot.ghost { fill: var(--down); opacity: 0.5; stroke-dasharray: 2 2; }
+  .node-dot.selected { stroke: var(--accent); stroke-width: 3; }
+  .node-label {
+    fill: var(--muted);
+    font-size: 9px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    pointer-events: none;
+  }
+
+  #tooltip {
+    position: fixed;
+    z-index: 50;
+    pointer-events: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    min-width: 200px;
+  }
+  #tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; }
+  #tooltip .tt-label { color: var(--muted); }
+  #tooltip .tt-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #detailPanel {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    padding: 16px;
+    font-size: 13px;
+  }
+  #detailPanel h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #detailPanel .close-btn {
+    cursor: pointer;
+    color: var(--muted);
+    background: none;
+    border: none;
+    font-size: 16px;
+    line-height: 1;
+  }
+  #detailPanel .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  #detailPanel .row:last-child { border-bottom: none; }
+  #detailPanel .row .k { color: var(--muted); }
+  #detailPanel .row .v {
+    text-align: right;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+  #detailPlaceholder { color: var(--muted); font-size: 13px; }
+
+  #nodeListPanel, #tablesPanel {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    overflow: hidden;
+  }
+  #tablesPanel:empty { display: none; }
+  .tables-selected-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .list-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+  }
+  .list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tool-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .tool-btn:hover { border-color: var(--accent); }
+  .tool-btn.write-btn {
+    margin-left: 6px;
+    border-color: var(--unknown);
+    color: var(--unknown);
+  }
+  .tool-btn.write-btn:hover { background: rgba(245, 166, 35, 0.12); }
+  .list-body {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .list-dc-label {
+    padding: 6px 14px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .list-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .list-row:hover { background: rgba(255,255,255,0.03); }
+  .list-row.active { background: rgba(91, 141, 239, 0.15); }
+  .list-checkbox { cursor: pointer; accent-color: var(--accent); }
+  .list-ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    flex: 1;
+  }
+  .list-hint {
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.up { background: var(--up); }
+  .dot.down { background: var(--down); }
+  .dot.unknown { background: var(--unknown); }
+
+  #error, #empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+  }
+  #error { color: var(--down); }
+  [hidden] { display: none !important; }
+
+  .node-dot.multi-selected {
+    stroke: #f5c542;
+    stroke-width: 3;
+    stroke-dasharray: 2 2;
+  }
+
+  #dragSelectBox {
+    position: fixed;
+    border: 1px solid var(--accent);
+    background: rgba(91, 141, 239, 0.15);
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  #wheelMenu {
+    position: fixed;
+    z-index: 100;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .wheel-center {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(23, 26, 33, 0.95);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 4px;
+    word-break: break-word;
+  }
+  .wheel-item {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    min-width: 68px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .wheel-item.hovered {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  #resultsPanel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    max-height: 42vh;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+  }
+  .results-tabbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .results-tabs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 0;
+    overflow-x: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .result-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    padding: 5px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .result-tab:hover { border-color: var(--accent); }
+  .result-tab-close {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .result-tab-close:hover { color: var(--down); }
+  .result-tab.active {
+    background: var(--panel);
+    border-color: var(--accent);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 12px;
+  }
+  .results-tabbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .results-limit-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .scroll-lock-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    padding-right: 8px;
+    border-right: 1px solid var(--border);
+  }
+  .scroll-lock-label input { cursor: pointer; accent-color: var(--accent); }
+  #resultsLimitSelect {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  .results-body {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .result-card {
+    flex: 0 0 260px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .result-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-card-ip { white-space: nowrap; }
+  .result-card-time {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .result-card-body {
+    padding: 10px;
+    font-size: 12px;
+    max-height: 22vh;
+    overflow-y: auto;
+  }
+  .result-card.pending .result-card-body { color: var(--muted); }
+  .result-card.error .result-card-body { color: var(--down); }
+  .result-card .kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 3px 0;
+  }
+  .result-card .kv span:first-child { color: var(--muted); }
+  .result-card .kv span:last-child {
+    text-align: right;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .kv-group-label {
+    margin-top: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+  .kv-group-label:first-child { margin-top: 0; }
+  .result-card .kv.diff {
+    background: rgba(229, 72, 77, 0.12);
+    border-radius: 4px;
+    margin: 1px 0;
+  }
+  .result-card .kv.diff span:last-child {
+    color: var(--down);
+    font-weight: 700;
+  }
+  .results-diff-hint {
+    padding: 6px 16px 0;
+    font-size: 11px;
+    color: var(--down);
+  }
+
+  /* --- Set* settings editor: a deliberately separate, modal flow -- see
+     the "Set* settings editor" JS comment for why this isn't just another
+     entry in the read-only results panel/tabs system above. */
+  #setSettingsOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #setSettingsPanel {
+    width: min(640px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+  }
+  .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .settings-failed-note {
+    padding: 8px 16px;
+    color: var(--down);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-loading {
+    padding: 24px 16px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .settings-body {
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row.diff { background: rgba(229, 72, 77, 0.08); }
+  .settings-row .settings-label {
+    flex: 1;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .settings-diff-badge {
+    font-size: 10px;
+    color: var(--down);
+    border: 1px solid var(--down);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+    cursor: help;
+  }
+  .settings-input {
+    width: 150px;
+    flex-shrink: 0;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-align: right;
+  }
+  .settings-row.diff .settings-input { border-color: var(--down); }
+  .settings-row.dirty .settings-input {
+    border-color: var(--accent);
+    background: rgba(91, 141, 239, 0.1);
+  }
+  .settings-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .settings-dirty-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .btn-primary, .btn-secondary {
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--unknown);
+    color: #16130a;
+    border: none;
+  }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-weight: 500;
+  }
+  .settings-apply-status {
+    padding: 0 16px 12px;
+    font-size: 12px;
+    max-height: 22vh;
+    overflow-y: auto;
+  }
+  .settings-apply-status .node-result {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .settings-apply-status .node-result span:last-child { text-align: right; word-break: break-word; }
+  .settings-apply-status .node-result.ok span:last-child { color: var(--up); }
+  .settings-apply-status .node-result.err span:last-child { color: var(--down); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>mr-cassop &mdash; nodetool status</h1>
+    <div class="meta" id="lastUpdated">not loaded yet</div>
+  </div>
+  <div class="legend">
+    <div class="item"><span class="dot up"></span> normal</div>
+    <div class="item"><span class="dot unknown"></span> other state</div>
+    <div class="item"><span class="dot down"></span> unreachable</div>
+    <div class="item">ctrl/cmd+click or drag to multi-select &middot; middle-click to run a tool</div>
+  </div>
+  <div class="toolbar">
+    <select id="envSelect"></select>
+  </div>
+</header>
+<main>
+  <div class="rings">
+    <div id="error" hidden></div>
+    <div id="empty" hidden>No node data yet.</div>
+    <div id="dcs"></div>
+  </div>
+  <div class="sidebar">
+    <div id="nodeListPanel"></div>
+    <div id="detailPanel">
+      <div id="detailPlaceholder">Click a node on the ring for details.</div>
+    </div>
+    <div id="tablesPanel"></div>
+  </div>
+</main>
+<div id="tooltip" hidden></div>
+<div id="resultsPanel" hidden></div>
+<div id="setSettingsOverlay" hidden></div>
+
+<script>
+const envSelect = document.getElementById('envSelect');
+const dcsEl = document.getElementById('dcs');
+const errorEl = document.getElementById('error');
+const emptyEl = document.getElementById('empty');
+const lastUpdatedEl = document.getElementById('lastUpdated');
+const tooltipEl = document.getElementById('tooltip');
+const detailPanelEl = document.getElementById('detailPanel');
+const resultsPanelEl = document.getElementById('resultsPanel');
+const nodeListPanelEl = document.getElementById('nodeListPanel');
+const tablesPanelEl = document.getElementById('tablesPanel');
+
+let currentEnv = null;
+let selectedNodeKey = null; // `${dc}:${ip}`, survives across refreshes
+let lastRowsByKey = {};
+const multiSelected = new Set(); // nodeKeys picked for bulk tool actions
+let wheelState = null;
+let lastNodesRaw = null; // last /nodes response, so a rack-filter change can re-render without refetching
+const rackFilters = {}; // dc name -> selected rack, 'all' by default
+
+// The global table picker backing requiresTable tools (cfstats/cfhistograms)
+// -- a persistent multi-select rather than a per-click prompt, so picking
+// once covers every table-scoped tool run afterward. lastTablesRaw is the
+// last /tables response (schema rarely changes -- fetched once per
+// environment, not on every 5s node refresh; see loadTables/refreshTables).
+let lastTablesRaw = null;
+const selectedTables = new Set(); // "keyspace.table" strings
+
+// Results history: one entry per tool invocation, kept as a tab. Async
+// updates always write into their own entry regardless of which tab is
+// currently active, so switching back to an older tab later still shows
+// what actually happened rather than a stale "running...".
+let resultsSeq = 0;
+let resultsHistory = []; // [{id, toolLabel, targets, timestamp, timings, cards}]
+let activeResultsId = null;
+let resultsHistoryLimit = 20;
+// When true, scrolling any node's result-card-body scrolls every other card
+// in the active tab to the same position -- lets you keep the same row lined
+// up while comparing long per-node output (netstats' dropped-message list,
+// tpstats' pool list, ...) across nodes. Lives outside resultsHistory since
+// it's a viewing preference, not part of any one run's data.
+let scrollSyncEnabled = false;
+
+// The "tools" a middle-click wheel (or the side list) can run. Deliberately
+// read-only for now -- the operator's nodectl package already has real
+// write/exec operations (Decommission, Assassinate), but wiring destructive
+// commands into a click-and-drag UI needs its own confirmation/safety
+// design, not a default.
+//
+// TOOLS itself is server-driven: apart from "status" (the one purely local
+// tool, added here since it needs no backend call), every entry comes from
+// Prober's own /tools listing (see loadTools below), which reflects its
+// jolokia.Catalog. Adding a new read-only stat command is now "add one entry
+// to that Go catalog" -- nothing on the frontend needs to change, since every
+// server-driven tool is fetched and rendered the exact same generic way.
+let TOOLS = [
+  {
+    id: 'status',
+    label: 'Status',
+    diffable: false,
+    // Instant: reads the already-loaded row data, no new network call.
+    // Returns the same StatsResult shape every server-driven tool does, so
+    // it goes through the exact same rendering/diffing path as the rest.
+    run: async (row) => statusStatsResult(row),
+  },
+];
+
+async function loadTools() {
+  try {
+    const res = await fetch(`/api/environments/${encodeURIComponent(currentEnv)}/tools`);
+    if (!res.ok) return;
+    const defs = await res.json();
+    for (const def of defs) {
+      TOOLS.push({
+        id: def.name,
+        label: def.label,
+        diffable: !!def.diffable,
+        requiresTable: !!def.requiresTable,
+        // table is only ever non-null for a requiresTable tool -- see
+        // invokeTool, the one place that prompts for it (once per
+        // invocation, not once per node) and threads it through here.
+        run: async (row, table) => {
+          let url = `/api/environments/${encodeURIComponent(currentEnv)}/stats?name=${encodeURIComponent(def.name)}&ip=${encodeURIComponent(row.ip)}`;
+          if (table) url += `&table=${encodeURIComponent(table)}`;
+          const res = await fetch(url);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || `HTTP ${res.status}`);
+          }
+          return await res.json();
+        },
+      });
+    }
+  } catch (err) {
+    console.error('failed to load tool catalog:', err);
+  }
+}
+
+function statusStatsResult(row) {
+  return { groups: [{ name: '', rows: [
+    { label: 'Status', value: row.status },
+    { label: 'DC / Rack', value: `${row.dc} / ${row.rack}` },
+    { label: 'Load', value: row.load },
+    { label: 'Seen up by', value: seenText(row) },
+  ] }] };
+}
+
+// The one generic renderer every server-driven tool's result goes through: a
+// StatsResult is just named groups of label/value rows (see jolokia.StatsResult
+// in the Go backend) -- no per-command formatter needed. diffMap, when given,
+// is a Map of "groupName||label" -> Set of every value seen for that row
+// across all of a Diffable tool's node cards (see computeDiffMap) -- a row
+// whose set has more than one distinct value gets the .diff class (red),
+// meaning that node disagrees with at least one other on this row.
+function formatStatsResult(result, diffMap) {
+  if (!result.groups || result.groups.length === 0) return '<div>no data</div>';
+  return result.groups.map(group => {
+    const heading = group.name ? `<div class="kv-group-label">${group.name}</div>` : '';
+    const rows = (group.rows || []).map(r => {
+      const key = `${group.name || ''}||${r.label}`;
+      const differs = !!(diffMap && diffMap.get(key) && diffMap.get(key).size > 1);
+      return `<div class="kv${differs ? ' diff' : ''}"><span>${r.label}</span><span>${r.value}</span></div>`;
+    }).join('');
+    return heading + rows;
+  }).join('');
+}
+
+async function loadEnvironments() {
+  const res = await fetch('/api/environments');
+  const names = await res.json();
+  envSelect.innerHTML = '';
+  for (const name of names) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    envSelect.appendChild(opt);
+  }
+  if (names.length > 0) {
+    currentEnv = names[0];
+    envSelect.value = currentEnv;
+  }
+}
+
+envSelect.addEventListener('change', () => {
+  currentEnv = envSelect.value;
+  selectedNodeKey = null;
+  selectedTables.clear();
+  lastTablesRaw = null;
+  refresh().then(loadTables);
+});
+
+// Every top-level key in the /nodes response is a node that Prober could
+// reach and get a self-report from. A node can also appear only inside a
+// peer's SimpleStates (referenced but never self-reporting) -- that's a
+// real, meaningful state: something peers know about but can't currently
+// see. We surface those as "ghost" rows instead of silently dropping them.
+function buildRows(nodes) {
+  const ips = Object.keys(nodes);
+  const referenced = new Set();
+  for (const ip of ips) {
+    for (const peerIp of Object.keys(nodes[ip].SimpleStates || {})) {
+      referenced.add(peerIp);
+    }
+  }
+
+  const rows = [];
+  for (const ip of ips) {
+    const n = nodes[ip];
+    let up = 0, down = 0, total = 0;
+    for (const otherIp of ips) {
+      if (otherIp === ip) continue;
+      const view = nodes[otherIp].SimpleStates && nodes[otherIp].SimpleStates[ip];
+      if (view === undefined) continue;
+      total++;
+      if (view === 'UP') up++; else down++;
+    }
+    rows.push({
+      ghost: false,
+      ip: ip.replace(/^\//, ''),
+      dc: n.DC || 'unknown',
+      rack: n.Rack || '-',
+      status: n.Status || '-',
+      load: n.Load || '-',
+      hostId: n.Host_ID || '-',
+      release: n.Release_Version || '-',
+      ownedTokens: n.OwnedTokens || [],
+      seenUp: up,
+      seenTotal: total,
+    });
+  }
+
+  // Nodes peers mention but that never showed up as a top-level key --
+  // Prober never got a self-report from them (likely unreachable/down).
+  for (const ip of referenced) {
+    if (nodes[ip]) continue;
+    rows.push({
+      ghost: true,
+      ip: ip.replace(/^\//, ''),
+      dc: 'unknown',
+      rack: '-',
+      status: 'UNREACHABLE',
+      load: '-',
+      hostId: '-',
+      release: '-',
+      ownedTokens: [],
+      seenUp: 0,
+      seenTotal: 0,
+    });
+  }
+
+  return rows;
+}
+
+function statusClass(row) {
+  if (row.ghost) return 'ghost';
+  if (row.status.toUpperCase() === 'NORMAL') return 'up';
+  return 'unknown';
+}
+
+function dotClasses(row, key) {
+  const classes = ['node-dot', statusClass(row)];
+  if (key === selectedNodeKey) classes.push('selected');
+  if (multiSelected.has(key)) classes.push('multi-selected');
+  return classes.join(' ');
+}
+
+function seenText(row) {
+  if (row.ghost) return '—';
+  return `${row.seenUp}/${row.seenTotal} peers`;
+}
+
+function nodeKey(row) {
+  return `${row.dc}:${row.ip}`;
+}
+
+// Murmur3Partitioner's token range is a signed int64: [-2^63, 2^63-1].
+const TOKEN_MIN = -(2n ** 63n);
+const TOKEN_RANGE = 2n ** 64n;
+
+// A node typically owns many non-contiguous tokens (16 by default with
+// vnodes), so a single ring dot is necessarily a representative position,
+// not "the" position -- we use the smallest owned token, which is at least
+// deterministic and stable across refreshes. Full multi-token-per-node
+// arcs would be a truer picture but are a bigger visualization on their own.
+function representativeToken(row) {
+  if (!row.ownedTokens || row.ownedTokens.length === 0) return null;
+  let min = null;
+  for (const t of row.ownedTokens) {
+    const v = BigInt(t);
+    if (min === null || v < min) min = v;
+  }
+  return min;
+}
+
+// Maps a token to an angle around the ring, matching the classic clockwise,
+// top-started layout used elsewhere (evenAngle below uses the same convention).
+function tokenAngle(token) {
+  const scaled = ((token - TOKEN_MIN) * 1000000n) / TOKEN_RANGE;
+  const fraction = Number(scaled) / 1000000;
+  return fraction * 2 * Math.PI - Math.PI / 2;
+}
+
+function evenAngle(index, count) {
+  return (2 * Math.PI * index) / count - Math.PI / 2;
+}
+
+// Orders nodes by their real token position (so the ring still reflects true
+// relative placement around the token range) but assigns evenly-spaced final
+// angles -- exact proportional placement can bunch nodes close together when
+// their tokens happen to be numerically close, making them hard to tell
+// apart or click. Order is real; spacing is deliberately not.
+function ringLayout(rows, radius, cx, cy) {
+  const haveTokens = rows.length > 0 && rows.every(r => representativeToken(r) !== null);
+
+  const sorted = haveTokens
+    ? [...rows].sort((a, b) => {
+        const ta = tokenAngle(representativeToken(a));
+        const tb = tokenAngle(representativeToken(b));
+        return ta - tb;
+      })
+    : [...rows].sort((a, b) => a.ip.localeCompare(b.ip));
+
+  const ordered = sorted.map((row, i) => ({ row, angle: evenAngle(i, rows.length) }));
+
+  return {
+    tokenWeighted: haveTokens,
+    placed: ordered.map(({ row, angle }) => ({
+      row,
+      angle,
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    })),
+  };
+}
+
+function renderRing(dc, rows) {
+  const size = 260;
+  const cx = size / 2, cy = size / 2, radius = 95;
+
+  const layout = ringLayout(rows, radius, cx, cy);
+  const positions = layout.placed.map(p => ({ x: p.x, y: p.y }));
+  rows = layout.placed.map(p => p.row);
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'ring');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+
+  // Transparent full-viewport rect so drag-to-select has a reliable hit target
+  // everywhere in the ring, not just on the drawn (fill:none) track circle.
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', 0);
+  bg.setAttribute('y', 0);
+  bg.setAttribute('width', size);
+  bg.setAttribute('height', size);
+  bg.setAttribute('fill', 'transparent');
+  svg.appendChild(bg);
+  attachDragSelect(svg);
+
+  const track = document.createElementNS(svgNS, 'circle');
+  track.setAttribute('class', 'ring-track');
+  track.setAttribute('cx', cx);
+  track.setAttribute('cy', cy);
+  track.setAttribute('r', radius);
+  svg.appendChild(track);
+
+  rows.forEach((row, i) => {
+    const pos = positions[i];
+    const key = nodeKey(row);
+
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('class', dotClasses(row, key));
+    dot.setAttribute('cx', pos.x);
+    dot.setAttribute('cy', pos.y);
+    dot.setAttribute('r', key === selectedNodeKey ? 11 : 9);
+    dot.dataset.key = key;
+
+    dot.addEventListener('mouseenter', () => showTooltip(row));
+    dot.addEventListener('mousemove', positionTooltip);
+    dot.addEventListener('mouseleave', hideTooltip);
+    dot.addEventListener('click', (evt) => {
+      // Shift is deliberately excluded: shift+click is the browser's own
+      // text-selection extend gesture, and it kept winning that race even
+      // with preventDefault elsewhere. Ctrl/Cmd+click doesn't have that
+      // conflict.
+      if (evt.ctrlKey || evt.metaKey) {
+        toggleMultiSelect(key);
+      } else {
+        selectNode(key);
+      }
+    });
+    dot.addEventListener('mousedown', (evt) => {
+      if (evt.button === 1) {
+        evt.preventDefault();
+        openWheel(evt, row);
+      }
+    });
+    dot.addEventListener('auxclick', (evt) => {
+      if (evt.button === 1) evt.preventDefault();
+    });
+
+    svg.appendChild(dot);
+
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('class', 'node-label');
+    const labelOffsetX = pos.x >= cx ? 12 : -12;
+    label.setAttribute('x', pos.x + labelOffsetX);
+    label.setAttribute('y', pos.y + 3);
+    label.setAttribute('text-anchor', pos.x >= cx ? 'start' : 'end');
+    label.textContent = row.ip.split('.').pop();
+    svg.appendChild(label);
+  });
+
+  return { svg, tokenWeighted: layout.tokenWeighted };
+}
+
+function tokenText(row) {
+  if (row.ghost || !row.ownedTokens || row.ownedTokens.length === 0) return 'none';
+  const rep = representativeToken(row);
+  return `${row.ownedTokens.length} (shown: ${rep})`;
+}
+
+function showTooltip(row) {
+  tooltipEl.innerHTML = `
+    <div class="tt-title"><span class="dot ${statusClass(row)}"></span>${row.ip}</div>
+    <div class="tt-row"><span class="tt-label">Status</span><span>${row.status}</span></div>
+    <div class="tt-row"><span class="tt-label">DC / Rack</span><span>${row.dc} / ${row.rack}</span></div>
+    <div class="tt-row"><span class="tt-label">Load</span><span>${row.load}</span></div>
+    <div class="tt-row"><span class="tt-label">Tokens owned</span><span>${tokenText(row)}</span></div>
+    <div class="tt-row"><span class="tt-label">Seen up by</span><span>${seenText(row)}</span></div>
+  `;
+  tooltipEl.hidden = false;
+}
+
+function positionTooltip(evt) {
+  const offset = 14;
+  let x = evt.clientX + offset;
+  let y = evt.clientY + offset;
+  const rect = tooltipEl.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = evt.clientX - rect.width - offset;
+  if (y + rect.height > window.innerHeight) y = evt.clientY - rect.height - offset;
+  tooltipEl.style.left = `${x}px`;
+  tooltipEl.style.top = `${y}px`;
+}
+
+function hideTooltip() {
+  tooltipEl.hidden = true;
+}
+
+// Selection lives in two places -- the ring (multiSelected Set, selectedNodeKey)
+// -- and now the side list mirrors the same state. Every selection change goes
+// through one of the functions below, which mutate state then call
+// syncSelectionVisuals() once, rather than each interaction site hand-rolling
+// its own DOM updates in two places and drifting out of sync.
+
+function selectNode(key) {
+  selectedNodeKey = selectedNodeKey === key ? null : key;
+  renderDetailPanel();
+  syncSelectionVisuals();
+}
+
+function renderDetailPanel() {
+  if (!selectedNodeKey || !lastRowsByKey[selectedNodeKey]) {
+    detailPanelEl.innerHTML = '<div id="detailPlaceholder">Click a node on the ring for details.</div>';
+    return;
+  }
+  const row = lastRowsByKey[selectedNodeKey];
+  detailPanelEl.innerHTML = `
+    <h3>
+      <span><span class="dot ${statusClass(row)}"></span> ${row.ip}</span>
+      <button class="close-btn" id="detailClose">&times;</button>
+    </h3>
+    <div class="row"><span class="k">Status</span><span class="v">${row.status}</span></div>
+    <div class="row"><span class="k">Datacenter</span><span class="v">${row.dc}</span></div>
+    <div class="row"><span class="k">Rack</span><span class="v">${row.rack}</span></div>
+    <div class="row"><span class="k">Load</span><span class="v">${row.load}</span></div>
+    <div class="row"><span class="k">Host ID</span><span class="v">${row.hostId}</span></div>
+    <div class="row"><span class="k">Release</span><span class="v">${row.release}</span></div>
+    <div class="row"><span class="k">Owned tokens</span><span class="v">${row.ownedTokens ? row.ownedTokens.length : 0}</span></div>
+    <div class="row"><span class="k">Ring position (min token)</span><span class="v">${representativeToken(row) ?? 'n/a'}</span></div>
+    <div class="row"><span class="k">Seen up by</span><span class="v">${seenText(row)}</span></div>
+  `;
+  document.getElementById('detailClose').addEventListener('click', () => selectNode(selectedNodeKey));
+}
+
+// --- Tables panel: the global picker requiresTable tools use ------------
+// Replaces a per-click window.prompt() with a persistent multi-select --
+// pick once, every cfstats/cfhistograms run afterward (list-toolbar button
+// or wheel item) uses the same selection via runTool, without asking again.
+// Schema rarely changes, so this is fetched once per environment (on load
+// and on env switch), not on every 5s node poll like /nodes -- refreshTables
+// exists for the rare case a table was just created/dropped mid-session.
+
+// Any UP, non-ghost node works -- schema (including system_schema itself) is
+// replicated cluster-wide, so which node answers doesn't matter.
+function firstAvailableNodeIp() {
+  for (const row of Object.values(lastRowsByKey)) {
+    if (!row.ghost) return row.ip;
+  }
+  return null;
+}
+
+async function loadTables() {
+  const ip = firstAvailableNodeIp();
+  if (!ip) {
+    tablesPanelEl.innerHTML = '';
+    return;
+  }
+  try {
+    const res = await fetch(`/api/environments/${encodeURIComponent(currentEnv)}/tables?ip=${encodeURIComponent(ip)}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    lastTablesRaw = await res.json();
+  } catch (err) {
+    console.error('failed to load table list:', err);
+    lastTablesRaw = null;
+  }
+  renderTablesPanel();
+}
+
+function renderTablesPanel() {
+  if (!lastTablesRaw || lastTablesRaw.length === 0) {
+    tablesPanelEl.innerHTML = '';
+    return;
+  }
+
+  const byKeyspace = {};
+  for (const table of lastTablesRaw) {
+    const [keyspace] = table.split('.');
+    (byKeyspace[keyspace] = byKeyspace[keyspace] || []).push(table);
+  }
+  const keyspaces = Object.keys(byKeyspace).sort();
+
+  let rowsHtml = '';
+  for (const keyspace of keyspaces) {
+    rowsHtml += `<div class="list-dc-label">${keyspace}</div>`;
+    for (const table of byKeyspace[keyspace]) {
+      rowsHtml += `
+        <label class="list-row" data-table="${table}">
+          <input type="checkbox" class="list-checkbox" data-table="${table}" ${selectedTables.has(table) ? 'checked' : ''}>
+          <span class="list-ip">${table.slice(keyspace.length + 1)}</span>
+        </label>
+      `;
+    }
+  }
+
+  tablesPanelEl.innerHTML = `
+    <div class="list-header">
+      <span>Tables</span>
+      <span class="list-header-actions">
+        <span class="tables-selected-count" id="tablesSelectedCount">${selectedTables.size} selected</span>
+        <button class="link-btn" id="tablesSelectAllBtn">select all</button>
+        <button class="link-btn" id="tablesClearBtn">clear</button>
+        <button class="link-btn" id="tablesRefreshBtn" title="Re-fetch the table list (in case a table was just created/dropped)">refresh</button>
+      </span>
+    </div>
+    <div class="list-body">${rowsHtml}</div>
+    <div class="list-hint">Used by table-scoped tools (Table Stats&hellip;, Table Histograms&hellip;) -- check one or more, then run one of those above.</div>
+  `;
+
+  // A single 'change' listener on each checkbox is enough -- the row is a
+  // <label> wrapping its checkbox, so a click anywhere on the row already
+  // toggles it natively; no separate row-click handler needed (and adding
+  // one that also calls cb.click() would double-toggle: native label
+  // behavior flips it once, then the extra .click() flips it right back).
+  const countEl = document.getElementById('tablesSelectedCount');
+  tablesPanelEl.querySelectorAll('.list-checkbox').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const table = cb.dataset.table;
+      if (cb.checked) selectedTables.add(table);
+      else selectedTables.delete(table);
+      countEl.textContent = `${selectedTables.size} selected`;
+      cb.closest('.list-row').classList.toggle('active', cb.checked);
+    });
+  });
+  document.getElementById('tablesSelectAllBtn').addEventListener('click', () => {
+    for (const table of lastTablesRaw) selectedTables.add(table);
+    renderTablesPanel();
+  });
+  document.getElementById('tablesClearBtn').addEventListener('click', () => {
+    selectedTables.clear();
+    renderTablesPanel();
+  });
+  document.getElementById('tablesRefreshBtn').addEventListener('click', loadTables);
+}
+
+// A list-based alternative to the middle-click wheel, for anyone who'd
+// rather check boxes and click a button than hold-and-drag a gesture.
+// Shares the exact same selection state and TOOLS catalog as the ring/wheel --
+// this is a different way to reach the same actions, not a separate feature.
+function renderNodeList(rows) {
+  if (rows.length === 0) {
+    nodeListPanelEl.innerHTML = '';
+    return;
+  }
+
+  const byDc = {};
+  for (const row of rows) (byDc[row.dc] = byDc[row.dc] || []).push(row);
+  const dcNames = Object.keys(byDc).sort();
+
+  let rowsHtml = '';
+  for (const dc of dcNames) {
+    rowsHtml += `<div class="list-dc-label">${dc}</div>`;
+    for (const row of [...byDc[dc]].sort((a, b) => a.ip.localeCompare(b.ip))) {
+      const key = nodeKey(row);
+      rowsHtml += `
+        <label class="list-row${key === selectedNodeKey ? ' active' : ''}" data-key="${key}">
+          <input type="checkbox" class="list-checkbox" data-key="${key}" ${multiSelected.has(key) ? 'checked' : ''}>
+          <span class="dot ${statusClass(row)}"></span>
+          <span class="list-ip">${row.ip}</span>
+        </label>
+      `;
+    }
+  }
+
+  nodeListPanelEl.innerHTML = `
+    <div class="list-header">
+      <span>Nodes</span>
+      <span class="list-header-actions">
+        <button class="link-btn" id="listSelectAllBtn">select all</button>
+        <button class="link-btn" id="listClearBtn">clear selection</button>
+      </span>
+    </div>
+    <div class="list-toolbar">
+      ${TOOLS.map(t => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`).join('')}
+      <button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>
+    </div>
+    <div class="list-body">${rowsHtml}</div>
+    <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click on the ring.</div>
+  `;
+
+  nodeListPanelEl.querySelectorAll('.list-checkbox').forEach(cb => {
+    cb.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      toggleMultiSelect(cb.dataset.key);
+    });
+  });
+  nodeListPanelEl.querySelectorAll('.list-row').forEach(rowEl => {
+    rowEl.addEventListener('click', (evt) => {
+      if (evt.target.classList.contains('list-checkbox')) return;
+      evt.preventDefault();
+      selectNode(rowEl.dataset.key);
+    });
+  });
+  // [data-tool] scopes this to the server-driven read-only buttons above --
+  // Set* is deliberately excluded (see its own listener below) since it
+  // isn't a TOOLS entry: it needs its own consolidated-table UI, not a
+  // per-node results-panel run.
+  nodeListPanelEl.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targets = currentSelectionTargets();
+      if (targets.length === 0) return;
+      const tool = TOOLS.find(t => t.id === btn.dataset.tool);
+      runTool(tool, targets);
+    });
+  });
+  document.getElementById('setSettingsBtn').addEventListener('click', () => {
+    const targets = currentSelectionTargets();
+    if (targets.length === 0) return;
+    openSetSettings(targets);
+  });
+  document.getElementById('listClearBtn').addEventListener('click', deselectAll);
+  document.getElementById('listSelectAllBtn').addEventListener('click', () => selectAll(rows));
+}
+
+function selectAll(rows) {
+  for (const row of rows) multiSelected.add(nodeKey(row));
+  syncSelectionVisuals();
+}
+
+function toggleMultiSelect(key) {
+  if (multiSelected.has(key)) {
+    multiSelected.delete(key);
+  } else {
+    multiSelected.add(key);
+  }
+  syncSelectionVisuals();
+}
+
+function deselectAll() {
+  selectedNodeKey = null;
+  multiSelected.clear();
+  renderDetailPanel();
+  syncSelectionVisuals();
+  closeWheel();
+}
+
+function syncSelectionVisuals() {
+  document.querySelectorAll('.node-dot').forEach(el => {
+    const key = el.dataset.key;
+    const isSelected = key === selectedNodeKey;
+    el.classList.toggle('selected', isSelected);
+    el.classList.toggle('multi-selected', multiSelected.has(key));
+    el.setAttribute('r', isSelected ? 11 : 9);
+  });
+  document.querySelectorAll('.list-row').forEach(rowEl => {
+    const key = rowEl.dataset.key;
+    rowEl.classList.toggle('active', key === selectedNodeKey);
+    const cb = rowEl.querySelector('.list-checkbox');
+    if (cb) cb.checked = multiSelected.has(key);
+  });
+}
+
+// Targets for the side list's tool buttons (no "node under cursor" like the
+// wheel has): the multi-selection if there is one, else the single detail
+// selection, else nothing.
+function currentSelectionTargets() {
+  if (multiSelected.size > 0) {
+    return [...multiSelected].map(k => lastRowsByKey[k]).filter(Boolean);
+  }
+  if (selectedNodeKey && lastRowsByKey[selectedNodeKey]) {
+    return [lastRowsByKey[selectedNodeKey]];
+  }
+  return [];
+}
+
+document.addEventListener('keydown', (evt) => {
+  // Skip when the Set* overlay is open -- its own Escape handler (below,
+  // defined with the rest of that feature) closes the modal instead, and
+  // this shouldn't also silently drop the node selection the user has open
+  // it to edit settings for.
+  if (evt.key === 'Escape' && setSettingsOverlayEl.hidden) deselectAll();
+});
+
+// --- Drag-to-select (rubber-band multi-select) ---------------------------
+// Left-drag on empty ring space (not on a node) selects every node whose dot
+// falls inside the drawn box. Plain drag replaces the current multi-selection;
+// ctrl/cmd+drag adds to it, matching ctrl/cmd+click's additive behavior.
+// (Shift is deliberately excluded here too -- see the click handler above.)
+
+function attachDragSelect(svg) {
+  svg.addEventListener('mousedown', (evt) => {
+    if (evt.button !== 0) return;
+    if (evt.target.closest('.node-dot')) return; // let the dot's own handlers manage this
+
+    evt.preventDefault();
+    const additive = evt.ctrlKey || evt.metaKey;
+    if (!additive) multiSelected.clear(); // syncSelectionVisuals() on mouseup reconciles the DOM
+
+    const startX = evt.clientX, startY = evt.clientY;
+    const box = document.createElement('div');
+    box.id = 'dragSelectBox';
+    document.body.appendChild(box);
+    updateDragBox(box, startX, startY, startX, startY);
+
+    // Without this, the mouse path crossing any text node mid-drag (a DC
+    // header, a node's IP label) restarts the browser's native text
+    // selection -- which then competes with/breaks every drag after the
+    // first, since the browser treats the next mousedown as extending that
+    // selection rather than starting a fresh custom drag.
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onUp);
+      document.body.style.userSelect = previousUserSelect;
+      box.remove();
+    };
+    const onMove = (e) => updateDragBox(box, startX, startY, e.clientX, e.clientY);
+    const onUp = () => {
+      const rect = box.getBoundingClientRect();
+      cleanup();
+      if (rect.width >= 3 || rect.height >= 3) applyDragSelection(rect);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    // Safety net: if the button is released outside the window (or the tab
+    // loses focus mid-drag), mouseup may never fire -- without this, that
+    // leaves onMove/onUp permanently attached, so the *next* drag adds a
+    // second set on top of the stuck one.
+    window.addEventListener('blur', onUp);
+  });
+}
+
+function updateDragBox(box, x1, y1, x2, y2) {
+  box.style.left = `${Math.min(x1, x2)}px`;
+  box.style.top = `${Math.min(y1, y2)}px`;
+  box.style.width = `${Math.abs(x2 - x1)}px`;
+  box.style.height = `${Math.abs(y2 - y1)}px`;
+}
+
+function applyDragSelection(rect) {
+  document.querySelectorAll('.node-dot').forEach(el => {
+    const b = el.getBoundingClientRect();
+    const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
+      multiSelected.add(el.dataset.key);
+    }
+  });
+  syncSelectionVisuals();
+}
+
+// --- Middle-click radial tool wheel -----------------------------------
+// Hold middle mouse button on a node to open the wheel, drag to a tool,
+// release to run it. A live multi-selection (ctrl/cmd+click or drag) becomes the
+// target set regardless of which node the middle-click itself landed on;
+// otherwise the action targets just that one node.
+
+const WHEEL_DEADZONE = 24;
+
+// Radius grows with the tool count so items don't overlap as the read-only
+// catalog grows -- a fixed 90px worked fine for the original ~7 tools but
+// started overlapping once it passed a dozen. 90 stays the floor for a
+// small catalog (or before loadTools() has populated TOOLS beyond the
+// built-in "Status" entry).
+function wheelRadius() {
+  return Math.max(90, TOOLS.length * 26);
+}
+
+function openWheel(evt, row) {
+  if (wheelState) closeWheel();
+  hideTooltip();
+
+  const targets = multiSelected.size > 0
+    ? [...multiSelected].map(k => lastRowsByKey[k]).filter(Boolean)
+    : [row];
+  if (targets.length === 0) return;
+
+  wheelState = { cx: evt.clientX, cy: evt.clientY, targets, hoveredIndex: -1, el: null };
+  renderWheel();
+
+  const onMove = (e) => updateWheelHover(e.clientX, e.clientY);
+  const onUp = (e) => {
+    if (e.button !== 1) return;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    const chosen = wheelState && wheelState.hoveredIndex >= 0 ? TOOLS[wheelState.hoveredIndex] : null;
+    const chosenTargets = wheelState ? wheelState.targets : [];
+    closeWheel();
+    if (chosen) runTool(chosen, chosenTargets);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function renderWheel() {
+  const el = document.createElement('div');
+  el.id = 'wheelMenu';
+  el.style.left = `${wheelState.cx}px`;
+  el.style.top = `${wheelState.cy}px`;
+
+  const center = document.createElement('div');
+  center.className = 'wheel-center';
+  center.textContent = wheelState.targets.length > 1
+    ? `${wheelState.targets.length} nodes`
+    : wheelState.targets[0].ip;
+  el.appendChild(center);
+
+  const radius = wheelRadius();
+  TOOLS.forEach((tool, i) => {
+    const angle = (2 * Math.PI * i) / TOOLS.length - Math.PI / 2;
+    const x = radius * Math.cos(angle);
+    const y = radius * Math.sin(angle);
+    const item = document.createElement('div');
+    item.className = 'wheel-item';
+    // The trailing translate(-50%,-50%) is the item's own self-centering
+    // from its CSS class -- setting .style.transform here overwrites that
+    // rule entirely rather than adding to it, so it has to be repeated, or
+    // every item renders by its top-left corner instead of its center
+    // (looks like the whole ring is shifted up-and-right from the actual
+    // click point).
+    item.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    item.textContent = tool.requiresTable ? `${tool.label}…` : tool.label;
+    el.appendChild(item);
+  });
+
+  document.body.appendChild(el);
+  wheelState.el = el;
+}
+
+function updateWheelHover(clientX, clientY) {
+  if (!wheelState) return;
+  const dx = clientX - wheelState.cx;
+  const dy = clientY - wheelState.cy;
+  const dist = Math.hypot(dx, dy);
+
+  let newIndex = -1;
+  if (dist >= WHEEL_DEADZONE) {
+    let angle = Math.atan2(dy, dx) + Math.PI / 2;
+    if (angle < 0) angle += 2 * Math.PI;
+    const segment = (2 * Math.PI) / TOOLS.length;
+    newIndex = Math.round(angle / segment) % TOOLS.length;
+  }
+
+  if (newIndex !== wheelState.hoveredIndex) {
+    wheelState.hoveredIndex = newIndex;
+    wheelState.el.querySelectorAll('.wheel-item').forEach((elm, i) => {
+      elm.classList.toggle('hovered', i === newIndex);
+    });
+  }
+}
+
+function closeWheel() {
+  if (wheelState && wheelState.el) wheelState.el.remove();
+  wheelState = null;
+}
+
+// --- Async results split-pane -------------------------------------------
+
+// formatElapsed renders a duration (ms) the way both the per-card time and
+// the aggregate status line show it -- sub-second in ms, otherwise seconds.
+function formatElapsed(ms) {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// timingSummary is the aggregate shown on an active tab: a single target's
+// own time, or min/avg/max once more than one has reported in. Recomputed
+// from whatever's landed so far, so it firms up progressively rather than
+// waiting for every target to finish.
+function timingSummary(entry) {
+  const values = Object.values(entry.timings);
+  if (values.length === 0) return '';
+  if (values.length === 1) return ` · ${formatElapsed(values[0])}`;
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  const inFlight = values.length < entry.targets.length ? ` (${values.length}/${entry.targets.length})` : '';
+  return ` · min ${formatElapsed(min)} / avg ${formatElapsed(avg)} / max ${formatElapsed(max)}${inFlight}`;
+}
+
+function trimResultsHistory() {
+  while (resultsHistory.length > resultsHistoryLimit) {
+    resultsHistory.shift();
+  }
+}
+
+// Removes one tab regardless of whether it's the active one -- if it was,
+// renderResultsPanel's own fallback (newest remaining) picks the next
+// active tab, so no special-casing is needed here.
+function closeResultsTab(id) {
+  resultsHistory = resultsHistory.filter(e => e.id !== id);
+  if (resultsHistory.length === 0) {
+    resultsPanelEl.hidden = true;
+    resultsPanelEl.innerHTML = '';
+    return;
+  }
+  renderResultsPanel();
+}
+
+// Renders the whole results panel from resultsHistory/activeResultsId: a
+// tab per invocation (the active one full-size with tool/count/time/timing,
+// every other one compact -- just its label and target count) plus the
+// active tab's node cards below. Called on every history change and on
+// every async result landing for the currently-active tab; inactive tabs'
+// data still updates in the background (see invokeTool) even though this
+// doesn't re-render for them, so switching back later shows what actually
+// happened rather than a stale "running...".
+function renderResultsPanel() {
+  if (resultsHistory.length === 0) {
+    resultsPanelEl.innerHTML = '';
+    return;
+  }
+  const active = resultsHistory.find(e => e.id === activeResultsId) || resultsHistory[resultsHistory.length - 1];
+  activeResultsId = active.id;
+  const diffMap = active.diffable ? computeDiffMap(active) : null;
+  const diffCount = diffMap ? [...diffMap.values()].filter(s => s.size > 1).length : 0;
+
+  // Newest first (left), oldest trailing off to the right.
+  const tabsHtml = [...resultsHistory].reverse().map(entry => {
+    const label = entry.id === active.id
+      ? (() => {
+          const count = entry.targets.length;
+          return `${entry.toolLabel} &middot; ${count} node${count === 1 ? '' : 's'} &middot; ${entry.timestamp.toLocaleTimeString()}${timingSummary(entry)}`;
+        })()
+      : `${entry.toolLabel} (${entry.targets.length})`;
+    return `
+      <div class="result-tab${entry.id === active.id ? ' active' : ''}" data-id="${entry.id}">
+        <span class="result-tab-label">${label}</span>
+        <span class="result-tab-close" data-id="${entry.id}" title="Remove this run">&times;</span>
+      </div>
+    `;
+  }).join('');
+
+  const limitOptions = [5, 10, 20, 50, 100]
+    .map(n => `<option value="${n}" ${n === resultsHistoryLimit ? 'selected' : ''}>${n}</option>`)
+    .join('');
+
+  resultsPanelEl.innerHTML = `
+    <div class="results-tabbar">
+      <div class="results-tabs" id="resultsTabs">${tabsHtml}</div>
+      <div class="results-tabbar-controls">
+        <label class="scroll-lock-label" title="Scroll one node's output, every other node's card scrolls with it">
+          <input type="checkbox" id="scrollLockCheckbox" ${scrollSyncEnabled ? 'checked' : ''}>
+          Lock scroll
+        </label>
+        <label for="resultsLimitSelect" class="results-limit-label">History</label>
+        <select id="resultsLimitSelect" title="Number of past commands to keep">${limitOptions}</select>
+        <button class="close-btn" id="resultsClose">&times;</button>
+      </div>
+    </div>
+    ${diffCount > 0 ? `<div class="results-diff-hint">${diffCount} setting${diffCount === 1 ? '' : 's'} ${diffCount === 1 ? 'differs' : 'differ'} across the targeted nodes (highlighted below)</div>` : ''}
+    <div class="results-body" id="resultsBody"></div>
+  `;
+
+  resultsPanelEl.querySelectorAll('.result-tab').forEach(tabEl => {
+    tabEl.addEventListener('click', () => {
+      activeResultsId = Number(tabEl.dataset.id);
+      renderResultsPanel();
+    });
+  });
+  resultsPanelEl.querySelectorAll('.result-tab-close').forEach(closeEl => {
+    closeEl.addEventListener('click', (evt) => {
+      evt.stopPropagation(); // don't also trigger the parent tab's switch-to-this-tab handler
+      closeResultsTab(Number(closeEl.dataset.id));
+    });
+  });
+  document.getElementById('resultsLimitSelect').addEventListener('change', (evt) => {
+    resultsHistoryLimit = Number(evt.target.value);
+    trimResultsHistory();
+    renderResultsPanel();
+  });
+  document.getElementById('resultsClose').addEventListener('click', () => { resultsPanelEl.hidden = true; });
+  document.getElementById('scrollLockCheckbox').addEventListener('change', (evt) => {
+    scrollSyncEnabled = evt.target.checked;
+    // Re-render rather than just (de)registering listeners on the existing
+    // DOM: renderResultsPanel already rebuilds resultsBody from scratch on
+    // every call, and reusing that path here is one code path for "attach
+    // sync" instead of two (initial render vs. toggle-on-later).
+    renderResultsPanel();
+  });
+
+  const body = document.getElementById('resultsBody');
+  for (const row of active.targets) {
+    const key = nodeKey(row);
+    const card = active.cards[key];
+    const cardEl = document.createElement('div');
+    cardEl.className = `result-card ${card.state}`;
+    let bodyHtml;
+    if (card.state === 'pending') bodyHtml = 'running&hellip;';
+    else if (card.state === 'error') bodyHtml = card.error;
+    else bodyHtml = formatStatsResult(card.data, diffMap);
+    cardEl.innerHTML = `
+      <div class="result-card-header">
+        <span class="dot ${statusClass(row)}"></span>
+        <span class="result-card-ip">${row.ip}</span>
+        <span class="result-card-time">${card.elapsedMs != null ? formatElapsed(card.elapsedMs) : ''}</span>
+      </div>
+      <div class="result-card-body">${bodyHtml}</div>
+    `;
+    body.appendChild(cardEl);
+  }
+
+  if (scrollSyncEnabled) attachScrollSync(body);
+}
+
+// attachScrollSync locks every result-card-body's scroll position to every
+// other one's within container: scrolling any single card scrolls all of
+// them to the same scrollTop, so the same row stays lined up across nodes
+// while comparing long output (a dropped-message list, a thread pool table).
+// Absolute scrollTop, not a proportional ratio -- results for the same tool
+// across nodes are normally near-identical in length/shape, so this is
+// simpler and matches what "lock" implies better than a scaled sync would.
+// The `syncing` guard exists because setting .scrollTop itself fires a
+// 'scroll' event -- without it, each card's own listener would re-trigger
+// every other card's listener in a loop.
+function attachScrollSync(container) {
+  const bodies = [...container.querySelectorAll('.result-card-body')];
+  let syncing = false;
+  bodies.forEach(el => {
+    el.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      for (const other of bodies) {
+        if (other !== el) other.scrollTop = el.scrollTop;
+      }
+      syncing = false;
+    });
+  });
+}
+
+// computeDiffMap builds "groupName||label" -> Set(every value seen for that
+// row) across every node that's finished reporting in for a Diffable entry.
+// Only 'done' cards contribute -- a still-pending or errored node shouldn't
+// make an otherwise-uniform setting look like it disagrees. Scoped by group
+// name (not just label) since a label like "Min"/"Max" can legitimately
+// repeat across unrelated groups in other, non-diffable tools.
+function computeDiffMap(entry) {
+  const map = new Map();
+  for (const row of entry.targets) {
+    const card = entry.cards[nodeKey(row)];
+    if (!card || card.state !== 'done' || !card.data || !card.data.groups) continue;
+    for (const group of card.data.groups) {
+      for (const r of (group.rows || [])) {
+        const key = `${group.name || ''}||${r.label}`;
+        if (!map.has(key)) map.set(key, new Set());
+        map.get(key).add(r.value);
+      }
+    }
+  }
+  return map;
+}
+
+// runTool is the one place every button/wheel-item click goes through before
+// invokeTool -- it's what makes requiresTable tools (cfstats/cfhistograms)
+// use the persistent Tables-panel selection instead of invokeTool having to
+// ask for a target itself. A requiresTable tool runs once per selected
+// table (each its own resultsHistory tab, same as running the button
+// multiple times by hand would) rather than trying to cram multiple tables'
+// worth of data into one tab -- that's what the tab system is already for.
+function runTool(tool, targets) {
+  if (!tool.requiresTable) {
+    invokeTool(tool, targets, null);
+    return;
+  }
+  if (selectedTables.size === 0) {
+    alert(`${tool.label} needs at least one table checked in the Tables panel first.`);
+    return;
+  }
+  for (const table of selectedTables) {
+    invokeTool(tool, targets, table);
+  }
+}
+
+function invokeTool(tool, targets, table) {
+  const id = ++resultsSeq;
+  const entry = {
+    id,
+    toolLabel: table ? `${tool.label} (${table})` : tool.label,
+    diffable: !!tool.diffable,
+    targets,
+    timestamp: new Date(),
+    timings: {}, // rowKey -> elapsed ms
+    cards: {},   // rowKey -> {state, data, error, elapsedMs}
+  };
+  for (const row of targets) {
+    entry.cards[nodeKey(row)] = { state: 'pending', data: null, error: null, elapsedMs: null };
+  }
+
+  resultsHistory.push(entry);
+  trimResultsHistory();
+  activeResultsId = id;
+  resultsPanelEl.hidden = false;
+  renderResultsPanel();
+
+  for (const row of targets) {
+    const rowKey = nodeKey(row);
+    const startedAt = performance.now();
+    const finish = (state, data, error) => {
+      const elapsedMs = performance.now() - startedAt;
+      entry.timings[rowKey] = elapsedMs;
+      entry.cards[rowKey] = { state, data, error, elapsedMs };
+      if (activeResultsId === id) renderResultsPanel();
+    };
+    tool.run(row, table)
+      .then(data => finish('done', data, null))
+      .catch(err => finish('error', null, err.message || String(err)));
+  }
+}
+
+// --- Set* settings editor -------------------------------------------------
+// A deliberately separate flow from the generic read-only TOOLS/results
+// system above: editing config knobs across many nodes at once needs its own
+// consolidated view (one row per setting, not one card per node) and its own
+// confirm step before anything is written -- not a bolt-on to the results
+// panel's per-node cards or the middle-click wheel. Deliberately NOT reachable
+// from the wheel: only the explicit list-toolbar button, so a write action
+// can never fire from a stray drag gesture the way a read-only tool can.
+//
+// Flow: openSetSettings queries every targeted node's current `settings` (the
+// same read as the Settings(get*) tool, just fired directly rather than
+// through invokeTool/resultsHistory, since this doesn't belong in that tab
+// history) -> renderSetSettings builds one table row per label, pre-filled
+// with the common value (or blank + a hover badge listing every node's value,
+// if they disagree) -> typing in a row's input marks it "dirty" -> Set
+// collects only dirty rows, confirms, then PUTs them to every targeted node
+// in parallel via applySettingsChanges.
+
+const setSettingsOverlayEl = document.getElementById('setSettingsOverlay');
+
+async function openSetSettings(targets) {
+  if (targets.length === 0) return;
+  setSettingsOverlayEl.hidden = false;
+  setSettingsOverlayEl.innerHTML = `
+    <div id="setSettingsPanel">
+      <div class="settings-header">
+        <span>Set settings &middot; querying ${targets.length} node${targets.length === 1 ? '' : 's'}&hellip;</span>
+        <button class="close-btn" id="setSettingsClose">&times;</button>
+      </div>
+      <div class="settings-loading">Loading current values&hellip;</div>
+    </div>
+  `;
+  wireSetSettingsDismiss();
+
+  // Query every targeted node's current settings in parallel -- a node that
+  // fails to report is excluded from the table (noted above it) rather than
+  // failing the whole panel, same fault-tolerance philosophy as the rest of
+  // this UI.
+  const perNode = await Promise.all(targets.map(async (row) => {
+    try {
+      const res = await fetch(`/api/environments/${encodeURIComponent(currentEnv)}/stats?name=settings&ip=${encodeURIComponent(row.ip)}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `HTTP ${res.status}`);
+      }
+      return { row, data: await res.json(), error: null };
+    } catch (err) {
+      return { row, data: null, error: err.message || String(err) };
+    }
+  }));
+
+  // The overlay may have been closed (or reopened for a different selection)
+  // while these were in flight -- only render if this is still the request
+  // that's expected to land. Cheap guard: re-check the overlay is still open.
+  if (setSettingsOverlayEl.hidden) return;
+  renderSetSettings(targets, perNode);
+}
+
+function closeSetSettings() {
+  setSettingsOverlayEl.hidden = true;
+  setSettingsOverlayEl.innerHTML = '';
+}
+
+function wireSetSettingsDismiss() {
+  document.getElementById('setSettingsClose').addEventListener('click', closeSetSettings);
+  setSettingsOverlayEl.addEventListener('click', (evt) => {
+    if (evt.target === setSettingsOverlayEl) closeSetSettings();
+  });
+}
+
+// mergeSettingsByLabel builds "label -> Map(ip -> value)" across every node
+// that answered, preserving first-seen row order (every node reports the
+// same labels in the same order -- settingSources' order on the backend --
+// so the first successful response's order is every response's order).
+function mergeSettingsByLabel(perNode) {
+  const rowOrder = [];
+  const byLabel = new Map();
+  for (const { row, data } of perNode) {
+    if (!data || !data.groups) continue;
+    for (const group of data.groups) {
+      for (const r of (group.rows || [])) {
+        if (!byLabel.has(r.label)) { byLabel.set(r.label, new Map()); rowOrder.push(r.label); }
+        byLabel.get(r.label).set(row.ip, r.value);
+      }
+    }
+  }
+  return { rowOrder, byLabel };
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function renderSetSettings(targets, perNode) {
+  const failed = perNode.filter(p => p.error);
+  const { rowOrder, byLabel } = mergeSettingsByLabel(perNode);
+
+  const failedHtml = failed.length > 0
+    ? `<div class="settings-failed-note">${failed.length} node${failed.length === 1 ? '' : 's'} failed to report and ${failed.length === 1 ? 'is' : 'are'} excluded below: ${failed.map(f => `${f.row.ip} (${f.error})`).join(', ')}</div>`
+    : '';
+
+  const rowsHtml = rowOrder.map(label => {
+    const values = byLabel.get(label);
+    const distinct = new Set(values.values());
+    const differs = distinct.size > 1;
+    const common = differs ? '' : [...distinct][0];
+    const tooltip = [...values.entries()].map(([ip, v]) => `${ip}: ${v}`).join('\n');
+    return `
+      <div class="settings-row${differs ? ' diff' : ''}" data-label="${escapeAttr(label)}">
+        <span class="settings-label">${label}</span>
+        ${differs ? `<span class="settings-diff-badge" title="${escapeAttr(tooltip)}">${distinct.size} distinct (${values.size} nodes)</span>` : ''}
+        <input class="settings-input" type="text" value="${escapeAttr(common)}" placeholder="${differs ? '(differs)' : ''}" data-label="${escapeAttr(label)}">
+      </div>
+    `;
+  }).join('');
+
+  setSettingsOverlayEl.innerHTML = `
+    <div id="setSettingsPanel">
+      <div class="settings-header">
+        <span>Set settings &middot; ${targets.length} node${targets.length === 1 ? '' : 's'} selected</span>
+        <button class="close-btn" id="setSettingsClose">&times;</button>
+      </div>
+      ${failedHtml}
+      <div class="settings-body">${rowsHtml || '<div class="settings-loading">No settings reported.</div>'}</div>
+      <div class="settings-footer">
+        <span class="settings-dirty-count" id="setSettingsDirtyCount">0 field(s) changed</span>
+        <span>
+          <button class="btn-secondary" id="setSettingsCancel">Cancel</button>
+          <button class="btn-primary" id="setSettingsApply" disabled>Set</button>
+        </span>
+      </div>
+      <div class="settings-apply-status" id="setSettingsStatus" hidden></div>
+    </div>
+  `;
+
+  wireSetSettingsDismiss();
+  document.getElementById('setSettingsCancel').addEventListener('click', closeSetSettings);
+
+  const dirty = new Set();
+  const applyBtn = document.getElementById('setSettingsApply');
+  const dirtyCountEl = document.getElementById('setSettingsDirtyCount');
+  setSettingsOverlayEl.querySelectorAll('.settings-input').forEach(input => {
+    input.addEventListener('input', () => {
+      dirty.add(input.dataset.label);
+      input.closest('.settings-row').classList.add('dirty');
+      dirtyCountEl.textContent = `${dirty.size} field(s) changed`;
+      applyBtn.disabled = dirty.size === 0;
+    });
+  });
+
+  applyBtn.addEventListener('click', () => {
+    const changes = {};
+    for (const label of dirty) {
+      changes[label] = setSettingsOverlayEl.querySelector(`.settings-input[data-label="${CSS.escape(label)}"]`).value;
+    }
+    if (Object.keys(changes).length === 0) return;
+
+    const summary = Object.entries(changes).map(([k, v]) => `  ${k} = ${v}`).join('\n');
+    const proceed = confirm(`Apply ${Object.keys(changes).length} field(s) to ${targets.length} node(s)?\n\n${summary}`);
+    if (!proceed) return;
+
+    applySettingsChanges(targets, changes);
+  });
+}
+
+// applySettingsChanges PUTs the same changes to every targeted node in
+// parallel (Promise.all, not sequential) and reports each node's own
+// success/failure independently as it lands -- a slow or failing node
+// doesn't hold up the others' results from showing.
+async function applySettingsChanges(targets, changes) {
+  const statusEl = document.getElementById('setSettingsStatus');
+  const applyBtn = document.getElementById('setSettingsApply');
+  applyBtn.disabled = true;
+  applyBtn.textContent = 'Setting…';
+  statusEl.hidden = false;
+  statusEl.innerHTML = targets.map(row => `<div class="node-result" data-ip="${escapeAttr(row.ip)}"><span>${row.ip}</span><span>running&hellip;</span></div>`).join('');
+
+  await Promise.all(targets.map(async (row) => {
+    const el = statusEl.querySelector(`.node-result[data-ip="${CSS.escape(row.ip)}"]`);
+    const valueEl = el.querySelector('span:last-child');
+    try {
+      const res = await fetch(`/api/environments/${encodeURIComponent(currentEnv)}/settings?ip=${encodeURIComponent(row.ip)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+      });
+      const respBody = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(respBody.error || `HTTP ${res.status}`);
+      const fieldErrors = Object.entries(respBody);
+      if (fieldErrors.length > 0) {
+        el.className = 'node-result err';
+        valueEl.textContent = fieldErrors.map(([k, v]) => `${k}: ${v}`).join('; ');
+      } else {
+        el.className = 'node-result ok';
+        valueEl.textContent = 'OK';
+      }
+    } catch (err) {
+      el.className = 'node-result err';
+      valueEl.textContent = err.message || String(err);
+    }
+  }));
+
+  applyBtn.textContent = 'Set';
+  applyBtn.disabled = false;
+}
+
+document.addEventListener('keydown', (evt) => {
+  if (evt.key === 'Escape' && !setSettingsOverlayEl.hidden) closeSetSettings();
+});
+
+function render(nodes) {
+  const rows = buildRows(nodes);
+  dcsEl.innerHTML = '';
+  // Populated from the full row set, not per-DC rack-filtered subsets --
+  // a node picked in the list while its ring is rack-filtered out must
+  // still resolve to a real row for tool invocation.
+  lastRowsByKey = {};
+  for (const row of rows) lastRowsByKey[nodeKey(row)] = row;
+
+  renderNodeList(rows);
+
+  if (rows.length === 0) {
+    emptyEl.hidden = false;
+    renderDetailPanel();
+    return;
+  }
+  emptyEl.hidden = true;
+
+  const byDc = {};
+  for (const row of rows) {
+    (byDc[row.dc] = byDc[row.dc] || []).push(row);
+  }
+
+  const dcNames = Object.keys(byDc).sort();
+  for (const dc of dcNames) {
+    const block = document.createElement('div');
+    block.className = 'dc-block';
+
+    const racks = [...new Set(byDc[dc].map(r => r.rack))].sort();
+    const selectedRack = rackFilters[dc] || 'all';
+    const visibleRows = selectedRack === 'all' ? byDc[dc] : byDc[dc].filter(r => r.rack === selectedRack);
+
+    const { svg, tokenWeighted } = renderRing(dc, visibleRows);
+
+    const h2 = document.createElement('h2');
+    const countLabel = selectedRack === 'all'
+      ? `${byDc[dc].length} node${byDc[dc].length === 1 ? '' : 's'}`
+      : `${visibleRows.length} of ${byDc[dc].length} nodes`;
+    const layoutNote = tokenWeighted ? 'ordered by token, evenly spaced' : 'even spacing, token data pending';
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = `Datacenter: ${dc} (${countLabel}, ${layoutNote})`;
+    h2.appendChild(titleSpan);
+
+    const rackSelect = document.createElement('select');
+    rackSelect.className = 'rack-select';
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = 'All racks';
+    rackSelect.appendChild(allOpt);
+    for (const rack of racks) {
+      const opt = document.createElement('option');
+      opt.value = rack;
+      opt.textContent = rack;
+      rackSelect.appendChild(opt);
+    }
+    rackSelect.value = selectedRack;
+    rackSelect.addEventListener('change', () => {
+      rackFilters[dc] = rackSelect.value;
+      if (lastNodesRaw) render(lastNodesRaw);
+    });
+    h2.appendChild(rackSelect);
+
+    block.appendChild(h2);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ring-wrap';
+    wrap.appendChild(svg);
+    block.appendChild(wrap);
+
+    dcsEl.appendChild(block);
+  }
+
+  renderDetailPanel();
+}
+
+async function refresh() {
+  if (!currentEnv) return;
+  try {
+    const res = await fetch(`/api/environments/${encodeURIComponent(currentEnv)}/nodes`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    const nodes = await res.json();
+    errorEl.hidden = true;
+    lastNodesRaw = nodes || {};
+    render(lastNodesRaw);
+    lastUpdatedEl.textContent = `${currentEnv} · updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    errorEl.hidden = false;
+    errorEl.textContent = `Failed to load node data: ${err.message}`;
+  }
+}
+
+async function init() {
+  await loadEnvironments();
+  await loadTools();
+  await refresh();
+  await loadTables();
+  setInterval(refresh, 5000);
+}
+
+init();
+</script>
+</body>
+</html>

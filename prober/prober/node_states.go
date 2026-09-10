@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -88,6 +89,7 @@ func (p *Prober) updateNodesRequest() {
 			cassandraNodeState := nodeStateResponse.Value
 			newNodeState.SimpleStates = cassandraNodeState.SimpleStates
 			newNodeState.EndpointState = cassandraNodeState.AllEndpointStates[polledIP]
+			newNodeState.EndpointState.OwnedTokens = ownedTokens(cassandraNodeState.TokenToEndpointMap, polledIP)
 			// lookup new nodes from node's peers (`.AllEndpointsStates`)
 			for ip, endpointState := range cassandraNodeState.AllEndpointStates {
 				// if the peer node is not in the list of discovered DCs and it belongs to the DC owned by prober
@@ -144,6 +146,33 @@ func (p *Prober) allNodesStates() map[string]jolokia.CassandraResponse {
 	}
 
 	return responses
+}
+
+// ownedTokens returns the tokens a node owns, sorted for stable output.
+// tokenToEndpoint is cluster-wide (token -> IP with no leading slash),
+// while broadcastIP follows this package's "/1.2.3.4" convention.
+func ownedTokens(tokenToEndpoint map[string]string, broadcastIP string) []string {
+	if len(tokenToEndpoint) == 0 {
+		return nil
+	}
+
+	ip := strings.TrimPrefix(broadcastIP, "/")
+	var tokens []string
+	for token, owner := range tokenToEndpoint {
+		if owner == ip {
+			tokens = append(tokens, token)
+		}
+	}
+
+	sort.Slice(tokens, func(i, j int) bool {
+		a, errA := strconv.ParseInt(tokens[i], 10, 64)
+		b, errB := strconv.ParseInt(tokens[j], 10, 64)
+		if errA != nil || errB != nil {
+			return tokens[i] < tokens[j]
+		}
+		return a < b
+	})
+	return tokens
 }
 
 func (p *Prober) ownedDC(dc string) bool {
