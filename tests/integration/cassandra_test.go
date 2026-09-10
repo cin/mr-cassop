@@ -102,7 +102,19 @@ var _ = Describe("cassandra statefulset deployment", func() {
 						"bash",
 						"-c",
 					`chown cassandra:cassandra /var/lib/cassandra
-sysctl -w net.core.optmem_max="40960" net.core.rmem_default="16777216" net.core.rmem_max="16777216" net.core.somaxconn="65535" net.core.wmem_default="16777216" net.core.wmem_max="16777216" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1048575" vm.swappiness="1"`,
+sysctl -w net.core.optmem_max="40960" || true
+sysctl -w net.core.rmem_default="16777216" || true
+sysctl -w net.core.rmem_max="16777216" || true
+sysctl -w net.core.somaxconn="65535" || true
+sysctl -w net.core.wmem_default="16777216" || true
+sysctl -w net.core.wmem_max="16777216" || true
+sysctl -w net.ipv4.ip_local_port_range="1025 65535" || true
+sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216" || true
+sysctl -w net.ipv4.tcp_wmem="4096 65536 16777216" || true
+sysctl -w vm.dirty_background_bytes="10485760" || true
+sysctl -w vm.dirty_bytes="1073741824" || true
+sysctl -w vm.max_map_count="1048575" || true
+sysctl -w vm.swappiness="1" || true`,
 				},
 			))
 			}
@@ -333,7 +345,19 @@ var _ = Describe("cassandra statefulset", func() {
 						"bash",
 						"-c",
 					`chown cassandra:cassandra /var/lib/cassandra
-sysctl -w net.core.optmem_max="40960" net.core.rmem_default="16777216" net.core.rmem_max="16777216" net.core.somaxconn="65535" net.core.wmem_default="16777216" net.core.wmem_max="16777216" net.ipv4.ip_local_port_range="1025 65535" net.ipv4.tcp_rmem="4096 87380 16777216" net.ipv4.tcp_wmem="4096 65536 16777216" vm.dirty_background_bytes="10485760" vm.dirty_bytes="1073741824" vm.max_map_count="1048575" vm.swappiness="1"`},
+sysctl -w net.core.optmem_max="40960" || true
+sysctl -w net.core.rmem_default="16777216" || true
+sysctl -w net.core.rmem_max="16777216" || true
+sysctl -w net.core.somaxconn="65535" || true
+sysctl -w net.core.wmem_default="16777216" || true
+sysctl -w net.core.wmem_max="16777216" || true
+sysctl -w net.ipv4.ip_local_port_range="1025 65535" || true
+sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216" || true
+sysctl -w net.ipv4.tcp_wmem="4096 65536 16777216" || true
+sysctl -w vm.dirty_background_bytes="10485760" || true
+sysctl -w vm.dirty_bytes="1073741824" || true
+sysctl -w vm.max_map_count="1048575" || true
+sysctl -w vm.swappiness="1" || true`},
 				),
 			)
 			}
