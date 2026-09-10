@@ -2,14 +2,17 @@ package prober
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/cin/mr-cassop/prober/config"
+	"github.com/cin/mr-cassop/prober/jolokia"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/julienschmidt/httprouter"
@@ -490,6 +493,260 @@ func TestPutDCs(t *testing.T) {
 		asserts.Expect(recorder.Code).To(gomega.Equal(testCase.expectedCode))
 		asserts.Expect(testProber.state.dcs).To(gomega.Equal(testCase.expectedDCs))
 	}
+}
+
+func TestGetNodes(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{
+			User:     "cassandra",
+			Password: "cassandra",
+		},
+		log: zap.NewNop().Sugar(),
+		state: state{
+			nodes: map[string]nodeState{
+				"/10.134.3.4": {
+					SimpleStates:  map[string]string{"/10.134.3.4": "UP"},
+					EndpointState: endpointState("/10.134.3.4", "NORMAL"),
+				},
+			},
+		},
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusOK))
+	b, err := io.ReadAll(recorder.Result().Body)
+	asserts.Expect(err).ToNot(gomega.HaveOccurred())
+
+	var got map[string]nodeState
+	asserts.Expect(json.Unmarshal(b, &got)).To(gomega.Succeed())
+	asserts.Expect(got).To(gomega.Equal(testProber.state.nodes))
+}
+
+func TestGetNodesRequiresAuth(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{
+			User:     "cassandra",
+			Password: "cassandra",
+		},
+		log: zap.NewNop().Sugar(),
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusUnauthorized))
+}
+
+func TestGetTools(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/tools", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusOK))
+	b, err := io.ReadAll(recorder.Result().Body)
+	asserts.Expect(err).ToNot(gomega.HaveOccurred())
+
+	var got []jolokia.StatDef
+	asserts.Expect(json.Unmarshal(b, &got)).To(gomega.Succeed())
+	names := make([]string, len(got))
+	for i, def := range got {
+		names[i] = def.Name
+	}
+	asserts.Expect(names).To(gomega.ContainElements("info", "describecluster", "compactionstats", "tpstats"))
+}
+
+func TestGetStat(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	wantResult := jolokia.StatsResult{Groups: []jolokia.StatGroup{{Rows: []jolokia.StatRow{
+		{Label: "Operation mode", Value: "NORMAL"},
+	}}}}
+	mock := &jolokiaMock{
+		stats: map[string]map[string]jolokia.StatsResult{
+			"/172.16.16.4": {"info": wantResult},
+		},
+	}
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+		state: state{
+			podIPs: map[string]string{"/10.134.3.4": "/172.16.16.4"},
+		},
+		jolokia: mock,
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/stats?name=info&ip=10.134.3.4", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusOK))
+	b, err := io.ReadAll(recorder.Result().Body)
+	asserts.Expect(err).ToNot(gomega.HaveOccurred())
+
+	var got jolokia.StatsResult
+	asserts.Expect(json.Unmarshal(b, &got)).To(gomega.Succeed())
+	asserts.Expect(got).To(gomega.Equal(wantResult))
+}
+
+func TestGetStatMissingName(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/stats?ip=10.134.3.4", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusBadRequest))
+}
+
+func TestGetStatMissingIP(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/stats?name=info", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusBadRequest))
+}
+
+func TestGetStatUnknownNode(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth:  UserAuth{User: "cassandra", Password: "cassandra"},
+		log:   zap.NewNop().Sugar(),
+		state: state{podIPs: map[string]string{}},
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodGet, "/stats?name=info&ip=10.134.3.9", nil)
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusNotFound))
+}
+
+func TestPutSettings(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	mock := &jolokiaMock{
+		setSettingsErrs: map[string]map[string]string{
+			"/172.16.16.4": {"Trace probability": "invalid value"},
+		},
+	}
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+		state: state{
+			podIPs: map[string]string{"/10.134.3.4": "/172.16.16.4"},
+		},
+		jolokia: mock,
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	body := `{"Compaction throughput (MB/s)":"128","Trace probability":"0.1"}`
+	request := httptest.NewRequest(http.MethodPut, "/settings?ip=10.134.3.4", strings.NewReader(body))
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusOK))
+	b, err := io.ReadAll(recorder.Result().Body)
+	asserts.Expect(err).ToNot(gomega.HaveOccurred())
+
+	var got map[string]string
+	asserts.Expect(json.Unmarshal(b, &got)).To(gomega.Succeed())
+	asserts.Expect(got).To(gomega.Equal(map[string]string{"Trace probability": "invalid value"}))
+
+	asserts.Expect(mock.setSettingsCalls).To(gomega.HaveLen(1))
+	asserts.Expect(mock.setSettingsCalls[0].ip).To(gomega.Equal("/172.16.16.4"))
+	asserts.Expect(mock.setSettingsCalls[0].changes).To(gomega.Equal(map[string]string{
+		"Compaction throughput (MB/s)": "128",
+		"Trace probability":            "0.1",
+	}))
+}
+
+func TestPutSettingsEmptyBody(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+		state: state{
+			podIPs: map[string]string{"/10.134.3.4": "/172.16.16.4"},
+		},
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodPut, "/settings?ip=10.134.3.4", strings.NewReader(`{}`))
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusBadRequest))
+}
+
+func TestPutSettingsInvalidJSON(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth: UserAuth{User: "cassandra", Password: "cassandra"},
+		log:  zap.NewNop().Sugar(),
+		state: state{
+			podIPs: map[string]string{"/10.134.3.4": "/172.16.16.4"},
+		},
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodPut, "/settings?ip=10.134.3.4", strings.NewReader(`not json`))
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusBadRequest))
+}
+
+func TestPutSettingsUnknownNode(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	testProber := &Prober{
+		auth:  UserAuth{User: "cassandra", Password: "cassandra"},
+		log:   zap.NewNop().Sugar(),
+		state: state{podIPs: map[string]string{}},
+	}
+	router := httprouter.New()
+	setupRoutes(router, testProber)
+
+	request := httptest.NewRequest(http.MethodPut, "/settings?ip=10.134.3.9", strings.NewReader(`{"Trace probability":"0.1"}`))
+	request.SetBasicAuth("cassandra", "cassandra")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	asserts.Expect(recorder.Code).To(gomega.Equal(http.StatusNotFound))
 }
 
 type failingReader string

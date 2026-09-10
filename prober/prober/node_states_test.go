@@ -15,7 +15,16 @@ import (
 
 type jolokiaMock struct {
 	nodeStates         map[string]jolokia.CassandraResponse
+	stats              map[string]map[string]jolokia.StatsResult // ip -> stat name -> result
+	tables             map[string][]string                       // ip -> keyspace.table list
+	setSettingsErrs    map[string]map[string]string              // ip -> label -> error message
+	setSettingsCalls   []setSettingsCall
 	username, password string
+}
+
+type setSettingsCall struct {
+	ip      string
+	changes map[string]string
 }
 
 func (j *jolokiaMock) SetAuth(username, password string) {
@@ -29,6 +38,27 @@ func (j *jolokiaMock) CassandraNodeState(ip string) (jolokia.CassandraResponse, 
 		return jolokia.CassandraResponse{}, fmt.Errorf("node %s not found", ip)
 	}
 	return resp, nil
+}
+
+func (j *jolokiaMock) RunStat(name, ip, table string) (jolokia.StatsResult, error) {
+	byName, found := j.stats[ip]
+	if !found {
+		return jolokia.StatsResult{}, fmt.Errorf("no mocked stats for ip %s", ip)
+	}
+	result, found := byName[name]
+	if !found {
+		return jolokia.StatsResult{}, fmt.Errorf("no mocked stat %q for ip %s", name, ip)
+	}
+	return result, nil
+}
+
+func (j *jolokiaMock) ListTables(ip string) ([]string, error) {
+	return j.tables[ip], nil
+}
+
+func (j *jolokiaMock) SetSettings(ip string, changes map[string]string) (map[string]string, error) {
+	j.setSettingsCalls = append(j.setSettingsCalls, setSettingsCall{ip: ip, changes: changes})
+	return j.setSettingsErrs[ip], nil
 }
 
 func endpointState(ip, state string) jolokia.EndpointState {
