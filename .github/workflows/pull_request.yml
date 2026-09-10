@@ -154,6 +154,7 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: ${{ env.TRIVY_SEVERITY }}
+          trivyignores: .trivyignore
 
   e2e-tests:
     if: contains(github.event.pull_request.labels.*.name, 'run-e2e')
