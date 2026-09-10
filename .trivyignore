@@ -1,0 +1,8 @@
+# CVE-2026-75595 (CRITICAL): io.netty:netty-handler 4.1.60.Final, bundled inside the
+# prebuilt icarus.jar (instaclustr/icarus release 3.0.0 downloaded in icarus/Dockerfile).
+# icarus-3.0.0 is the latest upstream release as of 2026-09-09 and there is no newer
+# release available with a patched netty-handler (fixed in 4.2.17.Final / 4.1.137.Final).
+# We can't repackage the release jar ourselves, so ignore until instaclustr ships a fix.
+# Re-check https://github.com/instaclustr/icarus/releases and remove this line once
+# ICARUS_VERSION in .github/workflows/pull_request.yml is bumped past the fix.
+CVE-2026-75595
