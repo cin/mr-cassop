@@ -90,12 +90,17 @@ func privilegedInitContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 	}
 
 	if len(cc.Spec.Cassandra.Sysctls) > 0 {
-		var sysctlArgs []string
-		for key, value := range cc.Spec.Cassandra.Sysctls {
-			sysctlArgs = append(sysctlArgs, fmt.Sprintf("%s=\"%s\"", key, value))
+		keys := make([]string, 0, len(cc.Spec.Cassandra.Sysctls))
+		for key := range cc.Spec.Cassandra.Sysctls {
+			keys = append(keys, key)
 		}
-		sort.Strings(sysctlArgs)
-		args = append(args, "sysctl -w "+strings.Join(sysctlArgs, " "))
+		sort.Strings(keys)
+		// Some kernels/environments (e.g. WSL2) don't expose every /proc/sys/net/core/* key inside a
+		// pod's network namespace. Apply each sysctl independently so one unsupported key doesn't fail
+		// the whole init container and block every other (supported) sysctl from being applied.
+		for _, key := range keys {
+			args = append(args, fmt.Sprintf("sysctl -w %s=%q || true", key, cc.Spec.Cassandra.Sysctls[key]))
+		}
 	}
 
 	return v1.Container{
