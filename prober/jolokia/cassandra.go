@@ -36,6 +36,16 @@ type EndpointState struct {
 	// Tokens are this node's owned tokens (signed int64 strings), derived from TokenToEndpointMap.
 	// With vnodes, a node typically owns many (e.g. 16 by default) non-contiguous tokens.
 	OwnedTokens []string
+	// Status_With_Port is gossip's newer STATUS_WITH_PORT app-state, which
+	// replaced STATUS in Cassandra 4.0+. Verified live against a 4.1
+	// cluster: polling a node directly, its AllEndpointStates entry for
+	// *itself* still carries the legacy STATUS (kept for backward compat),
+	// but its entries for every *peer* only carry STATUS_WITH_PORT --
+	// Status is empty for every non-self endpoint. Callers that need a
+	// peer's status (gossipinfo) must fall back to this field; callers that
+	// only ever look at a node's self-reported state (readiness checks)
+	// aren't affected and don't need to change.
+	Status_With_Port string
 }
 
 // AllEndpointStates implements UnmarshalText to transform the Cassandra MBean to a Go struct.
@@ -43,7 +53,8 @@ type AllEndpointStates map[string]EndpointState
 
 // UnmarshalText interprets the MBean AllEndpointStates and unmarshalls it into a map[string]string.
 // Parameter raw is a []byte that expects the following format for a map of known Endpoints:
-// 	`"\/10.244.0.5\n  generation:1615484112\n  heartbeat:147677\n  STATUS:17:NORMAL,-1068096267908218392\n`
+//
+//	`"\/10.244.0.5\n  generation:1615484112\n  heartbeat:147677\n  STATUS:17:NORMAL,-1068096267908218392\n`
 func (e *AllEndpointStates) UnmarshalText(raw []byte) error {
 	// AllEndpointStates can be converted into valid yaml with a few regex operations
 	data := string(raw)

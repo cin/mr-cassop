@@ -62,6 +62,11 @@ type StatDef struct {
 	// across a multi-node run -- see fetchSettings, the first and so far only
 	// entry that sets it.
 	Diffable bool `json:"diffable"`
+	// Category groups related entries for the frontend's category selector
+	// (Status/Compaction/Performance/Tables/Settings) so the tool list/wheel
+	// stay navigable as the catalog grows, rather than one long flat list.
+	// Purely a presentation grouping -- RunStat dispatches by Name alone.
+	Category string `json:"category"`
 	// RequiresTable marks a stat whose Fetch needs a "keyspace.table" target
 	// (cfstats/cfhistograms) rather than being runnable against a node on its
 	// own -- exposed via /tools so the frontend knows to prompt for one
@@ -82,31 +87,34 @@ type StatDef struct {
 }
 
 var Catalog = []StatDef{
-	{Name: "info", Label: "Info", Fetch: fetchInfo},
+	{Name: "info", Label: "Info", Category: "Status", Fetch: fetchInfo},
 	// Diffable: a node's SchemaVersion disagreeing with the rest of the
 	// cluster is a real, actionable problem (a pending/failed schema push),
 	// not expected variance -- worth the same red-highlight treatment as
 	// fetchSettings gets, and free to add since it's just this one flag.
-	{Name: "describecluster", Label: "Describe", Fetch: fetchDescribeCluster, Diffable: true},
-	{Name: "compactionstats", Label: "Compactions", Fetch: fetchCompactionStats},
-	{Name: "tpstats", Label: "TP Stats", Fetch: fetchTPStats},
-	{Name: "netstats", Label: "Net Stats", Fetch: fetchNetStats},
-	{Name: "gcstats", Label: "GC Stats", Fetch: fetchGCStats},
-	{Name: "proxyhistograms", Label: "Proxy Histograms", Fetch: fetchProxyHistograms},
-	{Name: "cachestats", Label: "Cache Stats", Fetch: fetchCacheStats},
-	{Name: "settings", Label: "Settings (get*)", Fetch: fetchSettings, Diffable: true},
+	{Name: "describecluster", Label: "Describe", Category: "Status", Fetch: fetchDescribeCluster, Diffable: true},
+	{Name: "version", Label: "Version", Category: "Status", Fetch: fetchVersion, Diffable: true},
+	{Name: "gossipinfo", Label: "Gossip Info", Category: "Status", Fetch: fetchGossipInfo},
+	{Name: "clientstats", Label: "Client Stats", Category: "Performance", Fetch: fetchClientStats},
+	{Name: "compactionstats", Label: "Compactions", Category: "Compaction", Fetch: fetchCompactionStats},
+	{Name: "tpstats", Label: "TP Stats", Category: "Performance", Fetch: fetchTPStats},
+	{Name: "netstats", Label: "Net Stats", Category: "Performance", Fetch: fetchNetStats},
+	{Name: "gcstats", Label: "GC Stats", Category: "Performance", Fetch: fetchGCStats},
+	{Name: "proxyhistograms", Label: "Proxy Histograms", Category: "Performance", Fetch: fetchProxyHistograms},
+	{Name: "cachestats", Label: "Cache Stats", Category: "Performance", Fetch: fetchCacheStats},
+	{Name: "settings", Label: "Settings (get*)", Category: "Settings", Fetch: fetchSettings, Diffable: true},
 	// Diffable for the same reason as describecluster above: gossip/native
 	// transport/incremental backups should normally be uniformly enabled (or
 	// uniformly disabled during planned maintenance) across a healthy
 	// cluster -- one node quietly disagreeing is exactly the kind of thing
 	// this pane exists to surface.
-	{Name: "statusflags", Label: "Status Flags", Fetch: fetchStatusFlags, Diffable: true},
-	{Name: "compactionhistory", Label: "Compaction History", Fetch: fetchCompactionHistory},
+	{Name: "statusflags", Label: "Status Flags", Category: "Status", Fetch: fetchStatusFlags, Diffable: true},
+	{Name: "compactionhistory", Label: "Compaction History", Category: "Compaction", Fetch: fetchCompactionHistory},
 	// The scoping decision the old comment here asked for: a required
 	// keyspace.table target (RequiresTable), not pagination or a top-N-by-
 	// size default -- see StatDef.RequiresTable's doc comment for why.
-	{Name: "cfstats", Label: "Table Stats", RequiresTable: true, FetchTable: fetchCfStats},
-	{Name: "cfhistograms", Label: "Table Histograms", RequiresTable: true, FetchTable: fetchTableHistograms},
+	{Name: "cfstats", Label: "Table Stats", Category: "Tables", RequiresTable: true, FetchTable: fetchCfStats},
+	{Name: "cfhistograms", Label: "Table Histograms", Category: "Tables", RequiresTable: true, FetchTable: fetchTableHistograms},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -189,6 +197,96 @@ func fetchDescribeCluster(j *Client, ip string) (StatsResult, error) {
 		row("Partitioner", desc.PartitionerName),
 		row("Schema version", desc.SchemaVersion),
 		row("Release version", desc.ReleaseVersion),
+	}}}}, nil
+}
+
+// fetchVersion matches `nodetool version`: just the running Cassandra
+// release, for the common one-line "what version is this node on" check.
+// describecluster above already includes this same attribute plus
+// cluster-wide context (name/partitioner/schema version) -- this doesn't add
+// new data, just exposes it under nodetool's own command name too.
+func fetchVersion(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.db:type=StorageService", "ReleaseVersion")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var releaseVersion string
+	if err := json.Unmarshal(value, &releaseVersion); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{
+		row("Release version", releaseVersion),
+	}}}}, nil
+}
+
+// fetchGossipInfo matches `nodetool gossipinfo`: every endpoint's current
+// gossip-reported state, one group per endpoint IP so a disagreement (e.g.
+// one node still reporting a peer DOWN after the rest have converged) is
+// visible at a glance rather than needing a per-node diff. Reuses
+// CassandraNodeState/AllEndpointStates -- the same gossip parsing Prober's
+// own readiness checks already depend on (see prober/node_states.go) --
+// rather than re-deriving gossip parsing here.
+func fetchGossipInfo(j *Client, ip string) (StatsResult, error) {
+	state, err := j.CassandraNodeState(ip)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if state.Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("gossip read failed: %s", state.Error)
+	}
+
+	peerIPs := make([]string, 0, len(state.Value.AllEndpointStates))
+	for peerIP := range state.Value.AllEndpointStates {
+		peerIPs = append(peerIPs, peerIP)
+	}
+	sort.Strings(peerIPs)
+
+	groups := make([]StatGroup, 0, len(peerIPs))
+	for _, peerIP := range peerIPs {
+		es := state.Value.AllEndpointStates[peerIP]
+		status := es.Status
+		if status == "" {
+			// Every non-self endpoint on Cassandra 4.0+ only carries the
+			// newer STATUS_WITH_PORT app-state -- see EndpointState's doc
+			// comment. Internal_IP/RPC_Address have the same gap (their
+			// _AND_PORT replacements exist in raw gossip too) but aren't
+			// worth adding here: the group name below is already this
+			// endpoint's IP, so a redundant address row isn't worth the
+			// extra parsing risk (those fields' values contain a literal
+			// ":<port>", which the shared regex-based gossip parser isn't
+			// verified to round-trip safely).
+			status = es.Status_With_Port
+		}
+		groups = append(groups, StatGroup{
+			Name: strings.TrimPrefix(peerIP, "/"),
+			Rows: []StatRow{
+				row("Status", status),
+				row("DC", es.DC),
+				row("Rack", es.Rack),
+				row("Load", es.Load),
+				row("Host ID", es.Host_ID),
+				row("Release version", es.Release_Version),
+			},
+		})
+	}
+	return StatsResult{Groups: groups}, nil
+}
+
+// fetchClientStats matches `nodetool clientstats`'s summary line: the count
+// of currently connected native-protocol clients. Deliberately not the
+// per-connection --all listing -- that needs a JMX *operation* invocation
+// (a call shape nothing in this client makes yet; every other fetch here is
+// a plain attribute read) and isn't worth adding without live-verifying its
+// exact operation name/return shape first, the same bar every other fetcher
+// in this file was held to.
+func fetchClientStats(j *Client, ip string) (StatsResult, error) {
+	const mbean = "org.apache.cassandra.metrics:type=Client,name=connectedNativeClients"
+	gauges, err := j.bulkReadGauges(ip, []string{mbean})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{
+		row("Connected native clients", gauges[mbean]),
 	}}}}, nil
 }
 

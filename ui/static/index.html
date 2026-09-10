@@ -63,10 +63,10 @@
 
   main {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 320px 1fr 340px;
     gap: 20px;
     padding: 20px;
-    max-width: 1300px;
+    max-width: 1700px;
     margin: 0 auto;
     align-items: start;
   }
@@ -77,8 +77,14 @@
     flex-direction: column;
     gap: 16px;
   }
+  .col-left { grid-column: 1; }
+  .col-right { grid-column: 3; }
   .rings {
+    grid-column: 2;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
   .dc-block {
     margin-bottom: 20px;
@@ -216,7 +222,9 @@
   .list-header-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 10px;
   }
   .link-btn {
     background: none;
@@ -226,6 +234,12 @@
     font-weight: 500;
     cursor: pointer;
     padding: 0;
+  }
+  .tool-category-row {
+    padding: 10px 14px 0;
+  }
+  .tool-category-row select {
+    width: 100%;
   }
   .list-toolbar {
     display: flex;
@@ -262,6 +276,46 @@
     letter-spacing: 0.04em;
     color: var(--muted);
   }
+  .ks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 14px 4px;
+  }
+  .ks-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    cursor: pointer;
+    text-align: left;
+  }
+  .ks-toggle:hover { color: var(--text); }
+  .ks-toggle .ks-caret {
+    display: inline-block;
+    font-size: 9px;
+    transition: transform 0.1s ease;
+  }
+  .ks-toggle.collapsed .ks-caret { transform: rotate(-90deg); }
+  .ks-toggle .ks-count { font-weight: 400; text-transform: none; letter-spacing: normal; }
+  .ks-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .ks-actions .link-btn { font-size: 10px; white-space: nowrap; }
+  .ks-group.collapsed .list-row { display: none; }
   .list-row {
     display: flex;
     align-items: center;
@@ -677,17 +731,20 @@
     <div class="item">ctrl/cmd+click or drag to multi-select &middot; middle-click to run a tool</div>
   </div>
   <div class="toolbar">
+    <select id="dcSelect"></select>
     <select id="envSelect"></select>
   </div>
 </header>
 <main>
+  <div class="sidebar col-left">
+    <div id="nodeListPanel"></div>
+  </div>
   <div class="rings">
     <div id="error" hidden></div>
     <div id="empty" hidden>No node data yet.</div>
     <div id="dcs"></div>
   </div>
-  <div class="sidebar">
-    <div id="nodeListPanel"></div>
+  <div class="sidebar col-right">
     <div id="detailPanel">
       <div id="detailPlaceholder">Click a node on the ring for details.</div>
     </div>
@@ -700,6 +757,7 @@
 
 <script>
 const envSelect = document.getElementById('envSelect');
+const dcSelectEl = document.getElementById('dcSelect');
 const dcsEl = document.getElementById('dcs');
 const errorEl = document.getElementById('error');
 const emptyEl = document.getElementById('empty');
@@ -717,6 +775,14 @@ const multiSelected = new Set(); // nodeKeys picked for bulk tool actions
 let wheelState = null;
 let lastNodesRaw = null; // last /nodes response, so a rack-filter change can re-render without refetching
 const rackFilters = {}; // dc name -> selected rack, 'all' by default
+// Which DC(s) to render rings for -- 'all' or one DC name. Unlike
+// rackFilters (per-DC, since a rack only makes sense scoped to one DC),
+// this is a single top-level filter: a cluster with many DCs (the kind of
+// cluster this matters for) would otherwise render every DC's ring at once
+// regardless of which one someone's actually looking at. Only affects the
+// ring area (#dcs) -- the Nodes list and Tables panel stay cluster-wide, the
+// same way rackFilters doesn't touch them either.
+let dcFilter = 'all';
 
 // The global table picker backing requiresTable tools (cfstats/cfhistograms)
 // -- a persistent multi-select rather than a per-click prompt, so picking
@@ -725,6 +791,16 @@ const rackFilters = {}; // dc name -> selected rack, 'all' by default
 // environment, not on every 5s node refresh; see loadTables/refreshTables).
 let lastTablesRaw = null;
 const selectedTables = new Set(); // "keyspace.table" strings
+// Keyspaces with their table list collapsed in the Tables panel. Defaults to
+// collapsed -- a real cluster's system/system_* keyspaces alone are ~30
+// tables, so showing everything expanded by default buries the panel in
+// scroll before anyone's picked anything. knownKeyspaces is what makes that
+// a *default* rather than a standing rule: a keyspace is only auto-collapsed
+// the first time renderTablesPanel ever sees it, so once someone expands one
+// it stays expanded across poll refreshes/selection changes instead of
+// snapping back closed.
+const collapsedKeyspaces = new Set();
+const knownKeyspaces = new Set();
 
 // Results history: one entry per tool invocation, kept as a tab. Async
 // updates always write into their own entry regardless of which tab is
@@ -757,6 +833,7 @@ let TOOLS = [
   {
     id: 'status',
     label: 'Status',
+    category: 'Status',
     diffable: false,
     // Instant: reads the already-loaded row data, no new network call.
     // Returns the same StatsResult shape every server-driven tool does, so
@@ -764,6 +841,20 @@ let TOOLS = [
     run: async (row) => statusStatsResult(row),
   },
 ];
+
+// The category a tool falls under drives both the side-panel button list
+// (see renderNodeList's category select) and what the middle-click wheel
+// offers -- narrowing the wheel by category is what keeps it usable as the
+// catalog keeps growing, rather than just growing wheelRadius() forever.
+// 'all' is the only category not present on any real tool -- it means "no
+// filter", not "put me in a category named all".
+let selectedToolCategory = 'all';
+let lastNodeListRows = []; // last renderNodeList() input, so the category select's change handler can re-render without a fresh /nodes fetch
+
+function visibleTools() {
+  if (selectedToolCategory === 'all') return TOOLS;
+  return TOOLS.filter(t => t.category === selectedToolCategory);
+}
 
 async function loadTools() {
   try {
@@ -774,6 +865,7 @@ async function loadTools() {
       TOOLS.push({
         id: def.name,
         label: def.label,
+        category: def.category || 'Other',
         diffable: !!def.diffable,
         requiresTable: !!def.requiresTable,
         // table is only ever non-null for a requiresTable tool -- see
@@ -847,6 +939,11 @@ envSelect.addEventListener('change', () => {
   selectedTables.clear();
   lastTablesRaw = null;
   refresh().then(loadTables);
+});
+
+dcSelectEl.addEventListener('change', () => {
+  dcFilter = dcSelectEl.value;
+  if (lastNodesRaw) render(lastNodesRaw);
 });
 
 // Every top-level key in the /nodes response is a node that Prober could
@@ -1194,10 +1291,28 @@ function renderTablesPanel() {
     (byKeyspace[keyspace] = byKeyspace[keyspace] || []).push(table);
   }
   const keyspaces = Object.keys(byKeyspace).sort();
+  for (const ks of keyspaces) {
+    if (!knownKeyspaces.has(ks)) {
+      knownKeyspaces.add(ks);
+      collapsedKeyspaces.add(ks); // first time seeing this keyspace -- default it closed
+    }
+  }
 
   let rowsHtml = '';
   for (const keyspace of keyspaces) {
-    rowsHtml += `<div class="list-dc-label">${keyspace}</div>`;
+    const collapsed = collapsedKeyspaces.has(keyspace);
+    rowsHtml += `
+      <div class="ks-group${collapsed ? ' collapsed' : ''}" data-ks="${keyspace}">
+        <div class="ks-header">
+          <button type="button" class="ks-toggle${collapsed ? ' collapsed' : ''}" data-ks="${keyspace}">
+            <span class="ks-caret">&#9662;</span>${keyspace} <span class="ks-count">(${byKeyspace[keyspace].length})</span>
+          </button>
+          <span class="ks-actions">
+            <button type="button" class="link-btn ks-select-all" data-ks="${keyspace}">select all</button>
+            <button type="button" class="link-btn ks-clear" data-ks="${keyspace}">clear</button>
+          </span>
+        </div>
+    `;
     for (const table of byKeyspace[keyspace]) {
       rowsHtml += `
         <label class="list-row" data-table="${table}">
@@ -1206,6 +1321,7 @@ function renderTablesPanel() {
         </label>
       `;
     }
+    rowsHtml += `</div>`;
   }
 
   tablesPanelEl.innerHTML = `
@@ -1213,6 +1329,8 @@ function renderTablesPanel() {
       <span>Tables</span>
       <span class="list-header-actions">
         <span class="tables-selected-count" id="tablesSelectedCount">${selectedTables.size} selected</span>
+        <button class="link-btn" id="tablesCollapseAllBtn">collapse all</button>
+        <button class="link-btn" id="tablesExpandAllBtn">expand all</button>
         <button class="link-btn" id="tablesSelectAllBtn">select all</button>
         <button class="link-btn" id="tablesClearBtn">clear</button>
         <button class="link-btn" id="tablesRefreshBtn" title="Re-fetch the table list (in case a table was just created/dropped)">refresh</button>
@@ -1246,6 +1364,36 @@ function renderTablesPanel() {
     renderTablesPanel();
   });
   document.getElementById('tablesRefreshBtn').addEventListener('click', loadTables);
+  document.getElementById('tablesCollapseAllBtn').addEventListener('click', () => {
+    for (const ks of keyspaces) collapsedKeyspaces.add(ks);
+    renderTablesPanel();
+  });
+  document.getElementById('tablesExpandAllBtn').addEventListener('click', () => {
+    for (const ks of keyspaces) collapsedKeyspaces.delete(ks);
+    renderTablesPanel();
+  });
+  tablesPanelEl.querySelectorAll('.ks-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ks = btn.dataset.ks;
+      if (collapsedKeyspaces.has(ks)) collapsedKeyspaces.delete(ks);
+      else collapsedKeyspaces.add(ks);
+      renderTablesPanel();
+    });
+  });
+  // Per-keyspace select all/clear -- byKeyspace is this render's own closure
+  // variable, so no need to recompute which tables belong to which keyspace.
+  tablesPanelEl.querySelectorAll('.ks-select-all').forEach(btn => {
+    btn.addEventListener('click', () => {
+      for (const table of byKeyspace[btn.dataset.ks] || []) selectedTables.add(table);
+      renderTablesPanel();
+    });
+  });
+  tablesPanelEl.querySelectorAll('.ks-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      for (const table of byKeyspace[btn.dataset.ks] || []) selectedTables.delete(table);
+      renderTablesPanel();
+    });
+  });
 }
 
 // A list-based alternative to the middle-click wheel, for anyone who'd
@@ -1253,6 +1401,7 @@ function renderTablesPanel() {
 // Shares the exact same selection state and TOOLS catalog as the ring/wheel --
 // this is a different way to reach the same actions, not a separate feature.
 function renderNodeList(rows) {
+  lastNodeListRows = rows;
   if (rows.length === 0) {
     nodeListPanelEl.innerHTML = '';
     return;
@@ -1277,6 +1426,18 @@ function renderNodeList(rows) {
     }
   }
 
+  // Category order: first-appearance order of TOOLS entries (which follows
+  // the server's own Catalog order), with 'all' pinned first -- not
+  // alphabetical, so related tools (e.g. every Performance one) stay
+  // grouped the same way they are in the unfiltered list.
+  const categories = ['all'];
+  for (const t of TOOLS) {
+    if (t.category && !categories.includes(t.category)) categories.push(t.category);
+  }
+  if (!categories.includes(selectedToolCategory)) selectedToolCategory = 'all';
+  const visible = visibleTools();
+  const showSetSettings = selectedToolCategory === 'all' || selectedToolCategory === 'Settings';
+
   nodeListPanelEl.innerHTML = `
     <div class="list-header">
       <span>Nodes</span>
@@ -1285,13 +1446,23 @@ function renderNodeList(rows) {
         <button class="link-btn" id="listClearBtn">clear selection</button>
       </span>
     </div>
+    <div class="tool-category-row">
+      <select id="toolCategorySelect">
+        ${categories.map(c => `<option value="${c}" ${c === selectedToolCategory ? 'selected' : ''}>${c === 'all' ? 'All tools' : c}</option>`).join('')}
+      </select>
+    </div>
     <div class="list-toolbar">
-      ${TOOLS.map(t => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`).join('')}
-      <button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>
+      ${visible.map(t => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`).join('')}
+      ${showSetSettings ? `<button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>` : ''}
     </div>
     <div class="list-body">${rowsHtml}</div>
     <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click on the ring.</div>
   `;
+
+  document.getElementById('toolCategorySelect').addEventListener('change', (evt) => {
+    selectedToolCategory = evt.target.value;
+    renderNodeList(lastNodeListRows);
+  });
 
   nodeListPanelEl.querySelectorAll('.list-checkbox').forEach(cb => {
     cb.addEventListener('click', (evt) => {
@@ -1318,11 +1489,14 @@ function renderNodeList(rows) {
       runTool(tool, targets);
     });
   });
-  document.getElementById('setSettingsBtn').addEventListener('click', () => {
-    const targets = currentSelectionTargets();
-    if (targets.length === 0) return;
-    openSetSettings(targets);
-  });
+  const setSettingsBtn = document.getElementById('setSettingsBtn');
+  if (setSettingsBtn) {
+    setSettingsBtn.addEventListener('click', () => {
+      const targets = currentSelectionTargets();
+      if (targets.length === 0) return;
+      openSetSettings(targets);
+    });
+  }
   document.getElementById('listClearBtn').addEventListener('click', deselectAll);
   document.getElementById('listSelectAllBtn').addEventListener('click', () => selectAll(rows));
 }
@@ -1469,8 +1643,8 @@ const WHEEL_DEADZONE = 24;
 // started overlapping once it passed a dozen. 90 stays the floor for a
 // small catalog (or before loadTools() has populated TOOLS beyond the
 // built-in "Status" entry).
-function wheelRadius() {
-  return Math.max(90, TOOLS.length * 26);
+function wheelRadius(toolCount) {
+  return Math.max(90, toolCount * 26);
 }
 
 function openWheel(evt, row) {
@@ -1482,7 +1656,10 @@ function openWheel(evt, row) {
     : [row];
   if (targets.length === 0) return;
 
-  wheelState = { cx: evt.clientX, cy: evt.clientY, targets, hoveredIndex: -1, el: null };
+  // Snapshot the current category filter's tools for this one interaction --
+  // the wheel shouldn't reshuffle mid-drag even if something else changed
+  // selectedToolCategory in the background.
+  wheelState = { cx: evt.clientX, cy: evt.clientY, targets, hoveredIndex: -1, el: null, tools: visibleTools() };
   renderWheel();
 
   const onMove = (e) => updateWheelHover(e.clientX, e.clientY);
@@ -1490,7 +1667,7 @@ function openWheel(evt, row) {
     if (e.button !== 1) return;
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    const chosen = wheelState && wheelState.hoveredIndex >= 0 ? TOOLS[wheelState.hoveredIndex] : null;
+    const chosen = wheelState && wheelState.hoveredIndex >= 0 ? wheelState.tools[wheelState.hoveredIndex] : null;
     const chosenTargets = wheelState ? wheelState.targets : [];
     closeWheel();
     if (chosen) runTool(chosen, chosenTargets);
@@ -1512,9 +1689,9 @@ function renderWheel() {
     : wheelState.targets[0].ip;
   el.appendChild(center);
 
-  const radius = wheelRadius();
-  TOOLS.forEach((tool, i) => {
-    const angle = (2 * Math.PI * i) / TOOLS.length - Math.PI / 2;
+  const radius = wheelRadius(wheelState.tools.length);
+  wheelState.tools.forEach((tool, i) => {
+    const angle = (2 * Math.PI * i) / wheelState.tools.length - Math.PI / 2;
     const x = radius * Math.cos(angle);
     const y = radius * Math.sin(angle);
     const item = document.createElement('div');
@@ -1544,8 +1721,8 @@ function updateWheelHover(clientX, clientY) {
   if (dist >= WHEEL_DEADZONE) {
     let angle = Math.atan2(dy, dx) + Math.PI / 2;
     if (angle < 0) angle += 2 * Math.PI;
-    const segment = (2 * Math.PI) / TOOLS.length;
-    newIndex = Math.round(angle / segment) % TOOLS.length;
+    const segment = (2 * Math.PI) / wheelState.tools.length;
+    newIndex = Math.round(angle / segment) % wheelState.tools.length;
   }
 
   if (newIndex !== wheelState.hoveredIndex) {
@@ -2025,6 +2202,15 @@ document.addEventListener('keydown', (evt) => {
   if (evt.key === 'Escape' && !setSettingsOverlayEl.hidden) closeSetSettings();
 });
 
+// Rebuilt from the live DC list every render() call, same as each DC
+// block's own rack-select -- cheap, and keeps it correct if a DC is
+// added/removed without needing separate diffing logic.
+function renderDcSelect(allDcNames) {
+  dcSelectEl.innerHTML = `<option value="all">All DCs (${allDcNames.length})</option>` +
+    allDcNames.map(dc => `<option value="${dc}">${dc}</option>`).join('');
+  dcSelectEl.value = dcFilter;
+}
+
 function render(nodes) {
   const rows = buildRows(nodes);
   dcsEl.innerHTML = '';
@@ -2048,7 +2234,10 @@ function render(nodes) {
     (byDc[row.dc] = byDc[row.dc] || []).push(row);
   }
 
-  const dcNames = Object.keys(byDc).sort();
+  const allDcNames = Object.keys(byDc).sort();
+  if (!allDcNames.includes(dcFilter)) dcFilter = 'all';
+  renderDcSelect(allDcNames);
+  const dcNames = dcFilter === 'all' ? allDcNames : [dcFilter];
   for (const dc of dcNames) {
     const block = document.createElement('div');
     block.className = 'dc-block';
