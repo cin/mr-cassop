@@ -10,25 +10,34 @@ import (
 var (
 	allEndpointsValue = AllEndpointStates{
 		"/10.244.0.5": EndpointState{
-			Status:      "NORMAL",
-			DC:          "dc1",
-			Rack:        "rack1",
-			Internal_IP: "10.244.0.5",
-			RPC_Address: "10.244.0.5",
+			Status:          "NORMAL",
+			DC:              "dc1",
+			Rack:            "rack1",
+			Internal_IP:     "10.244.0.5",
+			RPC_Address:     "10.244.0.5",
+			Load:            "165615",
+			Host_ID:         "d629438b-7158-4558-8675-80dc705ddc8e",
+			Release_Version: "3.11.11",
 		},
 		"/10.244.0.6": EndpointState{
-			Status:      "NORMAL",
-			DC:          "dc1",
-			Rack:        "rack1",
-			Internal_IP: "10.244.0.6",
-			RPC_Address: "10.244.0.6",
+			Status:          "NORMAL",
+			DC:              "dc1",
+			Rack:            "rack1",
+			Internal_IP:     "10.244.0.6",
+			RPC_Address:     "10.244.0.6",
+			Load:            "134596",
+			Host_ID:         "3e0d7191-84af-40cf-9e7f-0ce11c925e7f",
+			Release_Version: "3.11.11",
 		},
 		"/10.244.0.7": EndpointState{
-			Status:      "NORMAL",
-			DC:          "dc2",
-			Rack:        "rack1",
-			Internal_IP: "10.244.0.7",
-			RPC_Address: "10.244.0.7",
+			Status:          "NORMAL",
+			DC:              "dc2",
+			Rack:            "rack1",
+			Internal_IP:     "10.244.0.7",
+			RPC_Address:     "10.244.0.7",
+			Load:            "140333",
+			Host_ID:         "070ef8d2-7f54-4fd4-b34d-dfd8c2690588",
+			Release_Version: "3.11.11",
 		},
 	}
 )
@@ -62,12 +71,52 @@ func TestAllEndpointStates_UnmarshaText(t *testing.T) {
 
 func TestCassResponse_UnmarshalText(t *testing.T) {
 	tests := []struct {
-		name string
-		e    CassandraNodeState
-		data string
+		name     string
+		e        CassandraNodeState
+		expected CassandraNodeState
+		data     string
 	}{
 		{
 			name: "unmarshalls prettified SimpleStates and unescaped AllEndpointStates",
+			expected: CassandraNodeState{
+				SimpleStates: map[string]string{
+					"/10.244.0.5": "UP",
+					"/10.244.0.6": "UP",
+					"/10.244.0.7": "UP",
+				},
+				AllEndpointStates: AllEndpointStates{
+					"/10.244.0.5": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc1",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.5",
+						RPC_Address:     "10.244.0.5",
+						Load:            "254587",
+						Host_ID:         "070ef8d2-7f54-4fd4-b34d-dfd8c2690588",
+						Release_Version: "3.11.11",
+					},
+					"/10.244.0.6": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc1",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.6",
+						RPC_Address:     "10.244.0.6",
+						Load:            "237311",
+						Host_ID:         "d629438b-7158-4558-8675-80dc705ddc8e",
+						Release_Version: "3.11.11",
+					},
+					"/10.244.0.7": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc2",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.7",
+						RPC_Address:     "10.244.0.7",
+						Load:            "265004",
+						Host_ID:         "3e0d7191-84af-40cf-9e7f-0ce11c925e7f",
+						Release_Version: "3.11.11",
+					},
+				},
+			},
 			data: `{
 						"SimpleStates": {
 							"/10.244.0.6": "UP",
@@ -79,25 +128,56 @@ func TestCassResponse_UnmarshalText(t *testing.T) {
 		},
 		{
 			name: "unmarshalls minified and unescaped backlashes and newlines",
+			expected: CassandraNodeState{
+				SimpleStates: map[string]string{
+					"/10.244.0.5": "UP",
+					"/10.244.0.6": "UP",
+					"/10.244.0.7": "UP",
+				},
+				AllEndpointStates: AllEndpointStates{
+					"/10.244.0.5": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc1",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.5",
+						RPC_Address:     "10.244.0.5",
+						Load:            "284363",
+						Host_ID:         "d629438b-7158-4558-8675-80dc705ddc8e",
+						Release_Version: "3.11.11",
+					},
+					"/10.244.0.6": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc1",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.6",
+						RPC_Address:     "10.244.0.6",
+						Load:            "274238",
+						Host_ID:         "3e0d7191-84af-40cf-9e7f-0ce11c925e7f",
+						Release_Version: "3.11.11",
+					},
+					"/10.244.0.7": EndpointState{
+						Status:          "NORMAL",
+						DC:              "dc2",
+						Rack:            "rack1",
+						Internal_IP:     "10.244.0.7",
+						RPC_Address:     "10.244.0.7",
+						Load:            "285552",
+						Host_ID:         "070ef8d2-7f54-4fd4-b34d-dfd8c2690588",
+						Release_Version: "3.11.11",
+					},
+				},
+			},
 			data: `{"SimpleStates":{"\/10.244.0.6":"UP","\/10.244.0.7":"UP","\/10.244.0.5":"UP"},"AllEndpointStates":"\/10.244.0.5\n  generation:1615484112\n  heartbeat:147677\n  STATUS:17:NORMAL,-1068096267908218392\n  LOAD:147670:284363.0\n  SCHEMA:13:fed73249-15e3-378a-946f-7847dc4ed28d\n  DC:9:dc1\n  RACK:11:rack1\n  RELEASE_VERSION:5:3.11.11\n  INTERNAL_IP:7:10.244.0.5\n  RPC_ADDRESS:4:10.244.0.5\n  NET_VERSION:2:11\n  HOST_ID:3:d629438b-7158-4558-8675-80dc705ddc8e\n  RPC_READY:29:true\n  TOKENS:16:<hidden>\n\/10.244.0.6\n  generation:1615484110\n  heartbeat:147680\n  STATUS:17:NORMAL,-2918089050085335913\n  LOAD:147672:274238.0\n  SCHEMA:13:fed73249-15e3-378a-946f-7847dc4ed28d\n  DC:9:dc1\n  RACK:11:rack1\n  RELEASE_VERSION:5:3.11.11\n  INTERNAL_IP:7:10.244.0.6\n  RPC_ADDRESS:4:10.244.0.6\n  NET_VERSION:2:11\n  HOST_ID:3:3e0d7191-84af-40cf-9e7f-0ce11c925e7f\n  RPC_READY:29:true\n  TOKENS:16:<hidden>\n\/10.244.0.7\n  generation:1615484111\n  heartbeat:147680\n  STATUS:17:NORMAL,-139581499681091162\n  LOAD:147672:285552.0\n  SCHEMA:13:fed73249-15e3-378a-946f-7847dc4ed28d\n  DC:9:dc2\n  RACK:11:rack1\n  RELEASE_VERSION:5:3.11.11\n  INTERNAL_IP:7:10.244.0.7\n  RPC_ADDRESS:4:10.244.0.7\n  NET_VERSION:2:11\n  HOST_ID:3:070ef8d2-7f54-4fd4-b34d-dfd8c2690588\n  RPC_READY:29:true\n  TOKENS:16:<hidden>\n"}`,
 		},
 	}
 
-	cassResponseValue := CassandraNodeState{
-		SimpleStates: map[string]string{
-			"/10.244.0.5": "UP",
-			"/10.244.0.6": "UP",
-			"/10.244.0.7": "UP",
-		},
-		AllEndpointStates: allEndpointsValue,
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := json.Unmarshal([]byte(tt.data), &tt.e); err != nil {
 				t.Error("UnmarshalJSON() error = ", err)
 			}
-			if !cmp.Equal(tt.e, cassResponseValue) {
-				t.Error("Unmarshalled value is not equal to expected", cmp.Diff(cassResponseValue, tt.e))
+			if !cmp.Equal(tt.e, tt.expected) {
+				t.Error("Unmarshalled value is not equal to expected", cmp.Diff(tt.expected, tt.e))
 			}
 		})
 	}
