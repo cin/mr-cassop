@@ -11,6 +11,9 @@ func (n *client) Decommission(ctx context.Context, nodeIP string) error {
 		Type:      jmxRequestTypeExec,
 		Mbean:     mbeanCassandraDBStorageService,
 		Operation: "decommission",
+		// Cassandra 4.0+ added a "force" boolean parameter to StorageService.decommission();
+		// false matches nodetool's default (non-forced) decommission behavior.
+		Arguments: []string{"false"},
 	}
 
 	_, err := n.jolokia.Post(ctx, req, nodeIP)
