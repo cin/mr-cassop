@@ -26,7 +26,7 @@ import (
 var errDCDecommissionBlocked = errors.New("DC decommission blocked")
 
 func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Context, cc *dbv1alpha1.CassandraCluster, podList *v1.PodList, nodesList *v1.NodeList, allDCs []dbv1alpha1.DC, adminRoleSecret *v1.Secret) (bool, error) {
-	broadcastAddresses, err := getBroadcastAddresses(cc, podList.Items, nodesList.Items)
+	broadcastAddresses, err := getBroadcastAddresses(cc, excludePodsPendingRemoval(cc, podList.Items), nodesList.Items)
 	if err != nil {
 		return false, errors.Wrap(err, "can't get broadcast addresses")
 	}
@@ -192,6 +192,15 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 
 	if decommissionPod == nil {
 		return errors.Errorf("couldn't find pod %q to start the decommission", decommissionPodName)
+	}
+
+	if len(decommissionPod.Status.PodIP) == 0 {
+		// the pod never got scheduled/joined the ring (e.g. leftover from a scale-up that
+		// exceeded cluster capacity) - there's nothing to decommission, just scale it away.
+		r.Log.Infof("pod %s/%s never joined the cluster (no IP assigned), scaling down the statefulset without decommissioning",
+			decommissionPod.Namespace, decommissionPod.Name)
+		*sts.Spec.Replicas = *sts.Spec.Replicas - 1
+		return r.Update(ctx, &sts)
 	}
 
 	adminSecret, err := r.adminRoleSecret(ctx, cc)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
@@ -50,7 +51,14 @@ func (r *CassandraClusterReconciler) podsConfigMapData(ctx context.Context, cc *
 		return nil, nil // the statefulset may not be created yet
 	}
 
-	broadcastAddresses, err := getBroadcastAddresses(cc, podList.Items, nodesList.Items)
+	// pods that are unscheduled (no PodIP yet) and whose ordinal is beyond the currently desired
+	// replica count for their DC are on their way out (e.g. a scale-up that couldn't be scheduled,
+	// now being scaled back down) - skip them here instead of blocking the whole reconcile on a pod
+	// that will never get an IP. Pods that already joined the ring (have an IP) still go through the
+	// normal path so they can be properly decommissioned.
+	pods := excludePodsPendingRemoval(cc, podList.Items)
+
+	broadcastAddresses, err := getBroadcastAddresses(cc, pods, nodesList.Items)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting broadcast addresses")
 	}
@@ -65,15 +73,15 @@ func (r *CassandraClusterReconciler) podsConfigMapData(ctx context.Context, cc *
 		return nil, errors.Wrap(err, "failed to get init order info")
 	}
 
-	originalPodIPs, err := r.reconcilePodIPsConfigMap(ctx, cc, podList.Items, broadcastAddresses)
+	originalPodIPs, err := r.reconcilePodIPsConfigMap(ctx, cc, pods, broadcastAddresses)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't get the list of pod IPs")
 	}
 
 	cmData := make(map[string]string)
-	seedNodesReady := dcSeedPodsReady(podList.Items, nextDCToInit)
-	nextNonSeedPodName := nextNonSeedPodToInit(podList.Items, nextDCToInit)
-	for _, pod := range podList.Items {
+	seedNodesReady := dcSeedPodsReady(pods, nextDCToInit)
+	nextNonSeedPodName := nextNonSeedPodToInit(pods, nextDCToInit)
+	for _, pod := range pods {
 		entryName := pod.Name + "_" + string(pod.UID) + ".sh"
 
 		// Hold the config entry creation until pod is Running and ip is assigned
@@ -255,6 +263,43 @@ func (r *CassandraClusterReconciler) getSeedsList(ctx context.Context, cc *v1alp
 	}
 
 	return cassandraSeeds, nil
+}
+
+// excludePodsPendingRemoval filters out pods that never got a PodIP and whose ordinal is beyond
+// the currently desired replica count for their DC. Such pods (e.g. from a scale-up that
+// couldn't be scheduled) are about to be removed by reconcileCassandraScaling and should not
+// block reconciliation of every other pod while waiting for an IP they'll never get.
+func excludePodsPendingRemoval(cc *v1alpha1.CassandraCluster, pods []v1.Pod) []v1.Pod {
+	dcReplicas := dcsMap(cc)
+
+	filtered := make([]v1.Pod, 0, len(pods))
+	for _, pod := range pods {
+		if len(pod.Status.PodIP) == 0 {
+			desiredReplicas, ok := dcReplicas[pod.Labels[v1alpha1.CassandraClusterDC]]
+			if ok {
+				if ordinal, err := podOrdinal(pod.Name); err == nil && ordinal >= desiredReplicas {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, pod)
+	}
+
+	return filtered
+}
+
+func podOrdinal(podName string) (int32, error) {
+	idx := strings.LastIndex(podName, "-")
+	if idx == -1 || idx == len(podName)-1 {
+		return 0, errors.Errorf("cannot parse ordinal from pod name %q", podName)
+	}
+
+	ordinal, err := strconv.Atoi(podName[idx+1:])
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot parse ordinal from pod name %q", podName)
+	}
+
+	return int32(ordinal), nil
 }
 
 func getBroadcastAddresses(cc *v1alpha1.CassandraCluster, pods []v1.Pod, nodes []v1.Node) (map[string]string, error) {
