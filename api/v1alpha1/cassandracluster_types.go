@@ -286,6 +286,11 @@ type Cassandra struct {
 	Sysctls                       map[string]string `json:"sysctls,omitempty"`
 	Monitoring                    Monitoring        `json:"monitoring,omitempty"`
 	ConfigOverrides               string            `json:"configOverrides,omitempty"`
+	// Annotations to add to the ServiceAccount used by the cassandra pod (shared with its icarus
+	// sidecar). Primarily for cloud workload-identity federation (e.g. AWS IRSA's
+	// "eks.amazonaws.com/role-arn", GCP Workload Identity's "iam.gke.io/gcp-service-account"),
+	// so backup/restore can authenticate to cloud storage without any static credentials.
+	ServiceAccountAnnotations map[string]string `json:"serviceAccountAnnotations,omitempty"`
 }
 
 type Persistence struct {
