@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,13 +18,21 @@ import (
 var (
 	testError       = errors.New("test error message")
 	nilContextError = errors.New("net/http: nil Context")
-	// Wrapping the client's Transport in authTransport means net/http no longer recognizes it as a
-	// "known" *http.Transport for its optimized Client.Timeout bookkeeping, so a timed-out request
-	// surfaces as a plain context error instead of being annotated with
-	// "(Client.Timeout exceeded while awaiting headers)". The request still fails as expected.
-	timeoutExceededError = errors.New("context deadline exceeded")
-	defaultClient        = http.DefaultClient
+	defaultClient   = http.DefaultClient
 )
+
+// isTimeoutError matches the error an http.Client with a very short Timeout returns once it
+// fires. Depending on exactly where in net/http's request lifecycle the timeout lands, the
+// message can read either "context deadline exceeded" or "Client.Timeout exceeded while
+// awaiting headers" -- both are legitimate, and with a timeout this short which one you get is
+// a coin flip, not a code bug. Check the portable net.Error.Timeout() property instead of
+// string-matching either wording.
+func isTimeoutError() types.GomegaMatcher {
+	return WithTransform(func(err error) bool {
+		var netErr net.Error
+		return errors.As(err, &netErr) && netErr.Timeout()
+	}, BeTrue())
+}
 
 type test struct {
 	name           string
@@ -108,7 +117,7 @@ func TestIsRunning(t *testing.T) {
 		context:        context.Background(),
 		handler:        handleResponseError(testError, http.StatusInternalServerError),
 		expectedResult: false,
-		errorMatcher:   ContainSubstring(timeoutExceededError.Error()),
+		errorMatcher:   isTimeoutError(),
 	}
 	t.Run(tc.name, func(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
@@ -119,7 +128,7 @@ func TestIsRunning(t *testing.T) {
 		}, 1)
 		result, err := rc.IsRunning(tc.context)
 		asserts.Expect(result).To(Equal(tc.expectedResult))
-		asserts.Expect(err.Error()).To(tc.errorMatcher)
+		asserts.Expect(err).To(tc.errorMatcher)
 		ts.Close()
 	})
 }
@@ -174,7 +183,7 @@ func TestClusterExists(t *testing.T) {
 		context:        context.Background(),
 		handler:        handleResponseError(testError, http.StatusInternalServerError),
 		expectedResult: false,
-		errorMatcher:   ContainSubstring(timeoutExceededError.Error()),
+		errorMatcher:   isTimeoutError(),
 	}
 	t.Run(tc.name, func(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
@@ -185,7 +194,7 @@ func TestClusterExists(t *testing.T) {
 		}, 1)
 		result, err := rc.ClusterExists(tc.context)
 		asserts.Expect(result).To(Equal(tc.expectedResult))
-		asserts.Expect(err.Error()).To(tc.errorMatcher)
+		asserts.Expect(err).To(tc.errorMatcher)
 		ts.Close()
 	})
 }
@@ -235,7 +244,7 @@ func TestAddCluster(t *testing.T) {
 		name:         "returns error if http request fails",
 		context:      context.Background(),
 		handler:      handleResponseError(testError, http.StatusInternalServerError),
-		errorMatcher: ContainSubstring(timeoutExceededError.Error()),
+		errorMatcher: isTimeoutError(),
 	}
 	t.Run(tc.name, func(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
@@ -245,7 +254,7 @@ func TestAddCluster(t *testing.T) {
 			Timeout: 1 * time.Microsecond,
 		}, 1)
 		err = rc.AddCluster(tc.context, seed)
-		asserts.Expect(err.Error()).To(tc.errorMatcher)
+		asserts.Expect(err).To(tc.errorMatcher)
 		ts.Close()
 	})
 }

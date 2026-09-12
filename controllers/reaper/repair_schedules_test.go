@@ -106,7 +106,7 @@ func TestRepairSchedules(t *testing.T) {
 		name:         "returns error if http request fails",
 		context:      context.Background(),
 		handler:      handleResponseError(testError, http.StatusInternalServerError),
-		errorMatcher: ContainSubstring(timeoutExceededError.Error()),
+		errorMatcher: isTimeoutError(),
 	}
 	t.Run(tc.name, func(t *testing.T) {
 		ts := httptest.NewServer(tc.handler)
@@ -116,7 +116,7 @@ func TestRepairSchedules(t *testing.T) {
 			Timeout: 100 * time.Microsecond,
 		}, 1)
 		err = rc.CreateRepairSchedule(tc.context, repair)
-		asserts.Expect(err.Error()).To(tc.errorMatcher)
+		asserts.Expect(err).To(tc.errorMatcher)
 		ts.Close()
 	})
 }
