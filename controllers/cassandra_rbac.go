@@ -132,9 +132,10 @@ func (r *CassandraClusterReconciler) reconcileCassandraServiceAccount(ctx contex
 	saName := names.CassandraServiceAccount(cc.Name)
 	desiredServiceAccount := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      saName,
-			Namespace: cc.Namespace,
-			Labels:    labels.CombinedComponentLabels(cc, v1alpha1.CassandraClusterComponentCassandra),
+			Name:        saName,
+			Namespace:   cc.Namespace,
+			Labels:      labels.CombinedComponentLabels(cc, v1alpha1.CassandraClusterComponentCassandra),
+			Annotations: cc.Spec.Cassandra.ServiceAccountAnnotations,
 		},
 	}
 
@@ -155,6 +156,7 @@ func (r *CassandraClusterReconciler) reconcileCassandraServiceAccount(ctx contex
 		r.Log.Info("Updating cassandra Service account")
 		r.Log.Debugf(compare.DiffServiceAccount(actualServiceAccount, desiredServiceAccount))
 		actualServiceAccount.Labels = desiredServiceAccount.Labels
+		actualServiceAccount.Annotations = desiredServiceAccount.Annotations
 		if err = r.Update(ctx, actualServiceAccount); err != nil {
 			return errors.Wrap(err, "Unable to update cassandra service account")
 		}
