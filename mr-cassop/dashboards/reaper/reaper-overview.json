@@ -81,7 +81,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "datasource": {
@@ -89,12 +88,12 @@
             "uid": "prometheus"
           },
           "exemplar": true,
-          "expr": "RepairRunner_repairProgress{pod=~\"$pod\", runid=~\"$runid\"}",
+          "expr": "io_cassandrareaper_service_RepairRunner_repairProgress{pod=~\"$pod\", repairid=~\"$runid\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "runid: {{runid}}",
+          "legendFormat": "runid: {{repairid}}",
           "refId": "A"
         }
       ],
@@ -173,7 +172,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "datasource": {
@@ -181,409 +179,13 @@
             "uid": "prometheus"
           },
           "exemplar": true,
-          "expr": "rate(RepairRunner_millisSinceLastRepair{pod=~\"$pod\",runid=~\"$runid\"}[2m])",
+          "expr": "rate(io_cassandrareaper_service_RepairRunner_millisSinceLastRepair{pod=~\"$pod\",repairid=~\"$runid\"}[2m])",
           "interval": "",
-          "legendFormat": "runid: {{runid}}",
+          "legendFormat": "runid: {{repairid}}",
           "refId": "A"
         }
       ],
       "title": "Last job duration",
-      "type": "timeseries"
-    },
-    {
-      "description": "That graph shows amount of ignored by different reasons segment",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "links": [],
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "id": 26,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "sum"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "Total ignored",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores_on_client_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "ignored on client timeout",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores_on_connection_error\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "ignored on connection errors",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores_on_read_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "ignored on read timeout",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores_on_write_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "ignored on write timeout",
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"ignores_on_unavailable\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "ignored on Cassandra unavailable",
-          "refId": "F"
-        }
-      ],
-      "title": "Ignored segments ",
-      "type": "timeseries"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "links": [],
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 24,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "sum"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "Total retries",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries_on_client_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "retries on timeout",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries_on_connection_erroror\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "retries on connection errors",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries_on_read_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "retries on read timeout",
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries_on_write_timeout\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "retries on write timeout",
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"retries_on_unavailable\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "retries on Cassandra unavailable",
-          "refId": "F"
-        }
-      ],
-      "title": "Segments retries amount",
-      "type": "timeseries"
-    },
-    {
-      "description": "Timeouts on read/write operations in Cassandra cluster",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "links": [],
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "sum"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"read_timeouts\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "read timeout",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"write_timeouts\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "write timeout",
-          "refId": "B"
-        }
-      ],
-      "title": "R/W timeouts",
       "type": "timeseries"
     },
     {
@@ -643,8 +245,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 16
+        "x": 0,
+        "y": 8
       },
       "id": 8,
       "options": {
@@ -658,7 +260,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "datasource": {
@@ -681,24 +282,6 @@
           "interval": "",
           "legendFormat": "Take lead: {{pod}}",
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "increase(io_cassandrareaper_service_SegmentRunner_takeLead_failed{instance=\"$instance\"}[1m])",
-          "legendFormat": "Take lead failed: {{instance}}",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "increase(io_cassandrareaper_service_SegmentRunner_renewLead_failed{instance=\"$instance\"}[1m])",
-          "legendFormat": "Renew lead failed: {{instance}}",
-          "refId": "D"
         }
       ],
       "title": "Lead operations",
@@ -761,8 +344,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 24
+        "x": 12,
+        "y": 8
       },
       "id": 28,
       "options": {
@@ -780,7 +363,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "datasource": {
@@ -788,128 +370,13 @@
             "uid": "prometheus"
           },
           "exemplar": true,
-          "expr": "io_cassandrareaper_jmx_JmxConnectionFactory_openJmxConnections{pod=~\"$pod\"}",
+          "expr": "io_cassandrareaper_management_jmx_JmxManagementConnectionFactory_openJmxConnections{pod=~\"$pod\"}",
           "interval": "",
           "legendFormat": "pod: {{pod}}",
           "refId": "A"
         }
       ],
       "title": "Active JMX connections to C*",
-      "type": "timeseries"
-    },
-    {
-      "description": "Different type of errors on cooperation reaper with Cassandra cluster.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "links": [],
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
-      "id": 20,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "sum"
-          ],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"unavailables\", pod=~\"$pod\"}[2m])",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Cluster unavailable:",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"connection_errors\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "Connection errors:",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "exemplar": true,
-          "expr": "increase(core_Cluster{metric=\"authentication_errors\", pod=~\"$pod\"}[2m])",
-          "interval": "",
-          "legendFormat": "Authentication errors:",
-          "refId": "C"
-        }
-      ],
-      "title": "C* cluster errors",
       "type": "timeseries"
     },
     {
@@ -970,7 +437,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 32
+        "y": 16
       },
       "id": 6,
       "options": {
@@ -987,7 +454,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "datasource": {
@@ -1043,7 +509,7 @@
           "type": "prometheus",
           "uid": "$datasource"
         },
-        "definition": "label_values(io_cassandrareaper_jmx_JmxConnectionFactory_jmxConnectionsIntializer_count, pod)",
+        "definition": "label_values(io_cassandrareaper_management_jmx_JmxManagementConnectionFactory_jmxConnectionsIntializer_count, pod)",
         "hide": 0,
         "includeAll": true,
         "label": "pod",
@@ -1051,7 +517,7 @@
         "name": "pod",
         "options": [],
         "query": {
-          "query": "label_values(io_cassandrareaper_jmx_JmxConnectionFactory_jmxConnectionsIntializer_count, pod)",
+          "query": "label_values(io_cassandrareaper_management_jmx_JmxManagementConnectionFactory_jmxConnectionsIntializer_count, pod)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
@@ -1074,7 +540,7 @@
           "type": "prometheus",
           "uid": "$datasource"
         },
-        "definition": "label_values(RepairRunner_repairProgress, runid)",
+        "definition": "label_values(io_cassandrareaper_service_RepairRunner_repairProgress, repairid)",
         "hide": 0,
         "includeAll": true,
         "label": "runid",
@@ -1082,7 +548,7 @@
         "name": "runid",
         "options": [],
         "query": {
-          "query": "label_values(RepairRunner_repairProgress, runid)",
+          "query": "label_values(io_cassandrareaper_service_RepairRunner_repairProgress, repairid)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -1117,6 +583,6 @@
   "timezone": "browser",
   "title": "Cassandra - Reaper Overview",
   "uid": "z4aimKQ7k",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
