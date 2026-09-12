@@ -974,12 +974,12 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "jvm_memory_bytes_used{pod=~\"$pod\"}  / ignoring(area) group_left java_lang_OperatingSystem_TotalPhysicalMemorySize{pod=~\"$pod\"} * 100",
+          "expr": "jvm_memory_used_bytes{pod=~\"$pod\"}  / ignoring(area) group_left java_lang_OperatingSystem_TotalPhysicalMemorySize{pod=~\"$pod\"} * 100",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 5,
           "legendFormat": "{{ pod }} {{area}} memory",
-          "metric": "jvm_memory_bytes_used",
+          "metric": "jvm_memory_used_bytes",
           "refId": "A",
           "step": 50
         }
@@ -1061,7 +1061,7 @@
       "targets": [
         {
           "dsType": "influxdb",
-          "expr": "jvm_memory_pool_bytes_used{pod=~\"$pod\"}",
+          "expr": "jvm_memory_pool_used_bytes{pod=~\"$pod\"}",
           "format": "time_series",
           "groupBy": [
             {
@@ -1271,12 +1271,12 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "jvm_classes_loaded{pod=~\"$pod\"}",
+          "expr": "jvm_classes_currently_loaded{pod=~\"$pod\"}",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 5,
           "legendFormat": "{{ pod }}",
-          "metric": "jvm_classes_loaded",
+          "metric": "jvm_classes_currently_loaded",
           "refId": "A",
           "step": 50
         }
