@@ -36,7 +36,29 @@ RUN set -eux; \
   rm -rf /var/lib/apt/lists/* /tmp/datastax-mcac-agent.tgz /prometheus/datastax-mcac-agent/config; \
   mkdir /home/cassandra; \
   chown cassandra:cassandra /home/cassandra /opt/cassandra /prometheus; \
-  ln -sf /proc/mounts /etc/mtab # needed for disk related metrics when the mcac exporter is used
+  ln -sf /proc/mounts /etc/mtab; \
+  # This image runs on JDK 11+, so /etc/cassandra/jvm11-server.options is the file that's
+  # actually loaded. It ships with CMS active by default - CMS was deprecated in JDK 9 and
+  # is removed entirely in JDK 14+, so it's a dead end for any future JDK upgrade, not just
+  # a suboptimal GC choice. Switch to G1 instead: comment out the CMS block, uncomment G1's
+  # own recommended settings, and lower InitiatingHeapOccupancyPercent from the stock 70
+  # (Cassandra's comment only calls that out for heaps >= 16GB - 25 is the widely
+  # recommended value for the much smaller heaps most Cassandra pods actually run).
+  sed -i \
+    -e 's/^-XX:+UseConcMarkSweepGC$/#-XX:+UseConcMarkSweepGC/' \
+    -e 's/^-XX:+CMSParallelRemarkEnabled$/#-XX:+CMSParallelRemarkEnabled/' \
+    -e 's/^-XX:CMSInitiatingOccupancyFraction=75$/#-XX:CMSInitiatingOccupancyFraction=75/' \
+    -e 's/^-XX:+UseCMSInitiatingOccupancyOnly$/#-XX:+UseCMSInitiatingOccupancyOnly/' \
+    -e 's/^-XX:CMSWaitDuration=10000$/#-XX:CMSWaitDuration=10000/' \
+    -e 's/^-XX:+CMSParallelInitialMarkEnabled$/#-XX:+CMSParallelInitialMarkEnabled/' \
+    -e 's/^-XX:+CMSEdenChunksRecordAlways$/#-XX:+CMSEdenChunksRecordAlways/' \
+    -e 's/^-XX:+CMSClassUnloadingEnabled$/#-XX:+CMSClassUnloadingEnabled/' \
+    -e 's/^#-XX:+UseG1GC$/-XX:+UseG1GC/' \
+    -e 's/^#-XX:+ParallelRefProcEnabled$/-XX:+ParallelRefProcEnabled/' \
+    -e 's/^#-XX:G1RSetUpdatingPauseTimePercent=5$/-XX:G1RSetUpdatingPauseTimePercent=5/' \
+    -e 's/^#-XX:MaxGCPauseMillis=300$/-XX:MaxGCPauseMillis=300/' \
+    -e 's/^#-XX:InitiatingHeapOccupancyPercent=70$/-XX:InitiatingHeapOccupancyPercent=25/' \
+    /etc/cassandra/jvm11-server.options
 
 WORKDIR /home/cassandra
 
