@@ -25,6 +25,7 @@ FROM debian:trixie-slim
 WORKDIR /
 
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y ca-certificates && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
