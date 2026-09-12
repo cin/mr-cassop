@@ -1,0 +1,11 @@
+# Jolokia 2.6.2+ denies every JSR-160 proxy target by default (fix for
+# https://github.com/jolokia/jolokia/security/advisories, an incomplete-denylist
+# JNDI injection bypass) - a target URL must now match a pattern here to be
+# allowed at all. mr-cassop's Prober/nodectl reach each Cassandra pod's JMX
+# through this proxy (see prober/jolokia/jolokia.go's jmxUrl(), which builds
+# service:jmx:rmi:///jndi/rmi:/<pod-ip>:<jmx-port>/jmxrmi) - pod IPs are dynamic,
+# so this can't be pinned to a fixed host. Verified live: Jolokia's own rejection
+# log echoes the URL as .../jndi/rmi://<ip>:<port>/jmxrmi (two slashes, likely
+# JMXServiceURL's normalized form) rather than the one-slash form our code
+# builds, so the pattern below tolerates either.
+service:jmx:rmi:///jndi/rmi:/{1,2}[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:[0-9]{1,5}/jmxrmi
