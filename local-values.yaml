@@ -18,20 +18,23 @@ cassandraImage: ghcr.io/cin/mr-cassop/cassandra:dev
 reaperImage: thelastpickle/cassandra-reaper:4.2.5
 icarusImage: ghcr.io/cin/mr-cassop/icarus:dev
 clusterDashboards:
-  enabled: []
+  enabled:
+    - prober
+    - reaper
+    - tlp
   namespace: ""
   labels:
     grafana_dashboard: "1"
 monitoring:
-  enabled: false
+  enabled: true
   grafanaDashboard:
-    enabled: false
+    enabled: true
     namespace: ""
     labels:
       grafana_dashboard: "1"
-    datasourceName: ""
+    datasourceName: "Prometheus"
   serviceMonitor:
-    enabled: false
+    enabled: true
     namespace: ""
     labels:
       operator: mr-cassop

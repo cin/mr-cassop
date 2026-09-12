@@ -6,7 +6,19 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "iteration": 1650628593366,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "cassandra"
+      ],
+      "title": "Other C* Dashboards",
+      "type": "dashboards"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -51,7 +63,6 @@
         "showUnfilled": true,
         "text": {}
       },
-
       "targets": [
         {
           "exemplar": false,
@@ -108,7 +119,6 @@
         "showUnfilled": true,
         "text": {}
       },
-
       "targets": [
         {
           "exemplar": true,
@@ -615,7 +625,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "exemplar": true,
@@ -704,7 +713,6 @@
           "sort": "none"
         }
       },
-
       "targets": [
         {
           "exemplar": true,

@@ -33,7 +33,17 @@ data:
       "editable": true,
       "gnetId": null,
       "graphTooltip": 1,
-      "links": [],
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": false,
+          "keepTime": true,
+          "tags": ["cassandra"],
+          "title": "Other C* Dashboards",
+          "type": "dashboards"
+        }
+      ],
       "panels": [
         {
           "aliasColors": {},

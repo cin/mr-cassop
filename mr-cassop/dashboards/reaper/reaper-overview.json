@@ -7,7 +7,19 @@
   "graphTooltip": 0,
   "id": 246,
   "iteration": 1650620990432,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "cassandra"
+      ],
+      "title": "Other C* Dashboards",
+      "type": "dashboards"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {

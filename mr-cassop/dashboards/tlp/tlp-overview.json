@@ -14,7 +14,6 @@
       "includeVars": false,
       "keepTime": true,
       "tags": [
-        "tlp",
         "cassandra"
       ],
       "title": "Other C* Dashboards",
