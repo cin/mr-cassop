@@ -38,3 +38,7 @@ config/samples
 
 # macOS custom attributes
 **/.DS_Store
+
+# locally-built icarus jar (see icarus/Dockerfile) -- rebuild from
+# github.com/cin/icarus branch poc/esop-4.1.12, don't commit the binary
+icarus/icarus.jar
