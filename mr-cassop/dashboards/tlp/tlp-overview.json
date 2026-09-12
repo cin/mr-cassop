@@ -1862,9 +1862,9 @@
         "x": 0,
         "y": 44
       },
-      "id": 44,
+      "id": 49,
       "panels": [],
-      "title": "JVM G1 GC Stats",
+      "title": "JVM GC Stats",
       "type": "row"
     },
     {
@@ -1875,7 +1875,7 @@
       "datasource": {
         "uid": "$datasource"
       },
-      "description": "Display the amount of time spent with G1 young generation garbage collection times.\n\nThis chart will remain empty if ParNew CMS garbage collection is being used. Ensure that either G1 **or** ParNew CMS is being used homogeneously within a data center for more predictable performance.\n\nTODO: @Alex?",
+      "description": "Average young-generation GC pause time, whichever collector is actually configured (ParNew under CMS, G1 Young Generation under G1, PS Scavenge under Parallel). The legend's {{gc}} label shows which one is active - no dashboard change needed if the cluster's GC choice changes.",
       "editable": true,
       "error": false,
       "fill": 1,
@@ -1885,200 +1885,6 @@
         "w": 12,
         "x": 0,
         "y": 45
-      },
-      "hiddenSeries": false,
-      "id": 16,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": false,
-        "show": false,
-        "sort": "max",
-        "sortDesc": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "connected",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "rate(jvm_gc_collection_seconds_sum{gc=\"G1 Young Generation\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=\"G1 Young Generation\",datacenter=\"$dc\"}[5m])",
-          "format": "time_series",
-          "legendFormat": "{{pod}}",
-          "refId": "A",
-          "target": "derivative(cassandra.$ns.$dc.$host.jvm.gc.G1-Young-Generation.time)"
-        }
-      ],
-      "thresholds": [],
-      "timeRegions": [],
-      "title": "JVM G1 Young Generation",
-      "tooltip": {
-        "msResolution": false,
-        "shared": true,
-        "sort": 2,
-        "value_type": "individual"
-      },
-      "transparent": true,
-      "type": "graph",
-      "xaxis": {
-        "mode": "time",
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "ms",
-          "label": "Garbage collection times",
-          "logBase": 1,
-          "min": "0",
-          "show": true
-        },
-        {
-          "format": "short",
-          "logBase": 1,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": {
-        "uid": "$datasource"
-      },
-      "description": "Display the amount of time spent with G1 old generation garbage collection times.\n\nThis chart will remain empty if ParNew CMS garbage collection is being used. Ensure that either G1 **or** ParNew CMS is being used homogeneously within a data center for more predictable performance.\n\nTODO: @Alex?",
-      "editable": true,
-      "error": false,
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 45
-      },
-      "hiddenSeries": false,
-      "id": 17,
-      "legend": {
-        "alignAsTable": true,
-        "avg": true,
-        "current": true,
-        "max": true,
-        "min": false,
-        "show": false,
-        "sort": "max",
-        "sortDesc": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "connected",
-      "options": {
-        "alertThreshold": true
-      },
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "rate(jvm_gc_collection_seconds_sum{gc=\"G1 Old Generation\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=\"G1 Old Generation\",datacenter=\"$dc\"}[5m])",
-          "legendFormat": "{{pod}}",
-          "refId": "A",
-          "target": "derivative(cassandra.$ns.$dc.$host.jvm.gc.G1-Old-Generation.time)"
-        }
-      ],
-      "thresholds": [],
-      "timeRegions": [],
-      "title": "JVM G1 Old Generation",
-      "tooltip": {
-        "msResolution": false,
-        "shared": true,
-        "sort": 2,
-        "value_type": "individual"
-      },
-      "transparent": true,
-      "type": "graph",
-      "xaxis": {
-        "mode": "time",
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "ms",
-          "label": "Garbage collection times",
-          "logBase": 1,
-          "min": "0",
-          "show": true
-        },
-        {
-          "format": "short",
-          "logBase": 1,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false
-      }
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 52
-      },
-      "id": 45,
-      "panels": [],
-      "title": "JVM ParNew CMS GC Stats",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": {
-        "uid": "$datasource"
-      },
-      "description": "Display the amount of time spent in ParNew young generation garbage collections.\n\nThis chart will remain empty if G1 garbage collection is being used instead.",
-      "editable": true,
-      "error": false,
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 53
       },
       "hiddenSeries": false,
       "id": 47,
@@ -2111,15 +1917,15 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jvm_gc_collection_seconds_sum{gc=\"ParNew\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=\"ParNew\",datacenter=\"$dc\"}[5m])",
+          "expr": "rate(jvm_gc_collection_seconds_sum{gc=~\"ParNew|G1 Young Generation|PS Scavenge\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=~\"ParNew|G1 Young Generation|PS Scavenge\",datacenter=\"$dc\"}[5m])",
           "format": "time_series",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "{{pod}} - {{gc}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "JVM ParNew Young Generation",
+      "title": "Young Generation GC Pause Time",
       "tooltip": {
         "msResolution": false,
         "shared": true,
@@ -2159,7 +1965,7 @@
       "datasource": {
         "uid": "$datasource"
       },
-      "description": "Display the amount of time spent in CMS old generation garbage collections.\n\nThis chart will remain empty if G1 garbage collection is being used instead.",
+      "description": "Average old-generation GC pause time, whichever collector is actually configured (CMS, G1 Old Generation, or Parallel's PS MarkSweep). The legend's {{gc}} label shows which one is active - no dashboard change needed if the cluster's GC choice changes.",
       "editable": true,
       "error": false,
       "fill": 1,
@@ -2168,7 +1974,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 45
       },
       "hiddenSeries": false,
       "id": 48,
@@ -2201,15 +2007,15 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jvm_gc_collection_seconds_sum{gc=\"ConcurrentMarkSweep\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=\"ConcurrentMarkSweep\",datacenter=\"$dc\"}[5m])",
+          "expr": "rate(jvm_gc_collection_seconds_sum{gc=~\"ConcurrentMarkSweep|G1 Old Generation|PS MarkSweep\",datacenter=\"$dc\"}[5m]) / rate(jvm_gc_collection_seconds_count{gc=~\"ConcurrentMarkSweep|G1 Old Generation|PS MarkSweep\",datacenter=\"$dc\"}[5m])",
           "format": "time_series",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "{{pod}} - {{gc}}",
           "refId": "A"
         }
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "JVM CMS Old Generation",
+      "title": "Old Generation GC Pause Time",
       "tooltip": {
         "msResolution": false,
         "shared": true,
@@ -2448,5 +2254,5 @@
   },
   "timezone": "browser",
   "title": "Cassandra TLP - Overview",
-  "version": 2
+  "version": 3
 }
