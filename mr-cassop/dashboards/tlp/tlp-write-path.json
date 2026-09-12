@@ -13,7 +13,6 @@
       "includeVars": false,
       "keepTime": true,
       "tags": [
-        "tlp",
         "cassandra"
       ],
       "title": "Other C* Dashboards",
@@ -76,7 +75,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -168,7 +166,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -260,7 +257,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -352,7 +348,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -444,7 +439,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -537,7 +531,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -642,7 +635,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -734,7 +726,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -826,7 +817,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -918,7 +908,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1010,7 +999,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1102,7 +1090,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1202,7 +1189,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1289,7 +1275,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1376,7 +1361,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1463,7 +1447,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1546,7 +1529,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1629,7 +1611,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1712,7 +1693,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1795,7 +1775,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1878,7 +1857,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1974,7 +1952,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2057,7 +2034,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2140,7 +2116,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2223,7 +2198,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2306,7 +2280,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2389,7 +2362,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2472,7 +2444,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2555,7 +2526,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2638,7 +2608,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2721,7 +2690,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2804,7 +2772,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2887,7 +2854,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -2970,7 +2936,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3053,7 +3018,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3136,7 +3100,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3232,7 +3195,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3315,7 +3277,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3411,7 +3372,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3494,7 +3454,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3590,7 +3549,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3672,7 +3630,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3754,7 +3711,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3837,7 +3793,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -3920,7 +3875,6 @@
       "links": [],
       "nullPointMode": "connected",
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",

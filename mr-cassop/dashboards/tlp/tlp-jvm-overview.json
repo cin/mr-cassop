@@ -9,7 +9,19 @@
   "graphTooltip": 0,
   "id": 251,
   "iteration": 1650623841011,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "cassandra"
+      ],
+      "title": "Other C* Dashboards",
+      "type": "dashboards"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -77,7 +89,6 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-
       "targets": [
         {
           "datasource": {
@@ -193,7 +204,6 @@
         },
         "textMode": "auto"
       },
-
       "targets": [
         {
           "datasource": {
@@ -318,7 +328,6 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-
       "targets": [
         {
           "datasource": {
@@ -432,7 +441,6 @@
         },
         "textMode": "auto"
       },
-
       "targets": [
         {
           "dsType": "influxdb",
@@ -540,7 +548,6 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-
       "targets": [
         {
           "dsType": "influxdb",
@@ -648,7 +655,6 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-
       "targets": [
         {
           "dsType": "influxdb",
@@ -755,7 +761,6 @@
         },
         "textMode": "auto"
       },
-
       "targets": [
         {
           "dsType": "influxdb",
@@ -838,7 +843,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -964,7 +968,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1050,7 +1053,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1167,7 +1169,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1261,7 +1262,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1348,7 +1348,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1464,7 +1463,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 5,
       "points": false,
       "renderer": "flot",
@@ -1551,7 +1549,6 @@
         "alertThreshold": true
       },
       "percentage": false,
-
       "pointradius": 4,
       "points": false,
       "renderer": "flot",
