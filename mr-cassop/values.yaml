@@ -21,7 +21,7 @@ proberImage: ""
 jolokiaImage: ""
 cassandraImage: ""
 # reaper is an external image and is pinned independently of the chart version.
-reaperImage: thelastpickle/cassandra-reaper:4.2.5
+reaperImage: thelastpickle/cassandra-reaper:5.0.1
 icarusImage: ""
 clusterDashboards:
   enabled: []

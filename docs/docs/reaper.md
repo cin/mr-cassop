@@ -5,7 +5,7 @@ slug: /reaper
 
 mr-cassop deploys [Cassandra Reaper](http://cassandra-reaper.io/) for each managed `CassandraCluster`. Reaper coordinates Cassandra repairs and exposes a web UI/API for repair visibility and control.
 
-The operator registers the Cassandra cluster with Reaper and configures Reaper to authenticate to Cassandra/JMX using the cluster's generated management credentials. The default Reaper image is `thelastpickle/cassandra-reaper:4.2.5`; override `.spec.reaper.image` in a `CassandraCluster` or the chart-level `reaperImage` value if you need a different image.
+The operator registers the Cassandra cluster with Reaper and configures Reaper to authenticate to Cassandra/JMX using the cluster's generated management credentials. The default Reaper image is `thelastpickle/cassandra-reaper:5.0.1`; override `.spec.reaper.image` in a `CassandraCluster` or the chart-level `reaperImage` value if you need a different image.
 
 ### Schedule Repairs
 
