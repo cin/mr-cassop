@@ -27,7 +27,10 @@ RUN set -eux; \
   mkdir -p /prometheus; \
   wget https://github.com/prometheus/jmx_exporter/releases/download/${JMX_EXPORTER_VERSION}/jmx_prometheus_javaagent-${JMX_EXPORTER_VERSION}.jar -O /prometheus/jmx_prometheus_javaagent.jar; \
   wget https://github.com/instaclustr/cassandra-exporter/releases/download/v${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}/cassandra-exporter-agent-${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}.jar -O /prometheus/cassandra-exporter-agent.jar; \
-  wget https://github.com/datastax/metric-collector-for-apache-cassandra/releases/download/v${DATASTAX_CASSANDRA_EXPORTER_VERSION}/datastax-mcac-agent-${DATASTAX_CASSANDRA_EXPORTER_VERSION}.tar.gz -O /tmp/datastax-mcac-agent.tgz; \
+  # Cassandra 4.1+ needs the "-4.1-beta1" build - the default build throws
+  # "NoSuchFieldError: scheduledTasks" from UnixSocketClient.initCollectdHealthCheck
+  # on startup against 4.1's internals. See datastax/metric-collector-for-apache-cassandra#79.
+  wget https://github.com/datastax/metric-collector-for-apache-cassandra/releases/download/v${DATASTAX_CASSANDRA_EXPORTER_VERSION}/datastax-mcac-agent-${DATASTAX_CASSANDRA_EXPORTER_VERSION}-4.1-beta1.tar.gz -O /tmp/datastax-mcac-agent.tgz; \
   tar zxf /tmp/datastax-mcac-agent.tgz -C /prometheus; \
   mv /prometheus/datastax-mcac-agent-* /prometheus/datastax-mcac-agent; \
   rm -rf /var/lib/apt/lists/* /tmp/datastax-mcac-agent.tgz /prometheus/datastax-mcac-agent/config; \
