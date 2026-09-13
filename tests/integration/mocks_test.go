@@ -399,6 +399,10 @@ func (n *nodectlMock) OperationMode(ctx context.Context, nodeIP string) (nodectl
 	return n.nodesState[nodeIP].opMode, nil
 }
 
+func (n *nodectlMock) ReloadSeeds(ctx context.Context, nodeIP string) error {
+	return nil
+}
+
 func markMocksAsReady(cc *dbv1alpha1.CassandraCluster) {
 	for i, externalRegion := range cc.Spec.ExternalRegions.Managed {
 		mockProberClient.readyClusters[externalRegion.Domain] = true
