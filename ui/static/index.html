@@ -1444,6 +1444,11 @@ function renderNodeList(rows) {
   // A tool's own button markup, shared by both the grouped ("all") and
   // single-category rendering below rather than duplicating it.
   const toolButtonHtml = (t) => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`;
+  // Set* isn't a TOOLS/catalog entry (see its own listener below), but it's
+  // still a settings action -- folded into the Settings group itself rather
+  // than a separate "Write" category of its own, so it sits next to the
+  // read-only "Settings (get*)" button it edits.
+  const setSettingsButtonHtml = `<button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>`;
 
   // "All tools" groups buttons under a label per category -- a single flat
   // wrapped grid of ~20+ buttons (every catalog entry) had no way to tell
@@ -1453,9 +1458,9 @@ function renderNodeList(rows) {
   const toolbarHtml = selectedToolCategory === 'all'
     ? categories.filter(c => c !== 'all').map(cat => `
         <div class="tool-category-label">${cat}</div>
-        <div class="tool-group">${TOOLS.filter(t => t.category === cat).map(toolButtonHtml).join('')}</div>
+        <div class="tool-group">${TOOLS.filter(t => t.category === cat).map(toolButtonHtml).join('')}${cat === 'Settings' ? setSettingsButtonHtml : ''}</div>
       `).join('')
-    : `<div class="tool-group">${visibleTools().map(toolButtonHtml).join('')}</div>`;
+    : `<div class="tool-group">${visibleTools().map(toolButtonHtml).join('')}${showSetSettings ? setSettingsButtonHtml : ''}</div>`;
 
   nodeListPanelEl.innerHTML = `
     <div class="list-header">
@@ -1470,13 +1475,7 @@ function renderNodeList(rows) {
         ${categories.map(c => `<option value="${c}" ${c === selectedToolCategory ? 'selected' : ''}>${c === 'all' ? 'All tools' : c}</option>`).join('')}
       </select>
     </div>
-    <div class="list-toolbar">
-      ${toolbarHtml}
-      ${showSetSettings ? `
-        <div class="tool-category-label">Write</div>
-        <div class="tool-group"><button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button></div>
-      ` : ''}
-    </div>
+    <div class="list-toolbar">${toolbarHtml}</div>
     <div class="list-body">${rowsHtml}</div>
     <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click.</div>
   `;
