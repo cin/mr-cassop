@@ -110,11 +110,13 @@ var Catalog = []StatDef{
 	// this pane exists to surface.
 	{Name: "statusflags", Label: "Status Flags", Category: "Status", Fetch: fetchStatusFlags, Diffable: true},
 	{Name: "compactionhistory", Label: "Compaction History", Category: "Compaction", Fetch: fetchCompactionHistory},
+	{Name: "getlogginglevels", Label: "Logging Levels", Category: "Status", Fetch: fetchLoggingLevels},
 	// The scoping decision the old comment here asked for: a required
 	// keyspace.table target (RequiresTable), not pagination or a top-N-by-
 	// size default -- see StatDef.RequiresTable's doc comment for why.
 	{Name: "cfstats", Label: "Table Stats", Category: "Tables", RequiresTable: true, FetchTable: fetchCfStats},
 	{Name: "cfhistograms", Label: "Table Histograms", Category: "Tables", RequiresTable: true, FetchTable: fetchTableHistograms},
+	{Name: "toppartitions", Label: "Top Partitions", Category: "Tables", RequiresTable: true, FetchTable: fetchTopPartitions},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -1050,6 +1052,39 @@ func compactionHistoryCount(v any) string {
 	return strconv.FormatInt(int64(f), 10)
 }
 
+// fetchLoggingLevels matches `nodetool getlogginglevels`: every logger's
+// current effective level. StorageServiceMBean.getLoggingLevels() looks like
+// an operation by name, but standard-MBean reflection treats any no-arg
+// "getX"/"isX" interface method as attribute "X" rather than an operation --
+// verified live: calling it via exec fails ("getLoggingLevels", Jolokia's
+// bare not-found-as-operation error), while reading it as the "LoggingLevels"
+// attribute (like every other get*-named StorageService entry in
+// settingSources) succeeds. beginLocalSampling/finishLocalSampling
+// (fetchTopPartitions) are verb-named, not get/is-prefixed, so that
+// convention doesn't apply to them -- they're genuine operations and do need
+// exec.
+func fetchLoggingLevels(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.db:type=StorageService", "LoggingLevels")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var levels map[string]string
+	if err := json.Unmarshal(value, &levels); err != nil {
+		return StatsResult{}, err
+	}
+
+	names := make([]string, 0, len(levels))
+	for name := range levels {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	rows := make([]StatRow, len(names))
+	for i, name := range names {
+		rows[i] = row(name, levels[name])
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
 // splitKeyspaceTable parses the "keyspace.table" target both cfstats and
 // cfhistograms take -- the one thing every other Catalog entry doesn't need,
 // since they run against a node with no further scoping. A bare split on the
@@ -1251,6 +1286,106 @@ func fetchTableHistograms(j *Client, ip, table string) (StatsResult, error) {
 			}
 		}
 		groups = append(groups, StatGroup{Name: metric.Label, Rows: rows})
+	}
+
+	return StatsResult{Groups: groups}, nil
+}
+
+// topPartitionsSamplers are the sampler kinds `nodetool toppartitions`
+// reports. Verified against Cassandra 4.1.12's actual MBean interfaces (not
+// guessed): StorageServiceMBean.samplePartitions is cluster/node-wide with no
+// keyspace/table scoping, so it's not what nodetool's keyspace/cfname-scoped
+// CLI form actually calls -- that form drives ColumnFamilyStoreMBean's
+// beginLocalSampling(sampler, capacity, durationMillis)/
+// finishLocalSampling(sampler, count) pair on the target table's own MBean
+// instead, one round per sampler kind here.
+var topPartitionsSamplers = []struct{ Sampler, Label string }{
+	{"READS", "Frequency of reads by partition"},
+	{"WRITES", "Frequency of writes by partition"},
+	{"CAS_CONTENTIONS", "Frequency of CAS contentions by partition"},
+	{"WRITE_SIZE", "Max mutation size by partition"},
+	{"LOCAL_READ_TIME", "Longest local read query times"},
+}
+
+// capacity/count/duration match nodetool toppartitions' own defaults
+// (-s/-k/<duration>) closely enough for an on-demand UI click; not exposed
+// as params since StatDef.FetchTable takes no extra arguments (see its doc
+// comment) -- add a param if a future need justifies it.
+const (
+	topPartitionsCapacity = 256
+	topPartitionsCount    = 10
+	topPartitionsDuration = 4 * time.Second
+)
+
+// fetchTopPartitions matches `nodetool toppartitions <keyspace> <cfname>
+// <duration>`. Every sampler kind's CompositeData row has the same three
+// fields (value/count/error -- Cassandra's own Sampler.Sample, verified via
+// the jar's class constants) regardless of sampler; shown uniformly here
+// rather than special-cased per sampler like nodetool's own column headers
+// (Partition/Count, Partition/Bytes, Query/Microseconds), matching this
+// file's one-generic-row-shape approach elsewhere.
+func fetchTopPartitions(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, tableName, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	mbean := fmt.Sprintf("org.apache.cassandra.db:type=Tables,keyspace=%s,table=%s", keyspace, tableName)
+
+	beginCalls := make([]opCall, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		beginCalls[i] = opCall{Mbean: mbean, Operation: "beginLocalSampling",
+			Arguments: []any{s.Sampler, topPartitionsCapacity, int(topPartitionsDuration.Milliseconds())}}
+	}
+	beginRaws, err := j.bulkExec(ip, beginCalls)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	for i, raw := range beginRaws {
+		if raw.Status != http.StatusOK {
+			return StatsResult{}, fmt.Errorf("could not sample %s.%s (sampler %s): %s -- check the keyspace/table name",
+				keyspace, tableName, topPartitionsSamplers[i].Sampler, raw.Error)
+		}
+	}
+
+	time.Sleep(topPartitionsDuration)
+
+	finishCalls := make([]opCall, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		finishCalls[i] = opCall{Mbean: mbean, Operation: "finishLocalSampling", Arguments: []any{s.Sampler, topPartitionsCount}}
+	}
+	raws, err := j.bulkExec(ip, finishCalls)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	groups := make([]StatGroup, 0, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		if i >= len(raws) {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", "unavailable")}})
+			continue
+		}
+		if raws[i].Status != http.StatusOK {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", raws[i].Error)}})
+			continue
+		}
+		var samples []struct {
+			Value string  `json:"value"`
+			Count float64 `json:"count"`
+			Error float64 `json:"error"`
+		}
+		if err := json.Unmarshal(raws[i].Value, &samples); err != nil {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", err.Error())}})
+			continue
+		}
+		if len(samples) == 0 {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("(none)", "nothing recorded during sampling period")}})
+			continue
+		}
+		rows := make([]StatRow, len(samples))
+		for k, sample := range samples {
+			rows[k] = row(sample.Value, fmt.Sprintf("%d +/- %d", int64(sample.Count), int64(sample.Error)))
+		}
+		groups = append(groups, StatGroup{Name: s.Label, Rows: rows})
 	}
 
 	return StatsResult{Groups: groups}, nil

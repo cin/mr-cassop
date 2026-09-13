@@ -439,6 +439,45 @@ func (j *Client) bulkReadMetricAttribute(ip string, mbeans []string, attribute s
 	return values, nil
 }
 
+// opCall is one JMX operation invocation: an MBean, the operation name (no
+// signature suffix needed as long as the name isn't overloaded on the target
+// MBean -- true for every operation this package invokes so far), and its
+// arguments in declared order.
+type opCall struct {
+	Mbean     string
+	Operation string
+	Arguments []any
+}
+
+// bulkExec is bulkReadAttributes'/bulkWriteAttributes' counterpart for
+// invoking JMX *operations* rather than reading/writing attributes -- needed
+// by fetchTopPartitions, which drives ColumnFamilyStore's
+// beginLocalSampling/finishLocalSampling operations rather than any bounded
+// attribute. Same per-call fault isolation and single-round-trip batching as
+// the attribute helpers.
+func (j *Client) bulkExec(ip string, calls []opCall) ([]rawResponse, error) {
+	type Target struct{ Url, User, Password string }
+	type Request struct {
+		Type      string
+		Mbean     string
+		Operation string
+		Arguments []any
+		Target    Target
+	}
+	target := Target{jmxUrl(ip, j.jmxPort), j.auth.username, j.auth.password}
+	reqs := make([]Request, len(calls))
+	for i, c := range calls {
+		args := c.Arguments
+		if args == nil {
+			args = []any{}
+		}
+		reqs[i] = Request{Type: "exec", Mbean: c.Mbean, Operation: c.Operation, Arguments: args, Target: target}
+	}
+	extra.SetNamingStrategy(extra.LowerCaseWithUnderscores)
+	body, _ := jsoniter.Marshal(reqs)
+	return j.postBulk(j.toolClient, body)
+}
+
 func (j *Client) SetAuth(username, password string) {
 	j.auth.username = username
 	j.auth.password = password
