@@ -835,6 +835,7 @@ let TOOLS = [
     label: 'Status',
     category: 'Status',
     diffable: false,
+    wheel: true, // the one always-on wheel entry; everything else opts in via the backend catalog's Wheel flag
     // Instant: reads the already-loaded row data, no new network call.
     // Returns the same StatsResult shape every server-driven tool does, so
     // it goes through the exact same rendering/diffing path as the rest.
@@ -868,6 +869,9 @@ async function loadTools() {
         category: def.category || 'Other',
         diffable: !!def.diffable,
         requiresTable: !!def.requiresTable,
+        wheel: !!def.wheel,
+        confirm: !!def.confirm,
+        singleTarget: !!def.singleTarget,
         // table is only ever non-null for a requiresTable tool -- see
         // invokeTool, the one place that prompts for it (once per
         // invocation, not once per node) and threads it through here.
@@ -1148,16 +1152,6 @@ function renderRing(dc, rows) {
         selectNode(key);
       }
     });
-    dot.addEventListener('mousedown', (evt) => {
-      if (evt.button === 1) {
-        evt.preventDefault();
-        openWheel(evt, row);
-      }
-    });
-    dot.addEventListener('auxclick', (evt) => {
-      if (evt.button === 1) evt.preventDefault();
-    });
-
     svg.appendChild(dot);
 
     const label = document.createElementNS(svgNS, 'text');
@@ -1456,7 +1450,7 @@ function renderNodeList(rows) {
       ${showSetSettings ? `<button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>` : ''}
     </div>
     <div class="list-body">${rowsHtml}</div>
-    <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click on the ring.</div>
+    <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click.</div>
   `;
 
   document.getElementById('toolCategorySelect').addEventListener('change', (evt) => {
@@ -1631,35 +1625,81 @@ function applyDragSelection(rect) {
 }
 
 // --- Middle-click radial tool wheel -----------------------------------
-// Hold middle mouse button on a node to open the wheel, drag to a tool,
-// release to run it. A live multi-selection (ctrl/cmd+click or drag) becomes the
-// target set regardless of which node the middle-click itself landed on;
-// otherwise the action targets just that one node.
+// Hold middle mouse button anywhere -- not just directly on a node dot's own
+// small hitbox, which used to be the only trigger and was easy to miss,
+// especially near a viewport edge -- to open the wheel, drag to a tool,
+// release to run it. Target resolution (resolveWheelTargets) prefers a live
+// multi-selection, then the exact dot under the cursor if there is one, then
+// the single detail-selected node, same precedence the old dot-only handler
+// had plus the new no-dot-under-cursor fallback.
+//
+// Only a curated, opt-in subset of the catalog (StatDef.Wheel) appears here
+// -- see its doc comment for why: at ~20 entries the old "every tool is on
+// the wheel" approach made wheelRadius() big enough to push items off-screen
+// (openWheel's clamping below covers the rest of that). New catalog entries
+// should default to the category button list only, not this.
 
 const WHEEL_DEADZONE = 24;
 
-// Radius grows with the tool count so items don't overlap as the read-only
-// catalog grows -- a fixed 90px worked fine for the original ~7 tools but
-// started overlapping once it passed a dozen. 90 stays the floor for a
-// small catalog (or before loadTools() has populated TOOLS beyond the
-// built-in "Status" entry).
+// Radius grows with the tool count so items don't overlap -- 90 stays the
+// floor for the curated wheel set (comfortably under a dozen items) or
+// before loadTools() has populated TOOLS beyond the built-in "Status" entry.
 function wheelRadius(toolCount) {
   return Math.max(90, toolCount * 26);
 }
 
-function openWheel(evt, row) {
+// The wheel's own tool list: Wheel-flagged entries within the current
+// category filter, falling back to every Wheel-flagged entry if that
+// filter happens to exclude all of them (a category with no quick-access
+// tools shouldn't make the wheel silently do nothing).
+function wheelTools() {
+  const inCategory = visibleTools().filter(t => t.wheel);
+  return inCategory.length > 0 ? inCategory : TOOLS.filter(t => t.wheel);
+}
+
+// Resolves which node(s) a middle-click targets without requiring the
+// pointer to be exactly over a node: a live multi-selection always wins
+// (matches the side list's currentSelectionTargets precedence); otherwise
+// prefer the exact dot under the cursor, if any; otherwise fall back to
+// the single detail-selected node.
+function resolveWheelTargets(evt) {
+  if (multiSelected.size > 0) {
+    return [...multiSelected].map(k => lastRowsByKey[k]).filter(Boolean);
+  }
+  const dotEl = evt.target.closest && evt.target.closest('circle[data-key]');
+  if (dotEl && lastRowsByKey[dotEl.dataset.key]) {
+    return [lastRowsByKey[dotEl.dataset.key]];
+  }
+  if (selectedNodeKey && lastRowsByKey[selectedNodeKey]) {
+    return [lastRowsByKey[selectedNodeKey]];
+  }
+  return [];
+}
+
+function openWheel(evt, targets) {
   if (wheelState) closeWheel();
   hideTooltip();
-
-  const targets = multiSelected.size > 0
-    ? [...multiSelected].map(k => lastRowsByKey[k]).filter(Boolean)
-    : [row];
   if (targets.length === 0) return;
 
   // Snapshot the current category filter's tools for this one interaction --
   // the wheel shouldn't reshuffle mid-drag even if something else changed
   // selectedToolCategory in the background.
-  wheelState = { cx: evt.clientX, cy: evt.clientY, targets, hoveredIndex: -1, el: null, tools: visibleTools() };
+  const tools = wheelTools();
+  if (tools.length === 0) return;
+
+  // Clamp the wheel's center so every item stays on-screen -- previously
+  // pinned exactly to the click point, which pushed items above/beside the
+  // viewport (unreachable, including "Status") for a node near an edge,
+  // worse the bigger the tool count/radius got. itemMargin is a fudge for
+  // each item's own box (up to ~140px wide, ~36px tall) plus its own
+  // translate(-50%,-50%) self-centering.
+  const radius = wheelRadius(tools.length);
+  const itemMargin = 90;
+  const clamp = (v, lo, hi) => (lo <= hi ? Math.min(Math.max(v, lo), hi) : (lo + hi) / 2);
+  const cx = clamp(evt.clientX, radius + itemMargin, window.innerWidth - radius - itemMargin);
+  const cy = clamp(evt.clientY, radius + itemMargin, window.innerHeight - radius - itemMargin);
+
+  wheelState = { cx, cy, targets, hoveredIndex: -1, el: null, tools };
   renderWheel();
 
   const onMove = (e) => updateWheelHover(e.clientX, e.clientY);
@@ -1675,6 +1715,19 @@ function openWheel(evt, row) {
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onUp);
 }
+
+// Global trigger, replacing the old per-dot-only mousedown/auxclick
+// listeners -- see this section's header comment for why.
+document.addEventListener('mousedown', (evt) => {
+  if (evt.button !== 1) return;
+  const targets = resolveWheelTargets(evt);
+  if (targets.length === 0) return; // nothing to target: let the browser's default middle-click behavior happen
+  evt.preventDefault();
+  openWheel(evt, targets);
+});
+document.addEventListener('auxclick', (evt) => {
+  if (evt.button === 1) evt.preventDefault();
+});
 
 function renderWheel() {
   const el = document.createElement('div');
@@ -1943,6 +1996,18 @@ function computeDiffMap(entry) {
 // multiple times by hand would) rather than trying to cram multiple tables'
 // worth of data into one tab -- that's what the tab system is already for.
 function runTool(tool, targets) {
+  // SingleTarget/Confirm gate anything that isn't a plain read (reloadseeds
+  // is the first, mutating, entry to set either) -- checked here so both
+  // dispatch paths (wheel and the side-list buttons) get it for free, same
+  // as requiresTable below.
+  if (tool.singleTarget && targets.length !== 1) {
+    alert(`${tool.label} can only run against exactly one node at a time -- select a single node first.`);
+    return;
+  }
+  if (tool.confirm) {
+    const who = targets.length > 1 ? `${targets.length} nodes` : targets[0].ip;
+    if (!confirm(`Run "${tool.label}" on ${who}? This changes node state, not just reads it.`)) return;
+  }
   if (!tool.requiresTable) {
     invokeTool(tool, targets, null);
     return;

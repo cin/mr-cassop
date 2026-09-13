@@ -84,25 +84,54 @@ type StatDef struct {
 	// than adding a table parameter to Fetch itself so every other, simpler
 	// entry doesn't have to carry an always-empty parameter.
 	FetchTable func(j *Client, ip, table string) (StatsResult, error) `json:"-"`
+	// Wheel marks a curated "most used" subset for the frontend's middle-click
+	// radial wheel, independent of Category (which still drives the full
+	// category-filtered button list). The wheel's own radius grows with its
+	// item count (see ui/static/index.html's wheelRadius), so as the catalog
+	// grew past ~20 entries it stopped being usable for a quick gesture --
+	// deliberately opt-in per entry rather than "every catalog entry is on
+	// the wheel" going forward. Only a handful of frequent, fast, node-scoped
+	// reads should set this; leave new entries (especially RequiresTable
+	// ones, which need a table prompt anyway) off the wheel by default.
+	Wheel bool `json:"wheel"`
+	// Confirm marks a stat the frontend must confirm() before running --
+	// for anything that isn't a pure read (see fetchReloadSeeds, the first
+	// entry to set this). Deliberately separate from Wheel: a Confirm entry
+	// should generally also leave Wheel unset, since a drag-and-release
+	// gesture is the wrong interaction for something that needs a conscious
+	// confirmation step.
+	Confirm bool `json:"confirm"`
+	// SingleTarget marks a stat that only makes sense (or is only safe)
+	// against exactly one node at a time -- the frontend refuses to run it
+	// against a multi-selection. reloadSeeds is node-local gossip state, not
+	// a cluster-wide operation, so "run against every selected node" reads
+	// as one intentional action per node, not one bulk action -- forcing the
+	// operator to target nodes one at a time here is deliberate friction.
+	SingleTarget bool `json:"singleTarget"`
 }
 
+// wheelTools is the curated "most used" subset of the catalog below that
+// also sets Wheel: true -- roughly the original, pre-growth catalog (see
+// wheelRadius' own comment on why a fixed 90px radius stopped being enough
+// once the read-only catalog passed a dozen entries, and Wheel's own comment
+// on why growth from here on should default to the category list, not this).
 var Catalog = []StatDef{
-	{Name: "info", Label: "Info", Category: "Status", Fetch: fetchInfo},
+	{Name: "info", Label: "Info", Category: "Status", Fetch: fetchInfo, Wheel: true},
 	// Diffable: a node's SchemaVersion disagreeing with the rest of the
 	// cluster is a real, actionable problem (a pending/failed schema push),
 	// not expected variance -- worth the same red-highlight treatment as
 	// fetchSettings gets, and free to add since it's just this one flag.
-	{Name: "describecluster", Label: "Describe", Category: "Status", Fetch: fetchDescribeCluster, Diffable: true},
+	{Name: "describecluster", Label: "Describe", Category: "Status", Fetch: fetchDescribeCluster, Diffable: true, Wheel: true},
 	{Name: "version", Label: "Version", Category: "Status", Fetch: fetchVersion, Diffable: true},
 	{Name: "gossipinfo", Label: "Gossip Info", Category: "Status", Fetch: fetchGossipInfo},
 	{Name: "clientstats", Label: "Client Stats", Category: "Performance", Fetch: fetchClientStats},
-	{Name: "compactionstats", Label: "Compactions", Category: "Compaction", Fetch: fetchCompactionStats},
-	{Name: "tpstats", Label: "TP Stats", Category: "Performance", Fetch: fetchTPStats},
-	{Name: "netstats", Label: "Net Stats", Category: "Performance", Fetch: fetchNetStats},
+	{Name: "compactionstats", Label: "Compactions", Category: "Compaction", Fetch: fetchCompactionStats, Wheel: true},
+	{Name: "tpstats", Label: "TP Stats", Category: "Performance", Fetch: fetchTPStats, Wheel: true},
+	{Name: "netstats", Label: "Net Stats", Category: "Performance", Fetch: fetchNetStats, Wheel: true},
 	{Name: "gcstats", Label: "GC Stats", Category: "Performance", Fetch: fetchGCStats},
 	{Name: "proxyhistograms", Label: "Proxy Histograms", Category: "Performance", Fetch: fetchProxyHistograms},
-	{Name: "cachestats", Label: "Cache Stats", Category: "Performance", Fetch: fetchCacheStats},
-	{Name: "settings", Label: "Settings (get*)", Category: "Settings", Fetch: fetchSettings, Diffable: true},
+	{Name: "cachestats", Label: "Cache Stats", Category: "Performance", Fetch: fetchCacheStats, Wheel: true},
+	{Name: "settings", Label: "Settings (get*)", Category: "Settings", Fetch: fetchSettings, Diffable: true, Wheel: true},
 	// Diffable for the same reason as describecluster above: gossip/native
 	// transport/incremental backups should normally be uniformly enabled (or
 	// uniformly disabled during planned maintenance) across a healthy
@@ -117,6 +146,17 @@ var Catalog = []StatDef{
 	{Name: "cfstats", Label: "Table Stats", Category: "Tables", RequiresTable: true, FetchTable: fetchCfStats},
 	{Name: "cfhistograms", Label: "Table Histograms", Category: "Tables", RequiresTable: true, FetchTable: fetchTableHistograms},
 	{Name: "toppartitions", Label: "Top Partitions", Category: "Tables", RequiresTable: true, FetchTable: fetchTopPartitions},
+	// describering/effectiveownership are keyspace-scoped, not table-scoped
+	// like everything else RequiresTable -- see fetchDescribeRing's doc
+	// comment for why they reuse RequiresTable/FetchTable anyway rather than
+	// adding a parallel RequiresKeyspace scoping.
+	{Name: "describering", Label: "Describe Ring", Category: "Tables", RequiresTable: true, FetchTable: fetchDescribeRing},
+	{Name: "effectiveownership", Label: "Effective Ownership", Category: "Tables", RequiresTable: true, FetchTable: fetchEffectiveOwnership},
+	// reloadseeds is the catalog's first non-read-only entry -- see
+	// StatDef.Confirm/SingleTarget's doc comments for why it needs both.
+	// "Actions" is a new category rather than folding it into "Status" so
+	// the side panel visibly separates it from every read-only button.
+	{Name: "reloadseeds", Label: "Reload Seeds", Category: "Actions", Fetch: fetchReloadSeeds, Confirm: true, SingleTarget: true},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -1389,4 +1429,129 @@ func fetchTopPartitions(j *Client, ip, table string) (StatsResult, error) {
 	}
 
 	return StatsResult{Groups: groups}, nil
+}
+
+// fetchDescribeRing and fetchEffectiveOwnership are keyspace-scoped, not
+// table-scoped -- nodetool's own `describering <keyspace>` and the
+// ownership-% computation both key off the keyspace's replication settings
+// alone. They reuse RequiresTable/FetchTable (splitting the "keyspace.table"
+// target and discarding tableName) instead of a parallel RequiresKeyspace
+// scoping, since that would need its own frontend picker and route param for
+// a need this narrow -- the one cost is that selecting several tables from
+// the *same* keyspace in the Tables panel reruns the same keyspace-scoped
+// query once per selected table (redundant but harmless, each tab still
+// correct) rather than deduping to one.
+//
+// This corrects an earlier, incomplete assumption (see git history) that
+// "ownership %" had no real JMX-exposed number and would need to be computed
+// here from replication factor/topology by hand. StorageServiceMBean has
+// exactly that number already computed server-side --
+// effectiveOwnership(keyspace) -- verified against Cassandra 4.1.12's own
+// jar and a live cluster; no need to reimplement NetworkTopologyStrategy math
+// in this package.
+
+// fetchDescribeRing matches `nodetool describering <keyspace>`: every token
+// range's owning endpoints, via StorageServiceMBean.describeRingJMX(keyspace).
+// Verified live that this returns a List<String> of already-formatted
+// TokenRange.toString() entries (the same text nodetool's own CLI prints
+// verbatim), not structured CompositeData like every other TabularData/
+// composite read elsewhere in this file -- despite the "JMX" name suggesting
+// otherwise. Shown as-is rather than regex-parsed back into fields: Cassandra
+// already did the formatting, and re-parsing its toString() format would
+// just be a second, more fragile way to get the same information (breaks
+// silently if that format ever changes across versions). Left uncapped and
+// in the MBean's own return order, same as nodetool's own describering
+// output -- unlike compactionhistory, there's no "most recent N" style
+// cutoff that makes sense for a ring (every range is equally relevant).
+func fetchDescribeRing(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, _, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "describeRingJMX", Arguments: []any{keyspace},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("describering failed for keyspace %s: %s -- check the keyspace name", keyspace, raws[0].Error)
+	}
+
+	var ranges []string
+	if err := json.Unmarshal(raws[0].Value, &ranges); err != nil {
+		return StatsResult{}, err
+	}
+	rows := make([]StatRow, len(ranges))
+	for i, r := range ranges {
+		rows[i] = row(fmt.Sprintf("Range %d", i+1), r)
+	}
+	return StatsResult{Groups: []StatGroup{{Name: fmt.Sprintf("%d token ranges", len(rows)), Rows: rows}}}, nil
+}
+
+// fetchEffectiveOwnership matches the "Owns" column of `nodetool ring
+// <keyspace>`/`nodetool status <keyspace>`: each endpoint's effective
+// ownership percentage for the target keyspace, via
+// StorageServiceMBean.effectiveOwnership(keyspace) -- a real, already-
+// replication-factor-and-topology-aware number Cassandra computes itself
+// (Map<InetAddress,Float>), not something this package recomputes from raw
+// tokens.
+func fetchEffectiveOwnership(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, _, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "effectiveOwnership", Arguments: []any{keyspace},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("effective ownership failed for keyspace %s: %s -- check the keyspace name", keyspace, raws[0].Error)
+	}
+
+	var ownership map[string]float64
+	if err := json.Unmarshal(raws[0].Value, &ownership); err != nil {
+		return StatsResult{}, err
+	}
+
+	endpoints := make([]string, 0, len(ownership))
+	for endpoint := range ownership {
+		endpoints = append(endpoints, endpoint)
+	}
+	sort.Strings(endpoints)
+	rows := make([]StatRow, len(endpoints))
+	for i, endpoint := range endpoints {
+		rows[i] = row(strings.TrimPrefix(endpoint, "/"), fmt.Sprintf("%.2f%%", ownership[endpoint]*100))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// fetchReloadSeeds matches `nodetool reloadseeds`: re-reads the seed list
+// from the configured seed provider and returns the resulting list. Unlike
+// everything else in this catalog, this *mutates* node-local gossip state
+// rather than only reading it -- StatDef.Confirm/SingleTarget gate it in the
+// frontend accordingly (see their doc comments). The operation itself lives
+// on GossiperMBean, not StorageServiceMBean like most of this file --
+// verified against the jar's class constants (GossiperMBean.reloadSeeds(),
+// object name "org.apache.cassandra.net:type=Gossiper" from Gossiper's own
+// registration string, not the "org.apache.cassandra.gms" package name a
+// guess-by-analogy would produce).
+func fetchReloadSeeds(j *Client, ip string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.net:type=Gossiper", Operation: "reloadSeeds"}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("reloadSeeds failed: %s", raws[0].Error)
+	}
+
+	var seeds []string
+	if err := json.Unmarshal(raws[0].Value, &seeds); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Name: fmt.Sprintf("%d seeds after reload", len(seeds)), Rows: []StatRow{row("Seeds", listValue(seeds))}}}}, nil
 }
