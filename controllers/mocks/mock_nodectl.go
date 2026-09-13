@@ -99,6 +99,20 @@ func (mr *MockNodectlMockRecorder) OperationMode(ctx, nodeIP any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperationMode", reflect.TypeOf((*MockNodectl)(nil).OperationMode), ctx, nodeIP)
 }
 
+// ReloadSeeds mocks base method.
+func (m *MockNodectl) ReloadSeeds(ctx context.Context, nodeIP string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReloadSeeds", ctx, nodeIP)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReloadSeeds indicates an expected call of ReloadSeeds.
+func (mr *MockNodectlMockRecorder) ReloadSeeds(ctx, nodeIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadSeeds", reflect.TypeOf((*MockNodectl)(nil).ReloadSeeds), ctx, nodeIP)
+}
+
 // Version mocks base method.
 func (m *MockNodectl) Version(ctx context.Context, nodeIP string) (int, int, int, error) {
 	m.ctrl.T.Helper()

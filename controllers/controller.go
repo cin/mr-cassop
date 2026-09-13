@@ -261,6 +261,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return ctrl.Result{}, errors.Wrap(err, "Error reconciling cassandra pods configmap")
 	}
 
+	if err = r.reconcileSeedReload(ctx, cc, podList, nodeList); err != nil {
+		r.Log.Warnf("failed to reconcile seed reload: %s", err)
+	}
+
 	if err = r.reconcileCassandra(ctx, cc, restartChecksum); err != nil {
 		if errors.Cause(err) == errTLSSecretNotFound || errors.Cause(err) == errTLSSecretInvalid {
 			return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil

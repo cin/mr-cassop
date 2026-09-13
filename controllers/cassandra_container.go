@@ -209,12 +209,13 @@ func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1
 		`replace_address=""
 old_ip=$CASSANDRA_NODE_PREVIOUS_IP
 if [[ "${old_ip}" != "" ]]; then
-  if [ ! -d "/var/lib/cassandra/data" ] || [ -z "$(ls -A /var/lib/cassandra/data)" ]; then
-    replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
-    echo replacing old Cassandra node - adding arg $replace_address
-  else
-    echo not using replace address since the storage directory is not empty
-  fi
+  # replace_address_first_boot is a no-op once the node has already completed
+  # bootstrap (see CASSANDRA-7356), so it's safe to always pass it when the
+  # pod's IP changed - including on a restart with existing persisted data,
+  # which is the common case in Kubernetes and where gossip peers actually
+  # need to be told this node's identity moved to a new address.
+  replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
+  echo replacing old Cassandra node - adding arg $replace_address
 else
   echo not using replace address since the node IP hasn\'t changed
 fi`,

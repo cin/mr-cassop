@@ -21,6 +21,7 @@ type Nodectl interface {
 	Version(ctx context.Context, nodeIP string) (major, minor, patch int, err error)
 	ClusterView(ctx context.Context, nodeIP string) (ClusterView, error)
 	OperationMode(ctx context.Context, nodeIP string) (OperationMode, error)
+	ReloadSeeds(ctx context.Context, nodeIP string) error
 }
 
 func NewClient(jolokiaAddr, jmxUser, jmxPassword string, logr *zap.SugaredLogger) Nodectl {
