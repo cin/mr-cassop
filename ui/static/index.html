@@ -242,11 +242,22 @@
     width: 100%;
   }
   .list-toolbar {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tool-category-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 10px 0 4px;
+  }
+  .tool-category-label:first-child { margin-top: 0; }
+  .tool-group {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
   }
   .tool-btn {
     background: var(--bg);
@@ -259,7 +270,6 @@
   }
   .tool-btn:hover { border-color: var(--accent); }
   .tool-btn.write-btn {
-    margin-left: 6px;
     border-color: var(--unknown);
     color: var(--unknown);
   }
@@ -1429,8 +1439,23 @@ function renderNodeList(rows) {
     if (t.category && !categories.includes(t.category)) categories.push(t.category);
   }
   if (!categories.includes(selectedToolCategory)) selectedToolCategory = 'all';
-  const visible = visibleTools();
   const showSetSettings = selectedToolCategory === 'all' || selectedToolCategory === 'Settings';
+
+  // A tool's own button markup, shared by both the grouped ("all") and
+  // single-category rendering below rather than duplicating it.
+  const toolButtonHtml = (t) => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`;
+
+  // "All tools" groups buttons under a label per category -- a single flat
+  // wrapped grid of ~20+ buttons (every catalog entry) had no way to tell
+  // "Table Stats" and "TP Stats" apart at a glance. A specific category
+  // selection already says which group this is via the dropdown, so it
+  // stays a plain unlabeled group.
+  const toolbarHtml = selectedToolCategory === 'all'
+    ? categories.filter(c => c !== 'all').map(cat => `
+        <div class="tool-category-label">${cat}</div>
+        <div class="tool-group">${TOOLS.filter(t => t.category === cat).map(toolButtonHtml).join('')}</div>
+      `).join('')
+    : `<div class="tool-group">${visibleTools().map(toolButtonHtml).join('')}</div>`;
 
   nodeListPanelEl.innerHTML = `
     <div class="list-header">
@@ -1446,8 +1471,11 @@ function renderNodeList(rows) {
       </select>
     </div>
     <div class="list-toolbar">
-      ${visible.map(t => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`).join('')}
-      ${showSetSettings ? `<button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button>` : ''}
+      ${toolbarHtml}
+      ${showSetSettings ? `
+        <div class="tool-category-label">Write</div>
+        <div class="tool-group"><button class="tool-btn write-btn" id="setSettingsBtn" title="Query current settings on selected nodes, edit, then apply to all of them">Set&#42;</button></div>
+      ` : ''}
     </div>
     <div class="list-body">${rowsHtml}</div>
     <div class="list-hint">Check boxes (or click a row) to pick nodes, then run a tool above -- same as middle-click.</div>
