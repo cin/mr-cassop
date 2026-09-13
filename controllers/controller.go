@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
@@ -86,6 +87,11 @@ type CassandraClusterReconciler struct {
 	CqlClient     func(cluster *gocql.ClusterConfig) (cql.CqlClient, error)
 	ReaperClient  func(url *url.URL, clusterName, username, password string, defaultRepairThreadCount int32) reaper.ReaperClient
 	NodectlClient func(jolokiaAddr, jmxUser, jmxPassword string, logr *zap.SugaredLogger) nodectl.Nodectl
+
+	// seedReloadNudgedIPs is keyed by "namespace/cluster/podName" and records the last IP a
+	// seed pod had when reconcileSeedReload last nudged its peers to reload seeds, so it can
+	// throttle repeat nudges for the same IP change. See reconcileSeedReload's doc comment.
+	seedReloadNudgedIPs sync.Map
 }
 
 // +kubebuilder:rbac:groups=db.ibm.com,resources=cassandraclusters,verbs=get;list;watch;create;update;patch;delete

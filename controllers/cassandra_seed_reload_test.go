@@ -9,6 +9,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func seedReloadTestCluster() *v1alpha1.CassandraCluster {
+	return &v1alpha1.CassandraCluster{ObjectMeta: metav1.ObjectMeta{Name: "local-cluster", Namespace: "cassop"}}
+}
+
 func seedReloadTestPod(name string, isSeed, ready bool) v1.Pod {
 	labels := map[string]string{}
 	if isSeed {
@@ -93,4 +97,42 @@ func TestReadyPeerIPs(t *testing.T) {
 	peers := readyPeerIPs(pods, broadcastAddresses, "dc1-0")
 
 	g.Expect(peers).To(ConsistOf("10.244.3.37"))
+}
+
+func TestUnnudgedSeedIPsSkipsAnIPAlreadyNudged(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	r := &CassandraClusterReconciler{}
+	cc := seedReloadTestCluster()
+
+	r.markSeedReloadNudged(cc, "dc1-0", "10.244.2.37")
+
+	changed := map[string]string{"dc1-0": "10.244.2.37"}
+	g.Expect(r.unnudgedSeedIPs(cc, changed)).To(BeEmpty())
+}
+
+func TestUnnudgedSeedIPsKeepsANewIPForAnAlreadyNudgedPod(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	r := &CassandraClusterReconciler{}
+	cc := seedReloadTestCluster()
+
+	r.markSeedReloadNudged(cc, "dc1-0", "10.244.2.37")
+
+	// the seed's IP changed again since the last nudge - it should be nudged once more.
+	changed := map[string]string{"dc1-0": "10.244.2.99"}
+	g.Expect(r.unnudgedSeedIPs(cc, changed)).To(HaveKeyWithValue("dc1-0", "10.244.2.99"))
+}
+
+func TestUnnudgedSeedIPsIsScopedPerCluster(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	r := &CassandraClusterReconciler{}
+	ccA := &v1alpha1.CassandraCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "cassop"}}
+	ccB := &v1alpha1.CassandraCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-b", Namespace: "cassop"}}
+
+	r.markSeedReloadNudged(ccA, "dc1-0", "10.244.2.37")
+
+	changed := map[string]string{"dc1-0": "10.244.2.37"}
+	g.Expect(r.unnudgedSeedIPs(ccB, changed)).To(HaveKeyWithValue("dc1-0", "10.244.2.37"))
 }

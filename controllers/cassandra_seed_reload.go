@@ -20,6 +20,16 @@ import (
 // restart. This is a best-effort nudge, not a precondition: errors here are logged and
 // swallowed, and the underlying condition is naturally retried every reconcile until the
 // seed becomes ready again.
+//
+// The pod IPs configmap (our record of each pod's last-known-ready IP) only gets updated
+// once the seed pod itself reports ready again, which for the seed's own readiness probe
+// requires cross-node gossip agreement (see prober/prober/node_states.go:isNodeReady) - so
+// it can lag the seed's actual IP change by a long, unpredictable amount under churn, and
+// this reconciler runs far more often than that (every StatefulSet status change plus the
+// retry backoff of any other in-flight condition). Without its own throttle this would
+// detect the same "changed" IP and re-issue the JMX nudge on every single one of those
+// reconciles until the configmap catches up - seedReloadNudgedIPs remembers the IP we last
+// nudged peers about per seed pod so we only do it once per actual IP change.
 func (r *CassandraClusterReconciler) reconcileSeedReload(ctx context.Context, cc *v1alpha1.CassandraCluster, podList *v1.PodList, nodesList *v1.NodeList) error {
 	pods := excludePodsPendingRemoval(cc, podList.Items)
 
@@ -38,6 +48,7 @@ func (r *CassandraClusterReconciler) reconcileSeedReload(ctx context.Context, cc
 	}
 
 	changedSeeds := changedSeedIPs(pods, broadcastAddresses, podIPsCM.Data)
+	changedSeeds = r.unnudgedSeedIPs(cc, changedSeeds)
 	if len(changedSeeds) == 0 {
 		return nil
 	}
@@ -54,17 +65,41 @@ func (r *CassandraClusterReconciler) reconcileSeedReload(ctx context.Context, cc
 
 	nctl := r.NodectlClient(jolokiaURL(cc).String(), roleName, rolePassword, r.Log)
 
-	for seedPodName := range changedSeeds {
+	for seedPodName, newIP := range changedSeeds {
 		peerIPs := readyPeerIPs(pods, broadcastAddresses, seedPodName)
 		for _, peerIP := range peerIPs {
 			if err := nctl.ReloadSeeds(ctx, peerIP); err != nil {
 				r.Log.Debugf("failed to reload seeds on peer %s after seed pod %s's IP changed: %s", peerIP, seedPodName, err)
 			}
 		}
+		r.markSeedReloadNudged(cc, seedPodName, newIP)
 		r.Log.Infof("seed pod %s's IP changed, asked %d peer(s) to reload their seed list", seedPodName, len(peerIPs))
 	}
 
 	return nil
+}
+
+// unnudgedSeedIPs drops any seed pod from changed whose current IP we've already nudged
+// peers about, so a seed's IP change only triggers the reload once no matter how many
+// reconciles pass before our own bookkeeping of its IP catches up.
+func (r *CassandraClusterReconciler) unnudgedSeedIPs(cc *v1alpha1.CassandraCluster, changed map[string]string) map[string]string {
+	filtered := make(map[string]string, len(changed))
+	for podName, ip := range changed {
+		if nudgedIP, ok := r.seedReloadNudgedIPs.Load(seedReloadNudgeKey(cc, podName)); ok && nudgedIP == ip {
+			continue
+		}
+		filtered[podName] = ip
+	}
+
+	return filtered
+}
+
+func (r *CassandraClusterReconciler) markSeedReloadNudged(cc *v1alpha1.CassandraCluster, podName, ip string) {
+	r.seedReloadNudgedIPs.Store(seedReloadNudgeKey(cc, podName), ip)
+}
+
+func seedReloadNudgeKey(cc *v1alpha1.CassandraCluster, podName string) string {
+	return cc.Namespace + "/" + cc.Name + "/" + podName
 }
 
 // changedSeedIPs returns the current broadcast IP of every seed pod whose IP differs
