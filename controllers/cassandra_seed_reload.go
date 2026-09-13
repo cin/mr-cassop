@@ -5,6 +5,7 @@ import (
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/names"
+	"github.com/cin/mr-cassop/controllers/nodectl"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,21 +39,33 @@ func (r *CassandraClusterReconciler) reconcileSeedReload(ctx context.Context, cc
 		return errors.Wrap(err, "can't get broadcast addresses")
 	}
 
+	changedSeeds, err := r.changedUnnudgedSeedIPs(ctx, cc, pods, broadcastAddresses)
+	if err != nil || len(changedSeeds) == 0 {
+		return err
+	}
+
+	return r.nudgePeersForChangedSeeds(ctx, cc, pods, broadcastAddresses, changedSeeds)
+}
+
+// changedUnnudgedSeedIPs returns the current broadcast IP of every seed pod whose IP
+// changed since it was last recorded, minus any we've already nudged peers about.
+func (r *CassandraClusterReconciler) changedUnnudgedSeedIPs(ctx context.Context, cc *v1alpha1.CassandraCluster, pods []v1.Pod, broadcastAddresses map[string]string) (map[string]string, error) {
 	podIPsCM := &v1.ConfigMap{}
-	err = r.Get(ctx, types.NamespacedName{Name: names.PodIPsConfigMap(cc.Name), Namespace: cc.Namespace}, podIPsCM)
+	err := r.Get(ctx, types.NamespacedName{Name: names.PodIPsConfigMap(cc.Name), Namespace: cc.Namespace}, podIPsCM)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil // nothing recorded yet, nothing to compare against
+			return nil, nil // nothing recorded yet, nothing to compare against
 		}
-		return errors.Wrap(err, "can't get pod IPs configmap")
+		return nil, errors.Wrap(err, "can't get pod IPs configmap")
 	}
 
-	changedSeeds := changedSeedIPs(pods, broadcastAddresses, podIPsCM.Data)
-	changedSeeds = r.unnudgedSeedIPs(cc, changedSeeds)
-	if len(changedSeeds) == 0 {
-		return nil
-	}
+	changed := changedSeedIPs(pods, broadcastAddresses, podIPsCM.Data)
+	return r.unnudgedSeedIPs(cc, changed), nil
+}
 
+// nudgePeersForChangedSeeds asks every ready peer of each changed seed pod to reload its
+// seed list via JMX, one seed at a time.
+func (r *CassandraClusterReconciler) nudgePeersForChangedSeeds(ctx context.Context, cc *v1alpha1.CassandraCluster, pods []v1.Pod, broadcastAddresses, changedSeeds map[string]string) error {
 	adminSecret, err := r.adminRoleSecret(ctx, cc)
 	if err != nil {
 		return errors.Wrap(err, "can't get admin secret")
@@ -64,19 +77,25 @@ func (r *CassandraClusterReconciler) reconcileSeedReload(ctx context.Context, cc
 	}
 
 	nctl := r.NodectlClient(jolokiaURL(cc).String(), roleName, rolePassword, r.Log)
-
 	for seedPodName, newIP := range changedSeeds {
-		peerIPs := readyPeerIPs(pods, broadcastAddresses, seedPodName)
-		for _, peerIP := range peerIPs {
-			if err := nctl.ReloadSeeds(ctx, peerIP); err != nil {
-				r.Log.Debugf("failed to reload seeds on peer %s after seed pod %s's IP changed: %s", peerIP, seedPodName, err)
-			}
-		}
-		r.markSeedReloadNudged(cc, seedPodName, newIP)
-		r.Log.Infof("seed pod %s's IP changed, asked %d peer(s) to reload their seed list", seedPodName, len(peerIPs))
+		r.nudgePeersForChangedSeed(ctx, nctl, cc, pods, broadcastAddresses, seedPodName, newIP)
 	}
 
 	return nil
+}
+
+// nudgePeersForChangedSeed asks every ready peer of seedPodName to reload its seed list,
+// then records newIP as nudged so this same change isn't repeated on later reconciles.
+func (r *CassandraClusterReconciler) nudgePeersForChangedSeed(ctx context.Context, nctl nodectl.Nodectl, cc *v1alpha1.CassandraCluster, pods []v1.Pod, broadcastAddresses map[string]string, seedPodName, newIP string) {
+	peerIPs := readyPeerIPs(pods, broadcastAddresses, seedPodName)
+	for _, peerIP := range peerIPs {
+		if err := nctl.ReloadSeeds(ctx, peerIP); err != nil {
+			r.Log.Debugf("failed to reload seeds on peer %s after seed pod %s's IP changed: %s", peerIP, seedPodName, err)
+		}
+	}
+
+	r.markSeedReloadNudged(cc, seedPodName, newIP)
+	r.Log.Infof("seed pod %s's IP changed, asked %d peer(s) to reload their seed list", seedPodName, len(peerIPs))
 }
 
 // unnudgedSeedIPs drops any seed pod from changed whose current IP we've already nudged
