@@ -17,7 +17,7 @@ export RETRY_DELAY="10s"
 export DEFAULT_CASSANDRA_IMAGE="ghcr.io/cin/mr-cassop/cassandra:4.1.11-0.6.0"
 export DEFAULT_PROBER_IMAGE="ghcr.io/cin/mr-cassop/prober:0.6.0"
 export DEFAULT_JOLOKIA_IMAGE="ghcr.io/cin/mr-cassop/jolokia:0.6.0"
-export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:4.2.5"
+export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:5.0.1"
 export DEFAULT_ICARUS_IMAGE="ghcr.io/cin/mr-cassop/icarus:0.6.0"
 
 echo "✅ Environment variables set for local development"
