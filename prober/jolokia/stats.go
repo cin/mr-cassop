@@ -157,6 +157,27 @@ var Catalog = []StatDef{
 	// "Actions" is a new category rather than folding it into "Status" so
 	// the side panel visibly separates it from every read-only button.
 	{Name: "reloadseeds", Label: "Reload Seeds", Category: "Actions", Fetch: fetchReloadSeeds, Confirm: true, SingleTarget: true},
+
+	// getseeds/failuredetector/listpendinghints: read-only, node-scoped,
+	// no new plumbing beyond an attribute read -- the "cheap wins" flagged
+	// in the nodetool coverage matrix.
+	{Name: "getseeds", Label: "Seeds", Category: "Status", Fetch: fetchSeeds},
+	{Name: "failuredetector", Label: "Failure Detector", Category: "Status", Fetch: fetchFailureDetector},
+	{Name: "listpendinghints", Label: "Pending Hints", Category: "Status", Fetch: fetchPendingHints},
+
+	// invalidate*cache: mutating like reloadseeds (Confirm), but -- unlike
+	// reloadseeds' gossip-state change -- invalidating a cache has no
+	// cross-node coordination concern, so running it against several
+	// selected nodes at once (e.g. "clear the row cache everywhere after a
+	// schema change") is a normal, intentional use -- no SingleTarget.
+	{Name: "invalidatekeycache", Label: "Invalidate Key Cache", Category: "Actions", Fetch: fetchInvalidateKeyCache, Confirm: true},
+	{Name: "invalidaterowcache", Label: "Invalidate Row Cache", Category: "Actions", Fetch: fetchInvalidateRowCache, Confirm: true},
+	{Name: "invalidatecountercache", Label: "Invalidate Counter Cache", Category: "Actions", Fetch: fetchInvalidateCounterCache, Confirm: true},
+	{Name: "invalidatecredentialscache", Label: "Invalidate Credentials Cache", Category: "Actions", Fetch: fetchInvalidateCredentialsCache, Confirm: true},
+	{Name: "invalidatepermissionscache", Label: "Invalidate Permissions Cache", Category: "Actions", Fetch: fetchInvalidatePermissionsCache, Confirm: true},
+	{Name: "invalidaterolescache", Label: "Invalidate Roles Cache", Category: "Actions", Fetch: fetchInvalidateRolesCache, Confirm: true},
+	{Name: "invalidatejmxpermissionscache", Label: "Invalidate JMX Permissions Cache", Category: "Actions", Fetch: fetchInvalidateJmxPermissionsCache, Confirm: true},
+	{Name: "invalidatenetworkpermissionscache", Label: "Invalidate Network Permissions Cache", Category: "Actions", Fetch: fetchInvalidateNetworkPermissionsCache, Confirm: true},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -1554,4 +1575,152 @@ func fetchReloadSeeds(j *Client, ip string) (StatsResult, error) {
 		return StatsResult{}, err
 	}
 	return StatsResult{Groups: []StatGroup{{Name: fmt.Sprintf("%d seeds after reload", len(seeds)), Rows: []StatRow{row("Seeds", listValue(seeds))}}}}, nil
+}
+
+// fetchSeeds matches `nodetool getseeds`: the read-only complement to
+// reloadseeds, on the same GossiperMBean. "Seeds" is a zero-arg get-prefixed
+// method, so it's an attribute (same convention that made getlogginglevels
+// an attribute read rather than an exec), not an operation.
+func fetchSeeds(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.net:type=Gossiper", "Seeds")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var seeds []string
+	if err := json.Unmarshal(value, &seeds); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Seeds", listValue(seeds))}}}}, nil
+}
+
+// fetchFailureDetector matches `nodetool failuredetector`: each endpoint's
+// phi-accrual conviction value, from FailureDetectorMBean's "PhiValues"
+// attribute (a zero-arg get-prefixed TabularData read, same convention as
+// every other attribute here). Verified live that -- unlike
+// compactionhistory's composite-index TabularData (nested maps) or every
+// other single-column TabularData elsewhere in this file (flat array) --
+// Jolokia serializes this single-column-indexed one as a JSON *object* keyed
+// by the index value (the endpoint address) instead, e.g.
+// {"/10.0.0.1": {"Endpoint": "/10.0.0.1", "PHI": 0.18}, ...}.
+func fetchFailureDetector(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.net:type=FailureDetector", "PhiValues")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var byEndpoint map[string]struct {
+		Endpoint string
+		PHI      float64
+	}
+	if err := json.Unmarshal(value, &byEndpoint); err != nil {
+		return StatsResult{}, err
+	}
+	if len(byEndpoint) == 0 {
+		return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("(none)", "no endpoints")}}}}, nil
+	}
+	endpoints := make([]string, 0, len(byEndpoint))
+	for endpoint := range byEndpoint {
+		endpoints = append(endpoints, endpoint)
+	}
+	sort.Strings(endpoints)
+	rows := make([]StatRow, len(endpoints))
+	for i, endpoint := range endpoints {
+		rows[i] = row(strings.TrimPrefix(endpoint, "/"), fmt.Sprintf("%.4f", byEndpoint[endpoint].PHI))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// fetchPendingHints matches `nodetool listpendinghints`, from
+// HintsServiceMBean's "PendingHints" attribute (List<Map<String,String>>,
+// one map per target endpoint with keys verified live rather than guessed).
+func fetchPendingHints(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.hints:type=HintsService", "PendingHints")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var entries []map[string]string
+	if err := json.Unmarshal(value, &entries); err != nil {
+		return StatsResult{}, err
+	}
+	if len(entries) == 0 {
+		return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("(none)", "no pending hints")}}}}, nil
+	}
+	rows := make([]StatRow, len(entries))
+	for i, e := range entries {
+		keys := make([]string, 0, len(e))
+		for k := range e {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, len(keys))
+		for k, key := range keys {
+			parts[k] = fmt.Sprintf("%s: %s", key, e[key])
+		}
+		rows[i] = row(fmt.Sprintf("Hint %d", i+1), strings.Join(parts, ", "))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// cachesMbean is CacheServiceMBean's object name -- verified against the
+// jar's class constants, backing the three invalidate*cache entries whose
+// operations (invalidateKeyCache/invalidateRowCache/invalidateCounterCache)
+// live on it rather than each having their own per-cache MBean.
+const cachesMbean = "org.apache.cassandra.db:type=Caches"
+
+func fetchInvalidateKeyCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateKeyCache", "Key cache")
+}
+
+func fetchInvalidateRowCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateRowCache", "Row cache")
+}
+
+func fetchInvalidateCounterCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateCounterCache", "Counter cache")
+}
+
+// The five auth caches each get their own MBean (unlike the key/row/counter
+// caches above, which share one) and all implement AuthCacheMBean's generic
+// no-arg invalidate() -- nodetool's own invalidate*cache commands call this
+// generic form, not the more targeted invalidateCredentials(role)/
+// invalidatePermissions(role, resource)/invalidateRoles(role) overloads each
+// cache also exposes for invalidating a single entry.
+//
+// Two of the five register under a name that doesn't match their Java class
+// name -- verified against the jar rather than assumed by analogy with the
+// other three (CredentialsCache/PermissionsCache/RolesCache, which do follow
+// the obvious "org.apache.cassandra.auth:type=<ClassName>" pattern):
+// NetworkPermissionsCache registers as "NetworkAuthCache" (its deprecated/
+// legacy name), and JmxPermissionsCache registers as "JMXPermissionsCache"
+// (capitalized differently than its class name).
+func fetchInvalidateCredentialsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=CredentialsCache", "invalidate", "Credentials cache")
+}
+
+func fetchInvalidatePermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=PermissionsCache", "invalidate", "Permissions cache")
+}
+
+func fetchInvalidateRolesCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=RolesCache", "invalidate", "Roles cache")
+}
+
+func fetchInvalidateJmxPermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=JMXPermissionsCache", "invalidate", "JMX permissions cache")
+}
+
+func fetchInvalidateNetworkPermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=NetworkAuthCache", "invalidate", "Network permissions cache")
+}
+
+// execInvalidate is the shared no-arg-exec-then-confirm shape every
+// invalidate*cache entry above uses.
+func execInvalidate(j *Client, ip, mbean, operation, label string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: mbean, Operation: operation}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("%s invalidation failed: %s", label, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row(label, "invalidated")}}}}, nil
 }
