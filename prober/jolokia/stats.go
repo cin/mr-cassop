@@ -178,6 +178,19 @@ var Catalog = []StatDef{
 	// adding a parallel RequiresKeyspace scoping.
 	{Name: "describering", Label: "Describe Ring", Category: "Tables", RequiresTable: true, FetchTable: fetchDescribeRing},
 	{Name: "effectiveownership", Label: "Effective Ownership", Category: "Tables", RequiresTable: true, FetchTable: fetchEffectiveOwnership},
+
+	// repair matches `nodetool repair <keyspace> <table>` (no extra flags --
+	// see fetchRepair's doc comment on scope). Reuses RequiresTable/
+	// FetchTable exactly like cfstats: one selected table per run, so
+	// selecting several tables in the Tables panel kicks off one repair
+	// command per table, each its own results tab -- the existing
+	// per-table-tool behavior, not something repair needed to invent.
+	// Confirm since it's real, resource-intensive cluster work, not a
+	// bounded config write -- but not Danger: unlike this file's Danger
+	// entries, repair cannot lose data; it's Cassandra's own anti-entropy
+	// mechanism, the opposite of destructive.
+	{Name: "repair", Label: "Repair", Category: "Actions", RequiresTable: true, FetchTable: fetchRepair, Confirm: true},
+	{Name: "forceterminateallrepairsessions", Label: "Terminate All Repair Sessions", Category: "Actions", Fetch: fetchForceTerminateAllRepairSessions, Confirm: true},
 	// reloadseeds is the catalog's first non-read-only entry -- see
 	// StatDef.Confirm/SingleTarget's doc comments for why it needs both.
 	// "Actions" is a new category rather than folding it into "Status" so
@@ -1900,4 +1913,65 @@ func fetchMove(j *Client, ip, newToken string) (StatsResult, error) {
 		return StatsResult{}, fmt.Errorf("move(%s) failed: %s", newToken, raws[0].Error)
 	}
 	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Moved to token", newToken)}}}}, nil
+}
+
+// fetchRepair matches a plain `nodetool repair <keyspace> <table>` -- no
+// -pr/-full/-dc/... flags exposed here, deliberately: StorageServiceMBean.
+// repairAsync(keyspace, options) is parsed server-side by RepairOption.parse,
+// which fills in Cassandra's own defaults (via getOrDefault) for every key
+// this doesn't set -- verified live that a minimal options map (just
+// "columnFamilies", scoping to the one selected table, same as cfstats)
+// runs a real repair rather than erroring on the "missing" keys nodetool's
+// own CLI always fills in itself before sending. Exposing the flag surface
+// nodetool has is future work, not required to get a working "repair this
+// table without SSHing in" button.
+//
+// repairAsync itself is fire-and-forget: it returns a command ID
+// synchronously and does the real work across a background thread,
+// reporting progress via JMX notifications nodetool's own CLI listens for
+// live. This package has no notification-listener plumbing (a real
+// architectural addition, not a follow-up to bolt on here), so this only
+// reports that the command started -- check tpstats' repair thread pools,
+// compactionstats, or this node's system.log for progress.
+func fetchRepair(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, tableName, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	options := map[string]string{"columnFamilies": tableName}
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "repairAsync", Arguments: []any{keyspace, options},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("repair failed for %s.%s: %s -- check the keyspace/table name", keyspace, tableName, raws[0].Error)
+	}
+
+	var cmdID int
+	if err := json.Unmarshal(raws[0].Value, &cmdID); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{
+		row("Repair command", fmt.Sprintf("#%d", cmdID)),
+		row("Table", fmt.Sprintf("%s.%s", keyspace, tableName)),
+		row("Progress", "runs in the background -- no notification listener here yet, check tpstats' repair thread pools, compactionstats, or this node's system.log"),
+	}}}}, nil
+}
+
+// fetchForceTerminateAllRepairSessions backs
+// StorageServiceMBean.forceTerminateAllRepairSessions() -- the abort
+// counterpart to fetchRepair, for when a kicked-off repair needs to be
+// stopped (e.g. it's saturating a node more than expected).
+func fetchForceTerminateAllRepairSessions(j *Client, ip string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "forceTerminateAllRepairSessions"}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("forceTerminateAllRepairSessions failed: %s", raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Repair sessions", "terminated")}}}}, nil
 }
