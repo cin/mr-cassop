@@ -84,25 +84,80 @@ type StatDef struct {
 	// than adding a table parameter to Fetch itself so every other, simpler
 	// entry doesn't have to carry an always-empty parameter.
 	FetchTable func(j *Client, ip, table string) (StatsResult, error) `json:"-"`
+	// Wheel marks a curated "most used" subset for the frontend's middle-click
+	// radial wheel, independent of Category (which still drives the full
+	// category-filtered button list). The wheel's own radius grows with its
+	// item count (see ui/static/index.html's wheelRadius), so as the catalog
+	// grew past ~20 entries it stopped being usable for a quick gesture --
+	// deliberately opt-in per entry rather than "every catalog entry is on
+	// the wheel" going forward. Only a handful of frequent, fast, node-scoped
+	// reads should set this; leave new entries (especially RequiresTable
+	// ones, which need a table prompt anyway) off the wheel by default.
+	Wheel bool `json:"wheel"`
+	// Confirm marks a stat the frontend must confirm() before running --
+	// for anything that isn't a pure read (see fetchReloadSeeds, the first
+	// entry to set this). Deliberately separate from Wheel: a Confirm entry
+	// should generally also leave Wheel unset, since a drag-and-release
+	// gesture is the wrong interaction for something that needs a conscious
+	// confirmation step.
+	Confirm bool `json:"confirm"`
+	// SingleTarget marks a stat that only makes sense (or is only safe)
+	// against exactly one node at a time -- the frontend refuses to run it
+	// against a multi-selection. reloadSeeds is node-local gossip state, not
+	// a cluster-wide operation, so "run against every selected node" reads
+	// as one intentional action per node, not one bulk action -- forcing the
+	// operator to target nodes one at a time here is deliberate friction.
+	SingleTarget bool `json:"singleTarget"`
+	// Danger marks a stat as belonging in the frontend's red "Danger Zone"
+	// section -- cluster-membership/lifecycle operations (decommission,
+	// assassinate, drain, ...) that are hard or impossible to reverse if run
+	// by mistake, unlike everything else in this catalog (a bounded config
+	// write, a cache clear, a gossip reload). The frontend gates a Danger
+	// entry behind typing its own label back, not just confirm() -- the same
+	// bar a irreversible delete gets elsewhere. Every Danger entry should
+	// also set Confirm and, in effectively every case so far, SingleTarget:
+	// these are one-node-at-a-time operations, not bulk actions.
+	Danger bool `json:"danger"`
+	// RequiresArg marks a stat that needs one free-text argument neither a
+	// node nor a keyspace.table target covers -- an endpoint address to
+	// assassinate, a host ID to remove, a token to move to. Deliberately
+	// reuses RequiresTable's shape (one extra string, threaded through the
+	// same RunStat/route plumbing as a distinct arg param) rather than
+	// inventing a bespoke mechanism per command; the frontend collects it
+	// with a plain prompt() instead of the Tables-panel picker RequiresTable
+	// gets, since there's no finite list to choose from.
+	RequiresArg bool `json:"requiresArg"`
+	// ArgLabel is the prompt() text shown when collecting RequiresArg's
+	// value -- specific enough that the operator knows what to type without
+	// leaving this page to check nodetool's own help text.
+	ArgLabel string `json:"argLabel"`
+	// FetchArg is Fetch's RequiresArg-scoped counterpart, parallel to
+	// FetchTable.
+	FetchArg func(j *Client, ip, arg string) (StatsResult, error) `json:"-"`
 }
 
+// wheelTools is the curated "most used" subset of the catalog below that
+// also sets Wheel: true -- roughly the original, pre-growth catalog (see
+// wheelRadius' own comment on why a fixed 90px radius stopped being enough
+// once the read-only catalog passed a dozen entries, and Wheel's own comment
+// on why growth from here on should default to the category list, not this).
 var Catalog = []StatDef{
-	{Name: "info", Label: "Info", Category: "Status", Fetch: fetchInfo},
+	{Name: "info", Label: "Info", Category: "Status", Fetch: fetchInfo, Wheel: true},
 	// Diffable: a node's SchemaVersion disagreeing with the rest of the
 	// cluster is a real, actionable problem (a pending/failed schema push),
 	// not expected variance -- worth the same red-highlight treatment as
 	// fetchSettings gets, and free to add since it's just this one flag.
-	{Name: "describecluster", Label: "Describe", Category: "Status", Fetch: fetchDescribeCluster, Diffable: true},
+	{Name: "describecluster", Label: "Describe", Category: "Status", Fetch: fetchDescribeCluster, Diffable: true, Wheel: true},
 	{Name: "version", Label: "Version", Category: "Status", Fetch: fetchVersion, Diffable: true},
 	{Name: "gossipinfo", Label: "Gossip Info", Category: "Status", Fetch: fetchGossipInfo},
 	{Name: "clientstats", Label: "Client Stats", Category: "Performance", Fetch: fetchClientStats},
-	{Name: "compactionstats", Label: "Compactions", Category: "Compaction", Fetch: fetchCompactionStats},
-	{Name: "tpstats", Label: "TP Stats", Category: "Performance", Fetch: fetchTPStats},
-	{Name: "netstats", Label: "Net Stats", Category: "Performance", Fetch: fetchNetStats},
+	{Name: "compactionstats", Label: "Compactions", Category: "Compaction", Fetch: fetchCompactionStats, Wheel: true},
+	{Name: "tpstats", Label: "TP Stats", Category: "Performance", Fetch: fetchTPStats, Wheel: true},
+	{Name: "netstats", Label: "Net Stats", Category: "Performance", Fetch: fetchNetStats, Wheel: true},
 	{Name: "gcstats", Label: "GC Stats", Category: "Performance", Fetch: fetchGCStats},
 	{Name: "proxyhistograms", Label: "Proxy Histograms", Category: "Performance", Fetch: fetchProxyHistograms},
-	{Name: "cachestats", Label: "Cache Stats", Category: "Performance", Fetch: fetchCacheStats},
-	{Name: "settings", Label: "Settings (get*)", Category: "Settings", Fetch: fetchSettings, Diffable: true},
+	{Name: "cachestats", Label: "Cache Stats", Category: "Performance", Fetch: fetchCacheStats, Wheel: true},
+	{Name: "settings", Label: "Settings (get*)", Category: "Settings", Fetch: fetchSettings, Diffable: true, Wheel: true},
 	// Diffable for the same reason as describecluster above: gossip/native
 	// transport/incremental backups should normally be uniformly enabled (or
 	// uniformly disabled during planned maintenance) across a healthy
@@ -110,11 +165,88 @@ var Catalog = []StatDef{
 	// this pane exists to surface.
 	{Name: "statusflags", Label: "Status Flags", Category: "Status", Fetch: fetchStatusFlags, Diffable: true},
 	{Name: "compactionhistory", Label: "Compaction History", Category: "Compaction", Fetch: fetchCompactionHistory},
+	{Name: "getlogginglevels", Label: "Logging Levels", Category: "Status", Fetch: fetchLoggingLevels},
 	// The scoping decision the old comment here asked for: a required
 	// keyspace.table target (RequiresTable), not pagination or a top-N-by-
 	// size default -- see StatDef.RequiresTable's doc comment for why.
 	{Name: "cfstats", Label: "Table Stats", Category: "Tables", RequiresTable: true, FetchTable: fetchCfStats},
 	{Name: "cfhistograms", Label: "Table Histograms", Category: "Tables", RequiresTable: true, FetchTable: fetchTableHistograms},
+	{Name: "toppartitions", Label: "Top Partitions", Category: "Tables", RequiresTable: true, FetchTable: fetchTopPartitions},
+	// describering/effectiveownership are keyspace-scoped, not table-scoped
+	// like everything else RequiresTable -- see fetchDescribeRing's doc
+	// comment for why they reuse RequiresTable/FetchTable anyway rather than
+	// adding a parallel RequiresKeyspace scoping.
+	{Name: "describering", Label: "Describe Ring", Category: "Tables", RequiresTable: true, FetchTable: fetchDescribeRing},
+	{Name: "effectiveownership", Label: "Effective Ownership", Category: "Tables", RequiresTable: true, FetchTable: fetchEffectiveOwnership},
+
+	// repair matches `nodetool repair <keyspace> <table>` (no extra flags --
+	// see fetchRepair's doc comment on scope). Reuses RequiresTable/
+	// FetchTable exactly like cfstats: one selected table per run, so
+	// selecting several tables in the Tables panel kicks off one repair
+	// command per table, each its own results tab -- the existing
+	// per-table-tool behavior, not something repair needed to invent.
+	// Confirm since it's real, resource-intensive cluster work, not a
+	// bounded config write -- but not Danger: unlike this file's Danger
+	// entries, repair cannot lose data; it's Cassandra's own anti-entropy
+	// mechanism, the opposite of destructive.
+	{Name: "repair", Label: "Repair", Category: "Actions", RequiresTable: true, FetchTable: fetchRepair, Confirm: true},
+	{Name: "forceterminateallrepairsessions", Label: "Terminate All Repair Sessions", Category: "Actions", Fetch: fetchForceTerminateAllRepairSessions, Confirm: true},
+	// reloadseeds is the catalog's first non-read-only entry -- see
+	// StatDef.Confirm/SingleTarget's doc comments for why it needs both.
+	// "Actions" is a new category rather than folding it into "Status" so
+	// the side panel visibly separates it from every read-only button.
+	{Name: "reloadseeds", Label: "Reload Seeds", Category: "Actions", Fetch: fetchReloadSeeds, Confirm: true, SingleTarget: true},
+
+	// getseeds/failuredetector/listpendinghints: read-only, node-scoped,
+	// no new plumbing beyond an attribute read -- the "cheap wins" flagged
+	// in the nodetool coverage matrix.
+	{Name: "getseeds", Label: "Seeds", Category: "Status", Fetch: fetchSeeds},
+	{Name: "failuredetector", Label: "Failure Detector", Category: "Status", Fetch: fetchFailureDetector},
+	{Name: "listpendinghints", Label: "Pending Hints", Category: "Status", Fetch: fetchPendingHints},
+
+	// invalidate*cache: mutating like reloadseeds (Confirm), but -- unlike
+	// reloadseeds' gossip-state change -- invalidating a cache has no
+	// cross-node coordination concern, so running it against several
+	// selected nodes at once (e.g. "clear the row cache everywhere after a
+	// schema change") is a normal, intentional use -- no SingleTarget.
+	{Name: "invalidatekeycache", Label: "Invalidate Key Cache", Category: "Actions", Fetch: fetchInvalidateKeyCache, Confirm: true},
+	{Name: "invalidaterowcache", Label: "Invalidate Row Cache", Category: "Actions", Fetch: fetchInvalidateRowCache, Confirm: true},
+	{Name: "invalidatecountercache", Label: "Invalidate Counter Cache", Category: "Actions", Fetch: fetchInvalidateCounterCache, Confirm: true},
+	{Name: "invalidatecredentialscache", Label: "Invalidate Credentials Cache", Category: "Actions", Fetch: fetchInvalidateCredentialsCache, Confirm: true},
+	{Name: "invalidatepermissionscache", Label: "Invalidate Permissions Cache", Category: "Actions", Fetch: fetchInvalidatePermissionsCache, Confirm: true},
+	{Name: "invalidaterolescache", Label: "Invalidate Roles Cache", Category: "Actions", Fetch: fetchInvalidateRolesCache, Confirm: true},
+	{Name: "invalidatejmxpermissionscache", Label: "Invalidate JMX Permissions Cache", Category: "Actions", Fetch: fetchInvalidateJmxPermissionsCache, Confirm: true},
+	{Name: "invalidatenetworkpermissionscache", Label: "Invalidate Network Permissions Cache", Category: "Actions", Fetch: fetchInvalidateNetworkPermissionsCache, Confirm: true},
+
+	// getremovalstatus is the one read-only entry in this group -- the
+	// current state of any in-progress node removal. Everything else below
+	// is Danger: true, gated behind the frontend's typed-confirmation Danger
+	// Zone (see StatDef.Danger's doc comment), not just a plain confirm().
+	{Name: "getremovalstatus", Label: "Removal Status", Category: "Status", Fetch: fetchRemovalStatus},
+
+	// decommission/drain/stopdaemon/forceremovecompletion operate on the
+	// node the JMX call itself targets -- no extra argument needed, same
+	// shape as every plain Fetch entry, just gated by Danger/Confirm/
+	// SingleTarget instead of left open.
+	{Name: "decommission", Label: "Decommission", Category: "Danger", Fetch: fetchDecommission, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "drain", Label: "Drain", Category: "Danger", Fetch: fetchDrain, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "stopdaemon", Label: "Stop Daemon", Category: "Danger", Fetch: fetchStopDaemon, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "forceremovecompletion", Label: "Force Remove Completion", Category: "Danger", Fetch: fetchForceRemoveCompletion, Danger: true, Confirm: true, SingleTarget: true},
+
+	// assassinate/removenode/move each need one free-text argument identifying
+	// a *different* node (or, for move, a token) than the one the JMX call
+	// itself runs against -- RequiresArg, collected via prompt() rather than
+	// the Tables-panel picker RequiresTable gets, since there's no finite
+	// list to choose from here.
+	{Name: "assassinate", Label: "Assassinate Endpoint", Category: "Danger", RequiresArg: true,
+		ArgLabel: "Endpoint address to assassinate (e.g. 10.0.0.5) -- this permanently removes it from gossip with no re-replication",
+		FetchArg: fetchAssassinate, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "removenode", Label: "Remove Node", Category: "Danger", RequiresArg: true,
+		ArgLabel: "Host ID of the down node to remove from the ring (see Info's Host ID row on that node, if still reachable)",
+		FetchArg: fetchRemoveNode, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "move", Label: "Move", Category: "Danger", RequiresArg: true,
+		ArgLabel: "New token to move this node to",
+		FetchArg: fetchMove, Danger: true, Confirm: true, SingleTarget: true},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -129,7 +261,7 @@ func ListStats() []StatDef {
 // FetchTable instead of Fetch when the entry is RequiresTable (table is
 // ignored otherwise). Returns an error if no such stat is registered, or if
 // a RequiresTable stat is run without one.
-func RunStat(j *Client, name, ip, table string) (StatsResult, error) {
+func RunStat(j *Client, name, ip, table, arg string) (StatsResult, error) {
 	for _, def := range Catalog {
 		if def.Name != name {
 			continue
@@ -139,6 +271,12 @@ func RunStat(j *Client, name, ip, table string) (StatsResult, error) {
 				return StatsResult{}, fmt.Errorf("stat %q requires a table parameter (?table=keyspace.table)", name)
 			}
 			return def.FetchTable(j, ip, table)
+		}
+		if def.RequiresArg {
+			if arg == "" {
+				return StatsResult{}, fmt.Errorf("stat %q requires an arg parameter (?arg=...)", name)
+			}
+			return def.FetchArg(j, ip, arg)
 		}
 		return def.Fetch(j, ip)
 	}
@@ -1050,6 +1188,39 @@ func compactionHistoryCount(v any) string {
 	return strconv.FormatInt(int64(f), 10)
 }
 
+// fetchLoggingLevels matches `nodetool getlogginglevels`: every logger's
+// current effective level. StorageServiceMBean.getLoggingLevels() looks like
+// an operation by name, but standard-MBean reflection treats any no-arg
+// "getX"/"isX" interface method as attribute "X" rather than an operation --
+// verified live: calling it via exec fails ("getLoggingLevels", Jolokia's
+// bare not-found-as-operation error), while reading it as the "LoggingLevels"
+// attribute (like every other get*-named StorageService entry in
+// settingSources) succeeds. beginLocalSampling/finishLocalSampling
+// (fetchTopPartitions) are verb-named, not get/is-prefixed, so that
+// convention doesn't apply to them -- they're genuine operations and do need
+// exec.
+func fetchLoggingLevels(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.db:type=StorageService", "LoggingLevels")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var levels map[string]string
+	if err := json.Unmarshal(value, &levels); err != nil {
+		return StatsResult{}, err
+	}
+
+	names := make([]string, 0, len(levels))
+	for name := range levels {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	rows := make([]StatRow, len(names))
+	for i, name := range names {
+		rows[i] = row(name, levels[name])
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
 // splitKeyspaceTable parses the "keyspace.table" target both cfstats and
 // cfhistograms take -- the one thing every other Catalog entry doesn't need,
 // since they run against a node with no further scoping. A bare split on the
@@ -1254,4 +1425,553 @@ func fetchTableHistograms(j *Client, ip, table string) (StatsResult, error) {
 	}
 
 	return StatsResult{Groups: groups}, nil
+}
+
+// topPartitionsSamplers are the sampler kinds `nodetool toppartitions`
+// reports. Verified against Cassandra 4.1.12's actual MBean interfaces (not
+// guessed): StorageServiceMBean.samplePartitions is cluster/node-wide with no
+// keyspace/table scoping, so it's not what nodetool's keyspace/cfname-scoped
+// CLI form actually calls -- that form drives ColumnFamilyStoreMBean's
+// beginLocalSampling(sampler, capacity, durationMillis)/
+// finishLocalSampling(sampler, count) pair on the target table's own MBean
+// instead, one round per sampler kind here.
+var topPartitionsSamplers = []struct{ Sampler, Label string }{
+	{"READS", "Frequency of reads by partition"},
+	{"WRITES", "Frequency of writes by partition"},
+	{"CAS_CONTENTIONS", "Frequency of CAS contentions by partition"},
+	{"WRITE_SIZE", "Max mutation size by partition"},
+	{"LOCAL_READ_TIME", "Longest local read query times"},
+}
+
+// capacity/count/duration match nodetool toppartitions' own defaults
+// (-s/-k/<duration>) closely enough for an on-demand UI click; not exposed
+// as params since StatDef.FetchTable takes no extra arguments (see its doc
+// comment) -- add a param if a future need justifies it.
+const (
+	topPartitionsCapacity = 256
+	topPartitionsCount    = 10
+	topPartitionsDuration = 4 * time.Second
+)
+
+// fetchTopPartitions matches `nodetool toppartitions <keyspace> <cfname>
+// <duration>`. Every sampler kind's CompositeData row has the same three
+// fields (value/count/error -- Cassandra's own Sampler.Sample, verified via
+// the jar's class constants) regardless of sampler; shown uniformly here
+// rather than special-cased per sampler like nodetool's own column headers
+// (Partition/Count, Partition/Bytes, Query/Microseconds), matching this
+// file's one-generic-row-shape approach elsewhere.
+func fetchTopPartitions(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, tableName, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	mbean := fmt.Sprintf("org.apache.cassandra.db:type=Tables,keyspace=%s,table=%s", keyspace, tableName)
+
+	beginCalls := make([]opCall, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		beginCalls[i] = opCall{Mbean: mbean, Operation: "beginLocalSampling",
+			Arguments: []any{s.Sampler, topPartitionsCapacity, int(topPartitionsDuration.Milliseconds())}}
+	}
+	beginRaws, err := j.bulkExec(ip, beginCalls)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	for i, raw := range beginRaws {
+		if raw.Status != http.StatusOK {
+			return StatsResult{}, fmt.Errorf("could not sample %s.%s (sampler %s): %s -- check the keyspace/table name",
+				keyspace, tableName, topPartitionsSamplers[i].Sampler, raw.Error)
+		}
+	}
+
+	time.Sleep(topPartitionsDuration)
+
+	finishCalls := make([]opCall, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		finishCalls[i] = opCall{Mbean: mbean, Operation: "finishLocalSampling", Arguments: []any{s.Sampler, topPartitionsCount}}
+	}
+	raws, err := j.bulkExec(ip, finishCalls)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	groups := make([]StatGroup, 0, len(topPartitionsSamplers))
+	for i, s := range topPartitionsSamplers {
+		if i >= len(raws) {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", "unavailable")}})
+			continue
+		}
+		if raws[i].Status != http.StatusOK {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", raws[i].Error)}})
+			continue
+		}
+		var samples []struct {
+			Value string  `json:"value"`
+			Count float64 `json:"count"`
+			Error float64 `json:"error"`
+		}
+		if err := json.Unmarshal(raws[i].Value, &samples); err != nil {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("error", err.Error())}})
+			continue
+		}
+		if len(samples) == 0 {
+			groups = append(groups, StatGroup{Name: s.Label, Rows: []StatRow{row("(none)", "nothing recorded during sampling period")}})
+			continue
+		}
+		rows := make([]StatRow, len(samples))
+		for k, sample := range samples {
+			rows[k] = row(sample.Value, fmt.Sprintf("%d +/- %d", int64(sample.Count), int64(sample.Error)))
+		}
+		groups = append(groups, StatGroup{Name: s.Label, Rows: rows})
+	}
+
+	return StatsResult{Groups: groups}, nil
+}
+
+// fetchDescribeRing and fetchEffectiveOwnership are keyspace-scoped, not
+// table-scoped -- nodetool's own `describering <keyspace>` and the
+// ownership-% computation both key off the keyspace's replication settings
+// alone. They reuse RequiresTable/FetchTable (splitting the "keyspace.table"
+// target and discarding tableName) instead of a parallel RequiresKeyspace
+// scoping, since that would need its own frontend picker and route param for
+// a need this narrow -- the one cost is that selecting several tables from
+// the *same* keyspace in the Tables panel reruns the same keyspace-scoped
+// query once per selected table (redundant but harmless, each tab still
+// correct) rather than deduping to one.
+//
+// This corrects an earlier, incomplete assumption (see git history) that
+// "ownership %" had no real JMX-exposed number and would need to be computed
+// here from replication factor/topology by hand. StorageServiceMBean has
+// exactly that number already computed server-side --
+// effectiveOwnership(keyspace) -- verified against Cassandra 4.1.12's own
+// jar and a live cluster; no need to reimplement NetworkTopologyStrategy math
+// in this package.
+
+// fetchDescribeRing matches `nodetool describering <keyspace>`: every token
+// range's owning endpoints, via StorageServiceMBean.describeRingJMX(keyspace).
+// Verified live that this returns a List<String> of already-formatted
+// TokenRange.toString() entries (the same text nodetool's own CLI prints
+// verbatim), not structured CompositeData like every other TabularData/
+// composite read elsewhere in this file -- despite the "JMX" name suggesting
+// otherwise. Shown as-is rather than regex-parsed back into fields: Cassandra
+// already did the formatting, and re-parsing its toString() format would
+// just be a second, more fragile way to get the same information (breaks
+// silently if that format ever changes across versions). Left uncapped and
+// in the MBean's own return order, same as nodetool's own describering
+// output -- unlike compactionhistory, there's no "most recent N" style
+// cutoff that makes sense for a ring (every range is equally relevant).
+func fetchDescribeRing(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, _, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "describeRingJMX", Arguments: []any{keyspace},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("describering failed for keyspace %s: %s -- check the keyspace name", keyspace, raws[0].Error)
+	}
+
+	var ranges []string
+	if err := json.Unmarshal(raws[0].Value, &ranges); err != nil {
+		return StatsResult{}, err
+	}
+	rows := make([]StatRow, len(ranges))
+	for i, r := range ranges {
+		rows[i] = row(fmt.Sprintf("Range %d", i+1), r)
+	}
+	return StatsResult{Groups: []StatGroup{{Name: fmt.Sprintf("%d token ranges", len(rows)), Rows: rows}}}, nil
+}
+
+// fetchEffectiveOwnership matches the "Owns" column of `nodetool ring
+// <keyspace>`/`nodetool status <keyspace>`: each endpoint's effective
+// ownership percentage for the target keyspace, via
+// StorageServiceMBean.effectiveOwnership(keyspace) -- a real, already-
+// replication-factor-and-topology-aware number Cassandra computes itself
+// (Map<InetAddress,Float>), not something this package recomputes from raw
+// tokens.
+func fetchEffectiveOwnership(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, _, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "effectiveOwnership", Arguments: []any{keyspace},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("effective ownership failed for keyspace %s: %s -- check the keyspace name", keyspace, raws[0].Error)
+	}
+
+	var ownership map[string]float64
+	if err := json.Unmarshal(raws[0].Value, &ownership); err != nil {
+		return StatsResult{}, err
+	}
+
+	endpoints := make([]string, 0, len(ownership))
+	for endpoint := range ownership {
+		endpoints = append(endpoints, endpoint)
+	}
+	sort.Strings(endpoints)
+	rows := make([]StatRow, len(endpoints))
+	for i, endpoint := range endpoints {
+		rows[i] = row(strings.TrimPrefix(endpoint, "/"), fmt.Sprintf("%.2f%%", ownership[endpoint]*100))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// fetchReloadSeeds matches `nodetool reloadseeds`: re-reads the seed list
+// from the configured seed provider and returns the resulting list. Unlike
+// everything else in this catalog, this *mutates* node-local gossip state
+// rather than only reading it -- StatDef.Confirm/SingleTarget gate it in the
+// frontend accordingly (see their doc comments). The operation itself lives
+// on GossiperMBean, not StorageServiceMBean like most of this file --
+// verified against the jar's class constants (GossiperMBean.reloadSeeds(),
+// object name "org.apache.cassandra.net:type=Gossiper" from Gossiper's own
+// registration string, not the "org.apache.cassandra.gms" package name a
+// guess-by-analogy would produce).
+func fetchReloadSeeds(j *Client, ip string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.net:type=Gossiper", Operation: "reloadSeeds"}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("reloadSeeds failed: %s", raws[0].Error)
+	}
+
+	var seeds []string
+	if err := json.Unmarshal(raws[0].Value, &seeds); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Name: fmt.Sprintf("%d seeds after reload", len(seeds)), Rows: []StatRow{row("Seeds", listValue(seeds))}}}}, nil
+}
+
+// fetchSeeds matches `nodetool getseeds`: the read-only complement to
+// reloadseeds, on the same GossiperMBean. "Seeds" is a zero-arg get-prefixed
+// method, so it's an attribute (same convention that made getlogginglevels
+// an attribute read rather than an exec), not an operation.
+func fetchSeeds(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.net:type=Gossiper", "Seeds")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var seeds []string
+	if err := json.Unmarshal(value, &seeds); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Seeds", listValue(seeds))}}}}, nil
+}
+
+// fetchFailureDetector matches `nodetool failuredetector`: each endpoint's
+// phi-accrual conviction value, from FailureDetectorMBean's "PhiValues"
+// attribute (a zero-arg get-prefixed TabularData read, same convention as
+// every other attribute here). Verified live that -- unlike
+// compactionhistory's composite-index TabularData (nested maps) or every
+// other single-column TabularData elsewhere in this file (flat array) --
+// Jolokia serializes this single-column-indexed one as a JSON *object* keyed
+// by the index value (the endpoint address) instead, e.g.
+// {"/10.0.0.1": {"Endpoint": "/10.0.0.1", "PHI": 0.18}, ...}.
+func fetchFailureDetector(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.net:type=FailureDetector", "PhiValues")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var byEndpoint map[string]struct {
+		Endpoint string
+		PHI      float64
+	}
+	if err := json.Unmarshal(value, &byEndpoint); err != nil {
+		return StatsResult{}, err
+	}
+	if len(byEndpoint) == 0 {
+		return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("(none)", "no endpoints")}}}}, nil
+	}
+	endpoints := make([]string, 0, len(byEndpoint))
+	for endpoint := range byEndpoint {
+		endpoints = append(endpoints, endpoint)
+	}
+	sort.Strings(endpoints)
+	rows := make([]StatRow, len(endpoints))
+	for i, endpoint := range endpoints {
+		rows[i] = row(strings.TrimPrefix(endpoint, "/"), fmt.Sprintf("%.4f", byEndpoint[endpoint].PHI))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// fetchPendingHints matches `nodetool listpendinghints`, from
+// HintsServiceMBean's "PendingHints" attribute (List<Map<String,String>>,
+// one map per target endpoint with keys verified live rather than guessed).
+func fetchPendingHints(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.hints:type=HintsService", "PendingHints")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var entries []map[string]string
+	if err := json.Unmarshal(value, &entries); err != nil {
+		return StatsResult{}, err
+	}
+	if len(entries) == 0 {
+		return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("(none)", "no pending hints")}}}}, nil
+	}
+	rows := make([]StatRow, len(entries))
+	for i, e := range entries {
+		keys := make([]string, 0, len(e))
+		for k := range e {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, len(keys))
+		for k, key := range keys {
+			parts[k] = fmt.Sprintf("%s: %s", key, e[key])
+		}
+		rows[i] = row(fmt.Sprintf("Hint %d", i+1), strings.Join(parts, ", "))
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// cachesMbean is CacheServiceMBean's object name -- verified against the
+// jar's class constants, backing the three invalidate*cache entries whose
+// operations (invalidateKeyCache/invalidateRowCache/invalidateCounterCache)
+// live on it rather than each having their own per-cache MBean.
+const cachesMbean = "org.apache.cassandra.db:type=Caches"
+
+func fetchInvalidateKeyCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateKeyCache", "Key cache")
+}
+
+func fetchInvalidateRowCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateRowCache", "Row cache")
+}
+
+func fetchInvalidateCounterCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, cachesMbean, "invalidateCounterCache", "Counter cache")
+}
+
+// The five auth caches each get their own MBean (unlike the key/row/counter
+// caches above, which share one) and all implement AuthCacheMBean's generic
+// no-arg invalidate() -- nodetool's own invalidate*cache commands call this
+// generic form, not the more targeted invalidateCredentials(role)/
+// invalidatePermissions(role, resource)/invalidateRoles(role) overloads each
+// cache also exposes for invalidating a single entry.
+//
+// Two of the five register under a name that doesn't match their Java class
+// name -- verified against the jar rather than assumed by analogy with the
+// other three (CredentialsCache/PermissionsCache/RolesCache, which do follow
+// the obvious "org.apache.cassandra.auth:type=<ClassName>" pattern):
+// NetworkPermissionsCache registers as "NetworkAuthCache" (its deprecated/
+// legacy name), and JmxPermissionsCache registers as "JMXPermissionsCache"
+// (capitalized differently than its class name).
+func fetchInvalidateCredentialsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=CredentialsCache", "invalidate", "Credentials cache")
+}
+
+func fetchInvalidatePermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=PermissionsCache", "invalidate", "Permissions cache")
+}
+
+func fetchInvalidateRolesCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=RolesCache", "invalidate", "Roles cache")
+}
+
+func fetchInvalidateJmxPermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=JMXPermissionsCache", "invalidate", "JMX permissions cache")
+}
+
+func fetchInvalidateNetworkPermissionsCache(j *Client, ip string) (StatsResult, error) {
+	return execInvalidate(j, ip, "org.apache.cassandra.auth:type=NetworkAuthCache", "invalidate", "Network permissions cache")
+}
+
+// execInvalidate is the shared no-arg-exec-then-confirm shape every
+// invalidate*cache entry above uses.
+func execInvalidate(j *Client, ip, mbean, operation, label string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: mbean, Operation: operation}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("%s invalidation failed: %s", label, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row(label, "invalidated")}}}}, nil
+}
+
+// fetchRemovalStatus matches `nodetool status` reporting the removal in
+// progress, if any -- StorageServiceMBean's zero-arg get-prefixed
+// "RemovalStatus" attribute (a string, not a composite type).
+func fetchRemovalStatus(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.db:type=StorageService", "RemovalStatus")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var status string
+	if err := json.Unmarshal(value, &status); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Removal status", status)}}}}, nil
+}
+
+// execDangerOp is the shared no-arg-exec-then-confirm shape decommission/
+// drain/stopDaemon/forceRemoveCompletion use -- the same pattern as
+// execInvalidate, just named separately since these are Danger entries and
+// a future reader shouldn't have to check each call site to tell which kind
+// of operation this is backing.
+func execDangerOp(j *Client, ip, mbean, operation, successLabel string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: mbean, Operation: operation}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("%s failed: %s", operation, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row(successLabel, "done")}}}}, nil
+}
+
+// fetchDecommission matches `nodetool decommission` (without --force):
+// StorageServiceMBean.decommission(boolean force). Streams this node's data
+// to the rest of the ring and then removes it -- the operator's own
+// controllers/nodectl has a separate, reconcile-driven Decommission for
+// scale-down; this is the same underlying JMX call, exposed here for a
+// human operating on a cluster directly.
+func fetchDecommission(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "decommission", "Decommission")
+}
+
+// fetchDrain matches `nodetool drain`: stops accepting writes and flushes
+// every table. Recovery needs a restart of this node's process (in
+// mr-cassop, the StatefulSet's own pod restart).
+func fetchDrain(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "drain", "Drain")
+}
+
+// fetchStopDaemon matches `nodetool stopdaemon`: stops the Cassandra JVM
+// outright. In mr-cassop this pod restarts automatically (StatefulSet), but
+// the process is down for however long that takes -- more disruptive than
+// drain, not more destructive to data.
+func fetchStopDaemon(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "stopDaemon", "Stop Daemon")
+}
+
+// fetchForceRemoveCompletion matches `nodetool forceremovecompletion`:
+// force-completes a removeNode operation this node's view of the ring
+// considers still pending -- a recovery action for a stuck removal, not
+// something to reach for otherwise.
+func fetchForceRemoveCompletion(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "forceRemoveCompletion", "Force Remove Completion")
+}
+
+// fetchAssassinate matches `nodetool assassinate <endpoint>`:
+// GossiperMBean.assassinateEndpoint(String) -- permanently declares a peer
+// dead in gossip with no re-replication of the data it held. The node the
+// JMX call runs against (ip, this catalog's usual per-row target) merely
+// issues the command; endpoint (the RequiresArg value) is the *other* node
+// being removed from gossip, which is why this needed RequiresArg rather
+// than just running against the selected row like decommission/drain do.
+func fetchAssassinate(j *Client, ip, endpoint string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.net:type=Gossiper", Operation: "assassinateEndpoint", Arguments: []any{endpoint}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("assassinateEndpoint(%s) failed: %s", endpoint, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Assassinated", endpoint)}}}}, nil
+}
+
+// fetchRemoveNode matches `nodetool removenode <host ID>`:
+// StorageServiceMBean.removeNode(String hostId) -- tells the ring (via the
+// node the JMX call runs against) to remove a *different*, down node by its
+// host ID, streaming its data from replicas first. RequiresArg for the same
+// reason as fetchAssassinate: the target of the removal isn't the row this
+// runs against.
+func fetchRemoveNode(j *Client, ip, hostID string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "removeNode", Arguments: []any{hostID}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("removeNode(%s) failed: %s", hostID, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Remove started", hostID)}}}}, nil
+}
+
+// fetchMove matches `nodetool move <new token>`:
+// StorageServiceMBean.move(String newToken) -- relocates this node to a new
+// position on the token ring, streaming data accordingly. RequiresArg for
+// the token itself, unlike decommission/drain which need no argument beyond
+// which node to run against.
+func fetchMove(j *Client, ip, newToken string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "move", Arguments: []any{newToken}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("move(%s) failed: %s", newToken, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Moved to token", newToken)}}}}, nil
+}
+
+// fetchRepair matches a plain `nodetool repair <keyspace> <table>` -- no
+// -pr/-full/-dc/... flags exposed here, deliberately: StorageServiceMBean.
+// repairAsync(keyspace, options) is parsed server-side by RepairOption.parse,
+// which fills in Cassandra's own defaults (via getOrDefault) for every key
+// this doesn't set -- verified live that a minimal options map (just
+// "columnFamilies", scoping to the one selected table, same as cfstats)
+// runs a real repair rather than erroring on the "missing" keys nodetool's
+// own CLI always fills in itself before sending. Exposing the flag surface
+// nodetool has is future work, not required to get a working "repair this
+// table without SSHing in" button.
+//
+// repairAsync itself is fire-and-forget: it returns a command ID
+// synchronously and does the real work across a background thread,
+// reporting progress via JMX notifications nodetool's own CLI listens for
+// live. This package has no notification-listener plumbing (a real
+// architectural addition, not a follow-up to bolt on here), so this only
+// reports that the command started -- check tpstats' repair thread pools,
+// compactionstats, or this node's system.log for progress.
+func fetchRepair(j *Client, ip, table string) (StatsResult, error) {
+	keyspace, tableName, err := splitKeyspaceTable(table)
+	if err != nil {
+		return StatsResult{}, err
+	}
+
+	options := map[string]string{"columnFamilies": tableName}
+	raws, err := j.bulkExec(ip, []opCall{{
+		Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "repairAsync", Arguments: []any{keyspace, options},
+	}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("repair failed for %s.%s: %s -- check the keyspace/table name", keyspace, tableName, raws[0].Error)
+	}
+
+	var cmdID int
+	if err := json.Unmarshal(raws[0].Value, &cmdID); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{
+		row("Repair command", fmt.Sprintf("#%d", cmdID)),
+		row("Table", fmt.Sprintf("%s.%s", keyspace, tableName)),
+		row("Progress", "runs in the background -- no notification listener here yet, check tpstats' repair thread pools, compactionstats, or this node's system.log"),
+	}}}}, nil
+}
+
+// fetchForceTerminateAllRepairSessions backs
+// StorageServiceMBean.forceTerminateAllRepairSessions() -- the abort
+// counterpart to fetchRepair, for when a kicked-off repair needs to be
+// stopped (e.g. it's saturating a node more than expected).
+func fetchForceTerminateAllRepairSessions(j *Client, ip string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "forceTerminateAllRepairSessions"}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("forceTerminateAllRepairSessions failed: %s", raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Repair sessions", "terminated")}}}}, nil
 }
