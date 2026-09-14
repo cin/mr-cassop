@@ -274,6 +274,19 @@
     color: var(--unknown);
   }
   .tool-btn.write-btn:hover { background: rgba(245, 166, 35, 0.12); }
+  /* Danger Zone: decommission/assassinate/drain/... -- reuses --down (the
+     same red the ring already uses for an unreachable node) rather than a
+     new color, so "red" keeps meaning one thing across the whole page. */
+  .tool-category-label.danger-label {
+    color: var(--down);
+    font-weight: 700;
+  }
+  .tool-btn.danger-btn {
+    border-color: var(--down);
+    color: var(--down);
+    background: rgba(229, 72, 77, 0.08);
+  }
+  .tool-btn.danger-btn:hover { background: rgba(229, 72, 77, 0.18); }
   .list-body {
     max-height: 320px;
     overflow-y: auto;
@@ -882,12 +895,19 @@ async function loadTools() {
         wheel: !!def.wheel,
         confirm: !!def.confirm,
         singleTarget: !!def.singleTarget,
+        danger: !!def.danger,
+        requiresArg: !!def.requiresArg,
+        argLabel: def.argLabel || '',
         // table is only ever non-null for a requiresTable tool -- see
         // invokeTool, the one place that prompts for it (once per
         // invocation, not once per node) and threads it through here.
-        run: async (row, table) => {
+        run: async (row, extra) => {
           let url = `/api/environments/${encodeURIComponent(currentEnv)}/stats?name=${encodeURIComponent(def.name)}&ip=${encodeURIComponent(row.ip)}`;
-          if (table) url += `&table=${encodeURIComponent(table)}`;
+          // extra is a table (RequiresTable) or a free-text arg (RequiresArg)
+          // -- never both on the same entry, so which query param it becomes
+          // just follows which one this def declared.
+          if (extra && def.requiresArg) url += `&arg=${encodeURIComponent(extra)}`;
+          else if (extra) url += `&table=${encodeURIComponent(extra)}`;
           const res = await fetch(url);
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -1443,7 +1463,13 @@ function renderNodeList(rows) {
 
   // A tool's own button markup, shared by both the grouped ("all") and
   // single-category rendering below rather than duplicating it.
-  const toolButtonHtml = (t) => `<button class="tool-btn" data-tool="${t.id}" title="${t.requiresTable ? 'Runs once per table checked in the Tables panel below' : ''}">${t.label}${t.requiresTable ? '&hellip;' : ''}</button>`;
+  const toolButtonHtml = (t) => {
+    const needsMore = t.requiresTable || t.requiresArg;
+    const title = t.requiresTable ? 'Runs once per table checked in the Tables panel below'
+      : t.requiresArg ? (t.argLabel || 'Asks for a value before running')
+      : '';
+    return `<button class="tool-btn${t.danger ? ' danger-btn' : ''}" data-tool="${t.id}" title="${title.replace(/"/g, '&quot;')}">${t.label}${needsMore ? '&hellip;' : ''}</button>`;
+  };
   // Set* isn't a TOOLS/catalog entry (see its own listener below), but it's
   // still a settings action -- folded into the Settings group itself rather
   // than a separate "Write" category of its own, so it sits next to the
@@ -1457,7 +1483,7 @@ function renderNodeList(rows) {
   // stays a plain unlabeled group.
   const toolbarHtml = selectedToolCategory === 'all'
     ? categories.filter(c => c !== 'all').map(cat => `
-        <div class="tool-category-label">${cat}</div>
+        <div class="tool-category-label${cat === 'Danger' ? ' danger-label' : ''}">${cat}</div>
         <div class="tool-group">${TOOLS.filter(t => t.category === cat).map(toolButtonHtml).join('')}${cat === 'Settings' ? setSettingsButtonHtml : ''}</div>
       `).join('')
     : `<div class="tool-group">${visibleTools().map(toolButtonHtml).join('')}${showSetSettings ? setSettingsButtonHtml : ''}</div>`;
@@ -2031,9 +2057,26 @@ function runTool(tool, targets) {
     alert(`${tool.label} can only run against exactly one node at a time -- select a single node first.`);
     return;
   }
-  if (tool.confirm) {
+  // Danger entries (decommission, assassinate, drain, ...) need typing the
+  // tool's own label back, not just an OK/Cancel confirm() -- the same bar
+  // an irreversible delete gets elsewhere, since a stray Enter key or a
+  // muscle-memory click-through shouldn't be enough to decommission a node.
+  if (tool.danger) {
+    const who = targets.length > 1 ? `${targets.length} nodes` : targets[0].ip;
+    const typed = prompt(`This ${tool.label.toUpperCase()} on ${who} may be destructive or hard to reverse. Type ${tool.label.toUpperCase()} to confirm.`);
+    if (typed !== tool.label.toUpperCase()) {
+      if (typed !== null) alert('Text did not match -- nothing was run.');
+      return;
+    }
+  } else if (tool.confirm) {
     const who = targets.length > 1 ? `${targets.length} nodes` : targets[0].ip;
     if (!confirm(`Run "${tool.label}" on ${who}? This changes node state, not just reads it.`)) return;
+  }
+  if (tool.requiresArg) {
+    const arg = prompt(tool.argLabel || `Value for ${tool.label}:`);
+    if (!arg) return;
+    invokeTool(tool, targets, arg);
+    return;
   }
   if (!tool.requiresTable) {
     invokeTool(tool, targets, null);

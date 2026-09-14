@@ -108,6 +108,32 @@ type StatDef struct {
 	// as one intentional action per node, not one bulk action -- forcing the
 	// operator to target nodes one at a time here is deliberate friction.
 	SingleTarget bool `json:"singleTarget"`
+	// Danger marks a stat as belonging in the frontend's red "Danger Zone"
+	// section -- cluster-membership/lifecycle operations (decommission,
+	// assassinate, drain, ...) that are hard or impossible to reverse if run
+	// by mistake, unlike everything else in this catalog (a bounded config
+	// write, a cache clear, a gossip reload). The frontend gates a Danger
+	// entry behind typing its own label back, not just confirm() -- the same
+	// bar a irreversible delete gets elsewhere. Every Danger entry should
+	// also set Confirm and, in effectively every case so far, SingleTarget:
+	// these are one-node-at-a-time operations, not bulk actions.
+	Danger bool `json:"danger"`
+	// RequiresArg marks a stat that needs one free-text argument neither a
+	// node nor a keyspace.table target covers -- an endpoint address to
+	// assassinate, a host ID to remove, a token to move to. Deliberately
+	// reuses RequiresTable's shape (one extra string, threaded through the
+	// same RunStat/route plumbing as a distinct arg param) rather than
+	// inventing a bespoke mechanism per command; the frontend collects it
+	// with a plain prompt() instead of the Tables-panel picker RequiresTable
+	// gets, since there's no finite list to choose from.
+	RequiresArg bool `json:"requiresArg"`
+	// ArgLabel is the prompt() text shown when collecting RequiresArg's
+	// value -- specific enough that the operator knows what to type without
+	// leaving this page to check nodetool's own help text.
+	ArgLabel string `json:"argLabel"`
+	// FetchArg is Fetch's RequiresArg-scoped counterpart, parallel to
+	// FetchTable.
+	FetchArg func(j *Client, ip, arg string) (StatsResult, error) `json:"-"`
 }
 
 // wheelTools is the curated "most used" subset of the catalog below that
@@ -178,6 +204,36 @@ var Catalog = []StatDef{
 	{Name: "invalidaterolescache", Label: "Invalidate Roles Cache", Category: "Actions", Fetch: fetchInvalidateRolesCache, Confirm: true},
 	{Name: "invalidatejmxpermissionscache", Label: "Invalidate JMX Permissions Cache", Category: "Actions", Fetch: fetchInvalidateJmxPermissionsCache, Confirm: true},
 	{Name: "invalidatenetworkpermissionscache", Label: "Invalidate Network Permissions Cache", Category: "Actions", Fetch: fetchInvalidateNetworkPermissionsCache, Confirm: true},
+
+	// getremovalstatus is the one read-only entry in this group -- the
+	// current state of any in-progress node removal. Everything else below
+	// is Danger: true, gated behind the frontend's typed-confirmation Danger
+	// Zone (see StatDef.Danger's doc comment), not just a plain confirm().
+	{Name: "getremovalstatus", Label: "Removal Status", Category: "Status", Fetch: fetchRemovalStatus},
+
+	// decommission/drain/stopdaemon/forceremovecompletion operate on the
+	// node the JMX call itself targets -- no extra argument needed, same
+	// shape as every plain Fetch entry, just gated by Danger/Confirm/
+	// SingleTarget instead of left open.
+	{Name: "decommission", Label: "Decommission", Category: "Danger", Fetch: fetchDecommission, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "drain", Label: "Drain", Category: "Danger", Fetch: fetchDrain, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "stopdaemon", Label: "Stop Daemon", Category: "Danger", Fetch: fetchStopDaemon, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "forceremovecompletion", Label: "Force Remove Completion", Category: "Danger", Fetch: fetchForceRemoveCompletion, Danger: true, Confirm: true, SingleTarget: true},
+
+	// assassinate/removenode/move each need one free-text argument identifying
+	// a *different* node (or, for move, a token) than the one the JMX call
+	// itself runs against -- RequiresArg, collected via prompt() rather than
+	// the Tables-panel picker RequiresTable gets, since there's no finite
+	// list to choose from here.
+	{Name: "assassinate", Label: "Assassinate Endpoint", Category: "Danger", RequiresArg: true,
+		ArgLabel: "Endpoint address to assassinate (e.g. 10.0.0.5) -- this permanently removes it from gossip with no re-replication",
+		FetchArg: fetchAssassinate, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "removenode", Label: "Remove Node", Category: "Danger", RequiresArg: true,
+		ArgLabel: "Host ID of the down node to remove from the ring (see Info's Host ID row on that node, if still reachable)",
+		FetchArg: fetchRemoveNode, Danger: true, Confirm: true, SingleTarget: true},
+	{Name: "move", Label: "Move", Category: "Danger", RequiresArg: true,
+		ArgLabel: "New token to move this node to",
+		FetchArg: fetchMove, Danger: true, Confirm: true, SingleTarget: true},
 }
 
 // ListStats returns every catalog entry's name/label, so the frontend can
@@ -192,7 +248,7 @@ func ListStats() []StatDef {
 // FetchTable instead of Fetch when the entry is RequiresTable (table is
 // ignored otherwise). Returns an error if no such stat is registered, or if
 // a RequiresTable stat is run without one.
-func RunStat(j *Client, name, ip, table string) (StatsResult, error) {
+func RunStat(j *Client, name, ip, table, arg string) (StatsResult, error) {
 	for _, def := range Catalog {
 		if def.Name != name {
 			continue
@@ -202,6 +258,12 @@ func RunStat(j *Client, name, ip, table string) (StatsResult, error) {
 				return StatsResult{}, fmt.Errorf("stat %q requires a table parameter (?table=keyspace.table)", name)
 			}
 			return def.FetchTable(j, ip, table)
+		}
+		if def.RequiresArg {
+			if arg == "" {
+				return StatsResult{}, fmt.Errorf("stat %q requires an arg parameter (?arg=...)", name)
+			}
+			return def.FetchArg(j, ip, arg)
 		}
 		return def.Fetch(j, ip)
 	}
@@ -1723,4 +1785,119 @@ func execInvalidate(j *Client, ip, mbean, operation, label string) (StatsResult,
 		return StatsResult{}, fmt.Errorf("%s invalidation failed: %s", label, raws[0].Error)
 	}
 	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row(label, "invalidated")}}}}, nil
+}
+
+// fetchRemovalStatus matches `nodetool status` reporting the removal in
+// progress, if any -- StorageServiceMBean's zero-arg get-prefixed
+// "RemovalStatus" attribute (a string, not a composite type).
+func fetchRemovalStatus(j *Client, ip string) (StatsResult, error) {
+	value, err := j.readMBeanAttributes(ip, "org.apache.cassandra.db:type=StorageService", "RemovalStatus")
+	if err != nil {
+		return StatsResult{}, err
+	}
+	var status string
+	if err := json.Unmarshal(value, &status); err != nil {
+		return StatsResult{}, err
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Removal status", status)}}}}, nil
+}
+
+// execDangerOp is the shared no-arg-exec-then-confirm shape decommission/
+// drain/stopDaemon/forceRemoveCompletion use -- the same pattern as
+// execInvalidate, just named separately since these are Danger entries and
+// a future reader shouldn't have to check each call site to tell which kind
+// of operation this is backing.
+func execDangerOp(j *Client, ip, mbean, operation, successLabel string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: mbean, Operation: operation}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("%s failed: %s", operation, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row(successLabel, "done")}}}}, nil
+}
+
+// fetchDecommission matches `nodetool decommission` (without --force):
+// StorageServiceMBean.decommission(boolean force). Streams this node's data
+// to the rest of the ring and then removes it -- the operator's own
+// controllers/nodectl has a separate, reconcile-driven Decommission for
+// scale-down; this is the same underlying JMX call, exposed here for a
+// human operating on a cluster directly.
+func fetchDecommission(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "decommission", "Decommission")
+}
+
+// fetchDrain matches `nodetool drain`: stops accepting writes and flushes
+// every table. Recovery needs a restart of this node's process (in
+// mr-cassop, the StatefulSet's own pod restart).
+func fetchDrain(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "drain", "Drain")
+}
+
+// fetchStopDaemon matches `nodetool stopdaemon`: stops the Cassandra JVM
+// outright. In mr-cassop this pod restarts automatically (StatefulSet), but
+// the process is down for however long that takes -- more disruptive than
+// drain, not more destructive to data.
+func fetchStopDaemon(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "stopDaemon", "Stop Daemon")
+}
+
+// fetchForceRemoveCompletion matches `nodetool forceremovecompletion`:
+// force-completes a removeNode operation this node's view of the ring
+// considers still pending -- a recovery action for a stuck removal, not
+// something to reach for otherwise.
+func fetchForceRemoveCompletion(j *Client, ip string) (StatsResult, error) {
+	return execDangerOp(j, ip, "org.apache.cassandra.db:type=StorageService", "forceRemoveCompletion", "Force Remove Completion")
+}
+
+// fetchAssassinate matches `nodetool assassinate <endpoint>`:
+// GossiperMBean.assassinateEndpoint(String) -- permanently declares a peer
+// dead in gossip with no re-replication of the data it held. The node the
+// JMX call runs against (ip, this catalog's usual per-row target) merely
+// issues the command; endpoint (the RequiresArg value) is the *other* node
+// being removed from gossip, which is why this needed RequiresArg rather
+// than just running against the selected row like decommission/drain do.
+func fetchAssassinate(j *Client, ip, endpoint string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.net:type=Gossiper", Operation: "assassinateEndpoint", Arguments: []any{endpoint}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("assassinateEndpoint(%s) failed: %s", endpoint, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Assassinated", endpoint)}}}}, nil
+}
+
+// fetchRemoveNode matches `nodetool removenode <host ID>`:
+// StorageServiceMBean.removeNode(String hostId) -- tells the ring (via the
+// node the JMX call runs against) to remove a *different*, down node by its
+// host ID, streaming its data from replicas first. RequiresArg for the same
+// reason as fetchAssassinate: the target of the removal isn't the row this
+// runs against.
+func fetchRemoveNode(j *Client, ip, hostID string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "removeNode", Arguments: []any{hostID}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("removeNode(%s) failed: %s", hostID, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Remove started", hostID)}}}}, nil
+}
+
+// fetchMove matches `nodetool move <new token>`:
+// StorageServiceMBean.move(String newToken) -- relocates this node to a new
+// position on the token ring, streaming data accordingly. RequiresArg for
+// the token itself, unlike decommission/drain which need no argument beyond
+// which node to run against.
+func fetchMove(j *Client, ip, newToken string) (StatsResult, error) {
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: "org.apache.cassandra.db:type=StorageService", Operation: "move", Arguments: []any{newToken}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("move(%s) failed: %s", newToken, raws[0].Error)
+	}
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Moved to token", newToken)}}}}, nil
 }

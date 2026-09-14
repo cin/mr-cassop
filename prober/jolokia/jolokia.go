@@ -26,10 +26,11 @@ var (
 type Jolokia interface {
 	CassandraNodeState(ip string) (CassandraResponse, error)
 	// RunStat executes one named entry from the Catalog (see stats.go) --
-	// the single generic entry point for every "get" tool, in place of a
-	// bespoke method per command. table is only consulted for a
-	// RequiresTable entry (cfstats/cfhistograms) -- pass "" otherwise.
-	RunStat(name, ip, table string) (StatsResult, error)
+	// the single generic entry point for every tool, in place of a bespoke
+	// method per command. table is only consulted for a RequiresTable entry
+	// (cfstats/cfhistograms/...) and arg only for a RequiresArg entry
+	// (assassinate/removenode/move) -- pass "" for whichever doesn't apply.
+	RunStat(name, ip, table, arg string) (StatsResult, error)
 	// ListTables returns every "keyspace.table" pair known to ip -- backs the
 	// frontend's table picker for RequiresTable stats (cfstats/cfhistograms),
 	// sparing the user from typing a keyspace.table string blind.
@@ -252,8 +253,8 @@ func (j *Client) readMBeanAttributes(ip, mbean, attribute string) (json.RawMessa
 
 // RunStat looks up name in the Catalog (stats.go) and runs its fetch against
 // ip. This is the one entry point every "get" tool goes through.
-func (j *Client) RunStat(name, ip, table string) (StatsResult, error) {
-	return RunStat(j, name, ip, table)
+func (j *Client) RunStat(name, ip, table, arg string) (StatsResult, error) {
+	return RunStat(j, name, ip, table, arg)
 }
 
 // ListTables returns every "keyspace.table" pair known to ip. See

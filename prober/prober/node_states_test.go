@@ -40,7 +40,7 @@ func (j *jolokiaMock) CassandraNodeState(ip string) (jolokia.CassandraResponse, 
 	return resp, nil
 }
 
-func (j *jolokiaMock) RunStat(name, ip, table string) (jolokia.StatsResult, error) {
+func (j *jolokiaMock) RunStat(name, ip, table, arg string) (jolokia.StatsResult, error) {
 	byName, found := j.stats[ip]
 	if !found {
 		return jolokia.StatsResult{}, fmt.Errorf("no mocked stats for ip %s", ip)
