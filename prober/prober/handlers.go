@@ -122,7 +122,8 @@ func (p *Prober) getTools(w http.ResponseWriter, _ *http.Request, _ httprouter.P
 // never served from the poll cache. It backs user-triggered "tool"
 // invocations, where a real round trip, with real latency, is expected.
 // ?table=keyspace.table is only consulted for a RequiresTable entry
-// (cfstats/cfhistograms) -- RunStat validates its presence for those, so
+// (cfstats/cfhistograms/...) and ?arg=... only for a RequiresArg entry
+// (assassinate/removenode/move) -- RunStat validates presence for those, so
 // there's nothing extra to check here.
 func (p *Prober) getStat(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	name := r.URL.Query().Get("name")
@@ -132,13 +133,14 @@ func (p *Prober) getStat(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 		return
 	}
 	table := r.URL.Query().Get("table")
+	arg := r.URL.Query().Get("arg")
 
 	podIP, ok := p.resolvePodIP(w, r)
 	if !ok {
 		return
 	}
 
-	result, err := p.jolokia.RunStat(name, podIP, table)
+	result, err := p.jolokia.RunStat(name, podIP, table, arg)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		response, _ := json.Marshal(map[string]string{"error": err.Error()})

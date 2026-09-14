@@ -1,7 +1,7 @@
 ARG CASSANDRA_VERSION=4.1.12
-ARG GO_VERSION=1.24.13
+ARG GO_VERSION=1.26
 ARG GOSU_VERSION=1.19
-FROM golang:${GO_VERSION}-bookworm AS gosu-builder
+FROM golang:${GO_VERSION}-trixie AS gosu-builder
 ARG GOSU_VERSION
 
 RUN set -eux; \
@@ -10,6 +10,15 @@ RUN set -eux; \
 
 FROM cassandra:${CASSANDRA_VERSION}
 ARG JMX_EXPORTER_VERSION=1.6.0
+# Deliberately NOT kept in sync with jolokia/Dockerfile's JOLOKIA_VERSION
+# (2.6.2) -- jolokia-json releases from 2.4.0 on are compiled for Java 17
+# (class file version 61), but this image's Cassandra runs on Java 11 (see
+# the JDK 11+ comment below), which can only load up to class file version
+# 55 ("UnsupportedClassVersionError" otherwise, verified live). 2.3.0 is the
+# newest jolokia-json release still compiled for Java 11 -- the class itself
+# only needs to satisfy java.util.Map/List for JMX deserialization, so
+# trailing the Jolokia server's own version here is fine.
+ARG JOLOKIA_JSON_VERSION=2.3.0
 ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.14
 ENV DATASTAX_CASSANDRA_EXPORTER_VERSION=0.3.6
 
@@ -34,8 +43,17 @@ RUN set -eux; \
   tar zxf /tmp/datastax-mcac-agent.tgz -C /prometheus; \
   mv /prometheus/datastax-mcac-agent-* /prometheus/datastax-mcac-agent; \
   rm -rf /var/lib/apt/lists/* /tmp/datastax-mcac-agent.tgz /prometheus/datastax-mcac-agent/config; \
+  # jolokia-json.jar on Cassandra's own classpath (anything under
+  # /opt/cassandra/lib is picked up automatically) -- required for any JMX
+  # operation invoked with a Map/List argument (e.g. StorageServiceMBean.
+  # repairAsync's options map) to work through Jolokia's JSR-160 proxy mode.
+  # Without it, such a call fails with "ClassNotFoundException:
+  # org.jolokia.json.JSONObject" on the Cassandra side -- Jolokia's own docs
+  # confirm this is expected, not a bug: the proxy target JVM needs this jar
+  # itself, not just the Jolokia server doing the proxying.
+  wget https://repo1.maven.org/maven2/org/jolokia/jolokia-json/${JOLOKIA_JSON_VERSION}/jolokia-json-${JOLOKIA_JSON_VERSION}.jar -O /opt/cassandra/lib/jolokia-json-${JOLOKIA_JSON_VERSION}.jar; \
   mkdir /home/cassandra; \
-  chown cassandra:cassandra /home/cassandra /opt/cassandra /prometheus; \
+  chown cassandra:cassandra /home/cassandra /opt/cassandra /prometheus /opt/cassandra/lib/jolokia-json-${JOLOKIA_JSON_VERSION}.jar; \
   ln -sf /proc/mounts /etc/mtab; \
   # This image runs on JDK 11+, so /etc/cassandra/jvm11-server.options is the file that's
   # actually loaded. It ships with CMS active by default - CMS was deprecated in JDK 9 and
