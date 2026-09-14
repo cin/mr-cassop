@@ -1,7 +1,7 @@
 ARG CASSANDRA_VERSION=4.1.12
-ARG GO_VERSION=1.24.13
+ARG GO_VERSION=1.26
 ARG GOSU_VERSION=1.19
-FROM golang:${GO_VERSION}-bookworm AS gosu-builder
+FROM golang:${GO_VERSION}-trixie AS gosu-builder
 ARG GOSU_VERSION
 
 RUN set -eux; \
