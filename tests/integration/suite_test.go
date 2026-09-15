@@ -435,16 +435,9 @@ counter_cache_save_period: 7200
 			Namespace: operatorConfig.Namespace,
 		},
 	}
-	collectdCM := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.OperatorCollectdCM(),
-			Namespace: operatorConfig.Namespace,
-		},
-	}
 	Expect(k8sClient.Create(ctx, cassConfigCM)).To(Succeed())
 	Expect(k8sClient.Create(ctx, shiroConfigCM)).To(Succeed())
 	Expect(k8sClient.Create(ctx, prometheusCM)).To(Succeed())
-	Expect(k8sClient.Create(ctx, collectdCM)).To(Succeed())
 }
 
 // As the test control plane doesn't support garbage collection, this function is used to clean up resources
@@ -483,7 +476,6 @@ func CleanUpCreatedResources(ccName, ccNamespace string) {
 		{name: names.ActiveAdminSecret(cc.Name), objType: &v1.Secret{}},
 		{name: names.AdminAuthConfigSecret(cc.Name), objType: &v1.Secret{}},
 		{name: names.PodsConfigConfigmap(cc.Name), objType: &v1.ConfigMap{}},
-		{name: names.CollectdConfigMap(cc.Name), objType: &v1.ConfigMap{}},
 		{name: names.PodIPsConfigMap(cc.Name), objType: &v1.ConfigMap{}},
 		{name: cc.Spec.AdminRoleSecretName, objType: &v1.Secret{}},
 	}

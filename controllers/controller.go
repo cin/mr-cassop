@@ -208,10 +208,6 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return ctrl.Result{}, errors.Wrap(err, "Error reconciling prometheus configmap")
 	}
 
-	if err = r.reconcileCollectdConfigMap(ctx, cc); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Failed to reconcile collectd configmap")
-	}
-
 	if err = r.reconcileCassandraServiceMonitor(ctx, cc); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Failed to reconcile service monitor")
 	}

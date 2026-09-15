@@ -65,58 +65,6 @@ var _ = Describe("Cassandra monitoring", func() {
 		})
 	})
 
-	Context("when monitoring is enabled with datastax agent", func() {
-		It("should create datastax volume, volume mount, and port", func() {
-			cc := &v1alpha1.CassandraCluster{
-				ObjectMeta: cassandraObjectMeta,
-				Spec: v1alpha1.CassandraClusterSpec{
-					DCs: []v1alpha1.DC{
-						{
-							Name:     "dc1",
-							Replicas: proto.Int32(3),
-						},
-					},
-					ImagePullSecretName: "pull-secret-name",
-					AdminRoleSecretName: "admin-role",
-					Cassandra: &v1alpha1.Cassandra{
-						Monitoring: v1alpha1.Monitoring{
-							Enabled: true,
-							Agent:   v1alpha1.CassandraAgentDatastax,
-						},
-					},
-				},
-			}
-			createReadyCluster(cc)
-			checkVolume("collectd-config", "dc1")
-			checkPort("agent", "dc1", v1alpha1.DatastaxPort)
-		})
-	})
-
-	Context("when monitoring is enabled with instaclustr agent", func() {
-		It("should create instaclustr port", func() {
-			cc := &v1alpha1.CassandraCluster{
-				ObjectMeta: cassandraObjectMeta,
-				Spec: v1alpha1.CassandraClusterSpec{
-					DCs: []v1alpha1.DC{
-						{
-							Name:     "dc1",
-							Replicas: proto.Int32(3),
-						},
-					},
-					ImagePullSecretName: "pull-secret-name",
-					AdminRoleSecretName: "admin-role",
-					Cassandra: &v1alpha1.Cassandra{
-						Monitoring: v1alpha1.Monitoring{
-							Enabled: true,
-							Agent:   v1alpha1.CassandraAgentInstaclustr,
-						},
-					},
-				},
-			}
-			createReadyCluster(cc)
-			checkPort("agent", "dc1", v1alpha1.InstaclustrPort)
-		})
-	})
 })
 
 func checkPort(name, dc string, port int32) {

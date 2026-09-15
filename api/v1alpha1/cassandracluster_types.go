@@ -33,9 +33,7 @@ const (
 	CassandraClusterComponentCassandra = "cassandra"
 	CassandraClusterNetworkPolicy      = "network-policy"
 
-	CassandraAgentTlp         = "tlp"
-	CassandraAgentInstaclustr = "instaclustr"
-	CassandraAgentDatastax    = "datastax"
+	CassandraAgentTlp = "tlp"
 
 	CassandraDefaultRole           = "cassandra"
 	CassandraDefaultPassword       = "cassandra"
@@ -52,14 +50,12 @@ const (
 	ReaperAppPort   = 8080
 	ReaperAdminPort = 8081
 
-	IntraPort       = 7000
-	TlsPort         = 7001
-	JmxPort         = 7199
-	TlpPort         = 8090
-	CqlPort         = 9042
-	DatastaxPort    = 9103
-	InstaclustrPort = 9500
-	IcarusPort      = 4567
+	IntraPort  = 7000
+	TlsPort    = 7001
+	JmxPort    = 7199
+	TlpPort    = 8090
+	CqlPort    = 9042
+	IcarusPort = 4567
 
 	ReaperReplicasNumber     = 1
 	reaperRepairIntensityMin = 0.1
@@ -160,7 +156,7 @@ type HostPort struct {
 
 type Monitoring struct {
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:validation:Enum=instaclustr;datastax;tlp
+	// +kubebuilder:validation:Enum=tlp
 	Agent          string         `json:"agent,omitempty"`
 	ServiceMonitor ServiceMonitor `json:"serviceMonitor,omitempty"`
 }

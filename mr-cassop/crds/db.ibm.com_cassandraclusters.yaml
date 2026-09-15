@@ -70,8 +70,6 @@ spec:
                     properties:
                       agent:
                         enum:
-                        - instaclustr
-                        - datastax
                         - tlp
                         type: string
                       enabled:

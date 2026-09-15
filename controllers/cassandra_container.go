@@ -117,9 +117,6 @@ func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, resta
 		if cc.Spec.Cassandra.Monitoring.Agent == dbv1alpha1.CassandraAgentTlp {
 			container.VolumeMounts = append(container.VolumeMounts, prometheusVolumeMount())
 		}
-		if cc.Spec.Cassandra.Monitoring.Agent == dbv1alpha1.CassandraAgentDatastax {
-			container.VolumeMounts = append(container.VolumeMounts, collectdVolumeMount())
-		}
 		container.Env = append(container.Env, v1.EnvVar{
 			Name:  "JVM_EXTRA_OPTS",
 			Value: getJavaAgent(cc.Spec.Cassandra.Monitoring.Agent),
@@ -269,12 +266,7 @@ fi`,
 
 func getJavaAgent(agent string) string {
 	javaAgent := ""
-	switch agent {
-	case dbv1alpha1.CassandraAgentInstaclustr:
-		javaAgent = "-javaagent:/prometheus/cassandra-exporter-agent.jar"
-	case dbv1alpha1.CassandraAgentDatastax:
-		javaAgent = "-javaagent:/prometheus/datastax-mcac-agent/lib/datastax-mcac-agent.jar"
-	case dbv1alpha1.CassandraAgentTlp:
+	if agent == dbv1alpha1.CassandraAgentTlp {
 		javaAgent = fmt.Sprintf("-javaagent:/prometheus/jmx_prometheus_javaagent.jar=%d:/prometheus/prometheus.yaml", dbv1alpha1.TlpPort)
 	}
 	return javaAgent

@@ -122,12 +122,7 @@ func (r *CassandraClusterReconciler) reconcileDCService(ctx context.Context, cc 
 
 func getJavaAgentPort(agent string) int32 {
 	port := int32(0)
-	switch agent {
-	case dbv1alpha1.CassandraAgentInstaclustr:
-		port = dbv1alpha1.InstaclustrPort
-	case dbv1alpha1.CassandraAgentDatastax:
-		port = dbv1alpha1.DatastaxPort
-	case dbv1alpha1.CassandraAgentTlp:
+	if agent == dbv1alpha1.CassandraAgentTlp {
 		port = dbv1alpha1.TlpPort
 	}
 	return port

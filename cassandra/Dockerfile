@@ -1,4 +1,4 @@
-ARG CASSANDRA_VERSION=4.1.12
+ARG CASSANDRA_VERSION=5.0.9
 ARG GO_VERSION=1.26
 ARG GOSU_VERSION=1.19
 FROM golang:${GO_VERSION}-trixie AS gosu-builder
@@ -10,17 +10,10 @@ RUN set -eux; \
 
 FROM cassandra:${CASSANDRA_VERSION}
 ARG JMX_EXPORTER_VERSION=1.6.0
-# Deliberately NOT kept in sync with jolokia/Dockerfile's JOLOKIA_VERSION
-# (2.6.2) -- jolokia-json releases from 2.4.0 on are compiled for Java 17
-# (class file version 61), but this image's Cassandra runs on Java 11 (see
-# the JDK 11+ comment below), which can only load up to class file version
-# 55 ("UnsupportedClassVersionError" otherwise, verified live). 2.3.0 is the
-# newest jolokia-json release still compiled for Java 11 -- the class itself
-# only needs to satisfy java.util.Map/List for JMX deserialization, so
-# trailing the Jolokia server's own version here is fine.
-ARG JOLOKIA_JSON_VERSION=2.3.0
-ENV INSTACLUSTR_CASSANDRA_EXPORTER_VERSION=0.9.14
-ENV DATASTAX_CASSANDRA_EXPORTER_VERSION=0.3.6
+# Cassandra 5 requires JDK 17 (see the JDK 17 comment below), which lifts the
+# class-file-version ceiling that previously pinned this to 2.3.0 on the JDK
+# 11 4.1.x image -- kept in sync with jolokia/Dockerfile's JOLOKIA_VERSION now.
+ARG JOLOKIA_JSON_VERSION=2.6.2
 
 COPY --from=gosu-builder /out/gosu /usr/local/bin/gosu
 
@@ -35,14 +28,7 @@ RUN set -eux; \
     wget; \
   mkdir -p /prometheus; \
   wget https://github.com/prometheus/jmx_exporter/releases/download/${JMX_EXPORTER_VERSION}/jmx_prometheus_javaagent-${JMX_EXPORTER_VERSION}.jar -O /prometheus/jmx_prometheus_javaagent.jar; \
-  wget https://github.com/instaclustr/cassandra-exporter/releases/download/v${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}/cassandra-exporter-agent-${INSTACLUSTR_CASSANDRA_EXPORTER_VERSION}.jar -O /prometheus/cassandra-exporter-agent.jar; \
-  # Cassandra 4.1+ needs the "-4.1-beta1" build - the default build throws
-  # "NoSuchFieldError: scheduledTasks" from UnixSocketClient.initCollectdHealthCheck
-  # on startup against 4.1's internals. See datastax/metric-collector-for-apache-cassandra#79.
-  wget https://github.com/datastax/metric-collector-for-apache-cassandra/releases/download/v${DATASTAX_CASSANDRA_EXPORTER_VERSION}/datastax-mcac-agent-${DATASTAX_CASSANDRA_EXPORTER_VERSION}-4.1-beta1.tar.gz -O /tmp/datastax-mcac-agent.tgz; \
-  tar zxf /tmp/datastax-mcac-agent.tgz -C /prometheus; \
-  mv /prometheus/datastax-mcac-agent-* /prometheus/datastax-mcac-agent; \
-  rm -rf /var/lib/apt/lists/* /tmp/datastax-mcac-agent.tgz /prometheus/datastax-mcac-agent/config; \
+  rm -rf /var/lib/apt/lists/*; \
   # jolokia-json.jar on Cassandra's own classpath (anything under
   # /opt/cassandra/lib is picked up automatically) -- required for any JMX
   # operation invoked with a Map/List argument (e.g. StorageServiceMBean.
@@ -55,13 +41,13 @@ RUN set -eux; \
   mkdir /home/cassandra; \
   chown cassandra:cassandra /home/cassandra /opt/cassandra /prometheus /opt/cassandra/lib/jolokia-json-${JOLOKIA_JSON_VERSION}.jar; \
   ln -sf /proc/mounts /etc/mtab; \
-  # This image runs on JDK 11+, so /etc/cassandra/jvm11-server.options is the file that's
-  # actually loaded. It ships with CMS active by default - CMS was deprecated in JDK 9 and
-  # is removed entirely in JDK 14+, so it's a dead end for any future JDK upgrade, not just
-  # a suboptimal GC choice. Switch to G1 instead: comment out the CMS block, uncomment G1's
-  # own recommended settings, and lower InitiatingHeapOccupancyPercent from the stock 70
-  # (Cassandra's comment only calls that out for heaps >= 16GB - 25 is the widely
-  # recommended value for the much smaller heaps most Cassandra pods actually run).
+  # Cassandra 5 requires JDK 17, so /etc/cassandra/jvm17-server.options is the file that's
+  # actually loaded (jvm11-server.options no longer applies). It ships with CMS active by
+  # default - CMS was deprecated in JDK 9 and is removed entirely in JDK 14+, so it's a dead
+  # end on JDK 17, not just a suboptimal GC choice. Switch to G1 instead: comment out the CMS
+  # block, uncomment G1's own recommended settings, and lower InitiatingHeapOccupancyPercent
+  # from the stock 70 (Cassandra's comment only calls that out for heaps >= 16GB - 25 is the
+  # widely recommended value for the much smaller heaps most Cassandra pods actually run).
   sed -i \
     -e 's/^-XX:+UseConcMarkSweepGC$/#-XX:+UseConcMarkSweepGC/' \
     -e 's/^-XX:+CMSParallelRemarkEnabled$/#-XX:+CMSParallelRemarkEnabled/' \
@@ -76,7 +62,7 @@ RUN set -eux; \
     -e 's/^#-XX:G1RSetUpdatingPauseTimePercent=5$/-XX:G1RSetUpdatingPauseTimePercent=5/' \
     -e 's/^#-XX:MaxGCPauseMillis=300$/-XX:MaxGCPauseMillis=300/' \
     -e 's/^#-XX:InitiatingHeapOccupancyPercent=70$/-XX:InitiatingHeapOccupancyPercent=25/' \
-    /etc/cassandra/jvm11-server.options
+    /etc/cassandra/jvm17-server.options
 
 WORKDIR /home/cassandra
 
