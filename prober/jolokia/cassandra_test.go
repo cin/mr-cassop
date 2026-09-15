@@ -69,6 +69,44 @@ func TestAllEndpointStates_UnmarshaText(t *testing.T) {
 	}
 }
 
+// TestAllEndpointStates_UnmarshaText_IndexStatus is a regression test for a
+// real parse failure hit live against Cassandra 5.0.9: INDEX_STATUS (new in
+// 5.0) carries a JSON object as its value, with its own embedded commas and
+// braces (e.g. `{"system":{"PaxosUncommittedIndex":3},"reaper":{"state2i":3}}`),
+// which regexEndpointStatesRemovals' "drop everything after the first comma
+// on the line" rule used to truncate into invalid, unbalanced YAML --
+// breaking every node's readiness check at once, since AllEndpointStates is
+// polled per node regardless of whether that node has any index. This data
+// is a trimmed real capture (one endpoint, not three) rather than a
+// synthetic minimal repro, so it also exercises STATUS_WITH_PORT and the
+// other 5.0-only app-states (RPC_READY, *_ADDRESS_AND_PORT,
+// SSTABLE_VERSIONS) alongside INDEX_STATUS in the same payload.
+func TestAllEndpointStates_UnmarshaText_IndexStatus(t *testing.T) {
+	data := `"/10.244.0.12\n  generation:1789443050\n  heartbeat:750\n  STATUS:91:NORMAL,-1902241170960824283\n  LOAD:703:135060.0\n  SCHEMA:382:c5080cad-401c-3ac2-953a-14699cc676c5\n  DC:12:dc1\n  RACK:14:rack1\n  RELEASE_VERSION:5:5.0.9\n  INTERNAL_IP:10:10.244.0.12\n  RPC_ADDRESS:4:10.244.0.12\n  NET_VERSION:1:12\n  HOST_ID:2:23b3b166-ba17-49c2-9a5c-d09ceebf39b1\n  RPC_READY:103:true\n  INTERNAL_ADDRESS_AND_PORT:8:10.244.0.12:7000\n  NATIVE_ADDRESS_AND_PORT:3:10.244.0.12:9042\n  STATUS_WITH_PORT:90:NORMAL,-1902241170960824283\n  SSTABLE_VERSIONS:6:big-nb\n  INDEX_STATUS:321:{\"system\":{\"PaxosUncommittedIndex\":3},\"reaper\":{\"state2i\":3}}\n  TOKENS:89:<hidden>\n"`
+
+	var e AllEndpointStates
+	if err := json.Unmarshal([]byte(data), &e); err != nil {
+		t.Fatal("Unmarshal() error = ", err)
+	}
+
+	expected := AllEndpointStates{
+		"/10.244.0.12": EndpointState{
+			Status:           "NORMAL",
+			DC:               "dc1",
+			Rack:             "rack1",
+			Internal_IP:      "10.244.0.12",
+			RPC_Address:      "10.244.0.12",
+			Load:             "135060",
+			Host_ID:          "23b3b166-ba17-49c2-9a5c-d09ceebf39b1",
+			Release_Version:  "5.0.9",
+			Status_With_Port: "NORMAL",
+		},
+	}
+	if !cmp.Equal(e, expected) {
+		t.Error("Unmarshalled value is not equal to expected", cmp.Diff(expected, e))
+	}
+}
+
 func TestCassResponse_UnmarshalText(t *testing.T) {
 	tests := []struct {
 		name     string
