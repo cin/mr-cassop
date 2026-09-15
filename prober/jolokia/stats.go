@@ -204,6 +204,17 @@ var Catalog = []StatDef{
 	{Name: "failuredetector", Label: "Failure Detector", Category: "Status", Fetch: fetchFailureDetector},
 	{Name: "listpendinghints", Label: "Pending Hints", Category: "Status", Fetch: fetchPendingHints},
 
+	// getautorepairconfig/autorepairstatus: new in Cassandra 5.0 (CEP-31
+	// scheduled repair), read-only like the three above -- but unlike them,
+	// AutoRepairServiceMBean only exists on a node started with
+	// -Dcassandra.autorepair.enable=true (see fetchAutoRepairConfig's doc
+	// comment), so both Fetch/FetchArg degrade to a plain "not enabled" row
+	// rather than erroring when it's absent.
+	{Name: "getautorepairconfig", Label: "Auto-Repair Config", Category: "Status", Fetch: fetchAutoRepairConfig},
+	{Name: "autorepairstatus", Label: "Auto-Repair Status", Category: "Status", RequiresArg: true,
+		ArgLabel: "Repair type to check (full, incremental, or preview_repaired)",
+		FetchArg: fetchAutoRepairStatus},
+
 	// invalidate*cache: mutating like reloadseeds (Confirm), but -- unlike
 	// reloadseeds' gossip-state change -- invalidating a cache has no
 	// cross-node coordination concern, so running it against several
@@ -1733,6 +1744,128 @@ func fetchPendingHints(j *Client, ip string) (StatsResult, error) {
 		rows[i] = row(fmt.Sprintf("Hint %d", i+1), strings.Join(parts, ", "))
 	}
 	return StatsResult{Groups: []StatGroup{{Rows: rows}}}, nil
+}
+
+// autoRepairServiceMbean is AutoRepairServiceMBean's JMX object name
+// (verified against the source's own AutoRepairService.MBEAN_NAME
+// constant). Unlike every other MBean this catalog reads, it's only
+// registered when the node was started with
+// -Dcassandra.autorepair.enable=true -- a node started without that flag
+// has no such MBean at all, not merely a "disabled" one.
+const autoRepairServiceMbean = "org.apache.cassandra.db:type=AutoRepairService"
+
+// autoRepairUnavailableRow is the shared "nothing to show" result for both
+// auto-repair entries below: either the MBean isn't registered at all (see
+// autoRepairServiceMbean's doc comment) or it is but the scheduler itself is
+// off. nodetool's own getautorepairconfig/autorepairstatus commands print
+// the same "Auto-repair is not enabled" message for either case rather than
+// distinguishing them, so this does too.
+func autoRepairUnavailableRow() StatsResult {
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Auto-repair", "not enabled")}}}}
+}
+
+// autoRepairDisabled reads AutoRepairServiceMBean's zero-arg
+// isAutoRepairDisabled() attribute (AutoRepairDisabled), treating a
+// JMX-level failure -- the MBean not being registered at all -- the same as
+// a true value, since both mean "nothing to show" to the two callers below.
+func autoRepairDisabled(j *Client, ip string) (bool, error) {
+	raws, err := j.bulkReadAttributes(ip, []attrRead{{autoRepairServiceMbean, "AutoRepairDisabled"}})
+	if err != nil {
+		return false, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return true, nil
+	}
+	var disabled bool
+	if err := json.Unmarshal(raws[0].Value, &disabled); err != nil {
+		return false, err
+	}
+	return disabled, nil
+}
+
+// fetchAutoRepairConfig matches `nodetool getautorepairconfig`:
+// AutoRepairServiceMBean.getAutoRepairConfiguration(), a single free-text
+// blob (nodetool prints it as-is) rather than a structured JMX type -- see
+// AutoRepairService.java's getAutoRepairConfiguration/appendConfig, which
+// build it as an un-indented "repair scheduler configuration:" header line
+// followed by \t-indented "key: value" lines, then one further un-indented
+// "configuration for repair_type: <type>" header (and its own \t-indented
+// lines) per repair type (full/incremental/preview_repaired). Split into one
+// StatGroup per un-indented header so the panel reads as sections rather
+// than one long flat list, without hardcoding the key names within each
+// section.
+func fetchAutoRepairConfig(j *Client, ip string) (StatsResult, error) {
+	disabled, err := autoRepairDisabled(j, ip)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if disabled {
+		return autoRepairUnavailableRow(), nil
+	}
+
+	raws, err := j.bulkReadAttributes(ip, []attrRead{{autoRepairServiceMbean, "AutoRepairConfiguration"}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return autoRepairUnavailableRow(), nil
+	}
+	var config string
+	if err := json.Unmarshal(raws[0].Value, &config); err != nil {
+		return StatsResult{}, err
+	}
+
+	var groups []StatGroup
+	for _, line := range strings.Split(config, "\n") {
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "\t") {
+			name := strings.TrimPrefix(line, "configuration for repair_type: ")
+			name = strings.TrimSuffix(name, ":")
+			groups = append(groups, StatGroup{Name: name})
+			continue
+		}
+		if len(groups) == 0 {
+			continue // malformed: an indented line before any header
+		}
+		key, value, _ := strings.Cut(strings.TrimPrefix(line, "\t"), ": ")
+		last := &groups[len(groups)-1]
+		last.Rows = append(last.Rows, row(key, value))
+	}
+	return StatsResult{Groups: groups}, nil
+}
+
+// fetchAutoRepairStatus matches `nodetool autorepairstatus -t <repairType>`:
+// AutoRepairServiceMBean.getOnGoingRepairHostIds(repairType). Unlike
+// getAutoRepairConfiguration (a zero-arg attribute), this takes the repair
+// type as a parameter, so it's a JMX operation rather than an attribute --
+// see AutoRepairServiceMBean's own get-prefixed-but-parameterized method.
+// repairType is matched case-insensitively against full/incremental/
+// preview_repaired: RepairType.parse upper-cases the argument before
+// valueOf(), so any case the operator types works.
+func fetchAutoRepairStatus(j *Client, ip, repairType string) (StatsResult, error) {
+	disabled, err := autoRepairDisabled(j, ip)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if disabled {
+		return autoRepairUnavailableRow(), nil
+	}
+
+	raws, err := j.bulkExec(ip, []opCall{{Mbean: autoRepairServiceMbean, Operation: "getOnGoingRepairHostIds", Arguments: []any{repairType}}})
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if len(raws) == 0 || raws[0].Status != http.StatusOK {
+		return StatsResult{}, fmt.Errorf("getOnGoingRepairHostIds(%s) failed: %s -- repair type must be one of full/incremental/preview_repaired", repairType, raws[0].Error)
+	}
+	var hostIDs []string
+	if err := json.Unmarshal(raws[0].Value, &hostIDs); err != nil {
+		return StatsResult{}, err
+	}
+	sort.Strings(hostIDs)
+	return StatsResult{Groups: []StatGroup{{Rows: []StatRow{row("Active repairs ("+repairType+")", listValue(hostIDs))}}}}, nil
 }
 
 // cachesMbean is CacheServiceMBean's object name -- verified against the
