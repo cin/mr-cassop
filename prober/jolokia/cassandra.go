@@ -1,12 +1,28 @@
 package jolokia
 
 import (
+	"fmt"
 	"regexp"
 
 	"sigs.k8s.io/yaml"
 )
 
 var (
+	// regexIndexStatusLine drops the entire INDEX_STATUS line. Every other
+	// app-state's value is a scalar followed by throwaway comma-separated
+	// metadata (a version number, a token), which regexEndpointStatesRemovals
+	// below cleans up. INDEX_STATUS -- new in Cassandra 5.0 -- is the one
+	// exception: its value is itself a JSON object with its own embedded
+	// commas and braces, e.g.
+	// 	INDEX_STATUS:321:{"system":{"PaxosUncommittedIndex":3},"reaper":{"state2i":3}}
+	// regexEndpointStatesRemovals' "drop everything after the first comma on
+	// the line" rule truncates that into an unbalanced `{...` (verified live
+	// against a 5.0.9 cluster: "yaml: line N: did not find expected ',' or
+	// '}'" for every node, since AllEndpointStates -- and so this parse --
+	// runs for every node polled, not just ones with an index). Nothing in
+	// EndpointState models INDEX_STATUS, so the whole line is dropped
+	// up front rather than taught to the other two regexes.
+	regexIndexStatusLine = regexp.MustCompile(`(?m)^\s*INDEX_STATUS:\d+:.*\n?`)
 	// regexEndpointStatesRemovals matches digits before a colon OR anything after a comma:
 	// 	RACK:10:rack1 -> `10:`
 	// 	STATUS:22:NORMAL,-2918089050085335913 -> `,-2918089050085335913`, `22:`
@@ -58,12 +74,13 @@ type AllEndpointStates map[string]EndpointState
 func (e *AllEndpointStates) UnmarshalText(raw []byte) error {
 	// AllEndpointStates can be converted into valid yaml with a few regex operations
 	data := string(raw)
+	data = regexIndexStatusLine.ReplaceAllString(data, "")
 	data = regexEndpointStatesRemovals.ReplaceAllString(data, "")
 	data = regexEndpointStatesToYamlColon.ReplaceAllString(data, "$1: ")
 
 	var states map[string]EndpointState
 	if err := yaml.Unmarshal([]byte(data), &states); err != nil {
-		return err
+		return fmt.Errorf("%w -- raw: %q", err, string(raw))
 	}
 
 	*e = states
