@@ -552,7 +552,7 @@ var _ = Describe("cassandracluster validation", func() {
 		})
 	})
 	Context(".spec.monitoring.agent", func() {
-		It("can only be one of (instaclustr;datastax;tlp)", func() {
+		It("can only be tlp", func() {
 			cc := validCluster.DeepCopy()
 			cc.Spec.Cassandra = &v1alpha1.Cassandra{
 				NumSeeds:        3,

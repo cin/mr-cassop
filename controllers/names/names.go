@@ -67,10 +67,6 @@ func PrometheusConfigMap(clusterName string) string {
 	return clusterName + "-prometheus-configmap"
 }
 
-func CollectdConfigMap(clusterName string) string {
-	return clusterName + "-collectd-configmap"
-}
-
 func MaintenanceConfigMap(clusterName string) string {
 	return clusterName + "-maintenance-configmap"
 }
@@ -101,10 +97,6 @@ func AdminAuthConfigSecret(clusterName string) string {
 
 func PodIPsConfigMap(clusterName string) string {
 	return clusterName + "-pod-ips"
-}
-
-func OperatorCollectdCM() string {
-	return cassandraOperator + "-collectd-configmap"
 }
 
 func OperatorCassandraConfigCM() string {

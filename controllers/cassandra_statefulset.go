@@ -149,9 +149,6 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 		if cc.Spec.Cassandra.Monitoring.Agent == dbv1alpha1.CassandraAgentTlp {
 			desiredSts.Spec.Template.Spec.Volumes = append(desiredSts.Spec.Template.Spec.Volumes, prometheusVolume(cc))
 		}
-		if cc.Spec.Cassandra.Monitoring.Agent == dbv1alpha1.CassandraAgentDatastax {
-			desiredSts.Spec.Template.Spec.Volumes = append(desiredSts.Spec.Template.Spec.Volumes, collectdVolume(cc))
-		}
 	}
 
 	if cc.Spec.Cassandra.Persistence.Enabled {

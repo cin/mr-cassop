@@ -40,11 +40,9 @@ deploy:
         jolokiaImage: "ghcr.io/cin/mr-cassop/jolokia:{{.USER}}"
         cassandraImage: "ghcr.io/cin/mr-cassop/cassandra:{{.USER}}"
         admissionWebhooks.enabled: true
-        clusterDashboards.enabled[0]: "datastax"
-        clusterDashboards.enabled[1]: "instaclustr"
-        clusterDashboards.enabled[2]: "prober"
-        clusterDashboards.enabled[3]: "reaper"
-        clusterDashboards.enabled[4]: "tlp"
+        clusterDashboards.enabled[0]: "prober"
+        clusterDashboards.enabled[1]: "reaper"
+        clusterDashboards.enabled[2]: "tlp"
         monitoring.enabled: true
         monitoring.grafanaDashboard.enabled: true
         monitoring.grafanaDashboard.datasourceName: "Prometheus"
