@@ -18,7 +18,7 @@ ARG JOLOKIA_JSON_VERSION=2.6.2
 COPY --from=gosu-builder /out/gosu /usr/local/bin/gosu
 
 RUN set -eux; \
-  apt-get update && apt-get install -y --no-install-recommends \
+  apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     dnsutils \
     jq \
