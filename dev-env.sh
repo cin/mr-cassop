@@ -14,7 +14,10 @@ export METRICS_PORT="8329"
 export RETRY_DELAY="10s"
 
 # Default images - using the values from values.yaml
-export DEFAULT_CASSANDRA_IMAGE="ghcr.io/cin/mr-cassop/cassandra:4.1.11-0.6.0"
+# Cassandra is on 5.0.9 as of main, but no published release has built that image yet
+# (latest published tag, 0.6.6, is still Cassandra 4.1.12) - point at a main-built dev
+# tag until a 5.0.9-based release ships, e.g. via `VERSION=dev ./build-local.sh --cassandra`.
+export DEFAULT_CASSANDRA_IMAGE="ghcr.io/cin/mr-cassop/cassandra:dev"
 export DEFAULT_PROBER_IMAGE="ghcr.io/cin/mr-cassop/prober:0.6.0"
 export DEFAULT_JOLOKIA_IMAGE="ghcr.io/cin/mr-cassop/jolokia:0.6.0"
 export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:5.0.1"
