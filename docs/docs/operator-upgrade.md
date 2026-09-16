@@ -9,7 +9,9 @@ The CRD is have to be updated manually with `kubectl apply -f ...` or some other
 
 The Helm upgrade part is no different from any other upgrades. Simply run `helm upgrade --version <chart_version> <chart path>`
 
-The order of invocations is not important.
+The order of invocations is not important, with one exception: upgrading across a Cassandra major version (e.g.
+4.1.x -> 5.0.x) requires bumping the `CassandraCluster`'s image at the same time as the chart upgrade -- see
+[Upgrading to Cassandra 5.0](upgrading-to-cassandra-5.md).
 
 :::caution
 
@@ -22,6 +24,12 @@ Depending on the change in the operator, additional steps may be required during
 Version specific upgrade instructions can be found in the release notes.
 
 ## Notable changes
+
+### Cassandra 5.0 support (`0.7.0`)
+
+The `0.7.x` line moves the vendored `cassandra.yaml` and default Cassandra image to target Cassandra 5.0.x.
+Upgrading a cluster still running Cassandra 4.1.x needs a specific order of operations and a `storage_compatibility_mode`
+walkthrough -- see [Upgrading to Cassandra 5.0](upgrading-to-cassandra-5.md) before upgrading past `0.6.x`.
 
 ### Default `sysctls` updated for Cassandra 4.1
 

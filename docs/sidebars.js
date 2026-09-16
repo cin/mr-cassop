@@ -4,6 +4,7 @@ module.exports = {
     'quickstart',
     'operator-configuration',
     'operator-upgrade',
+    'upgrading-to-cassandra-5',
     'cassandracluster-configuration',
     'admin-auth',
     'roles-management',
