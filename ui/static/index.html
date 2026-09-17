@@ -70,6 +70,13 @@
     margin: 0 auto;
     align-items: start;
   }
+  /* #resultsPanel overlays the viewport's bottom (position: fixed) rather than
+     taking up document flow space, so without this the last rack's command
+     row can end up scrolled underneath it with no way to reach it. Match its
+     max-height so the real page content always has room to scroll clear. */
+  body.results-panel-open main {
+    padding-bottom: calc(42vh + 20px);
+  }
   .sidebar {
     position: sticky;
     top: 20px;
@@ -790,6 +797,14 @@ const detailPanelEl = document.getElementById('detailPanel');
 const resultsPanelEl = document.getElementById('resultsPanel');
 const nodeListPanelEl = document.getElementById('nodeListPanel');
 const tablesPanelEl = document.getElementById('tablesPanel');
+
+// Keeps the body.results-panel-open class (see the matching CSS rule) in
+// sync with resultsPanelEl's visibility, so the page gains scroll room under
+// the fixed-position panel whenever it's shown.
+function setResultsPanelVisible(visible) {
+  resultsPanelEl.hidden = !visible;
+  document.body.classList.toggle('results-panel-open', visible);
+}
 
 let currentEnv = null;
 let selectedNodeKey = null; // `${dc}:${ip}`, survives across refreshes
@@ -1881,7 +1896,7 @@ function trimResultsHistory() {
 function closeResultsTab(id) {
   resultsHistory = resultsHistory.filter(e => e.id !== id);
   if (resultsHistory.length === 0) {
-    resultsPanelEl.hidden = true;
+    setResultsPanelVisible(false);
     resultsPanelEl.innerHTML = '';
     return;
   }
@@ -1960,7 +1975,7 @@ function renderResultsPanel() {
     trimResultsHistory();
     renderResultsPanel();
   });
-  document.getElementById('resultsClose').addEventListener('click', () => { resultsPanelEl.hidden = true; });
+  document.getElementById('resultsClose').addEventListener('click', () => setResultsPanelVisible(false));
   document.getElementById('scrollLockCheckbox').addEventListener('change', (evt) => {
     scrollSyncEnabled = evt.target.checked;
     // Re-render rather than just (de)registering listeners on the existing
@@ -2109,7 +2124,7 @@ function invokeTool(tool, targets, table) {
   resultsHistory.push(entry);
   trimResultsHistory();
   activeResultsId = id;
-  resultsPanelEl.hidden = false;
+  setResultsPanelVisible(true);
   renderResultsPanel();
 
   for (const row of targets) {
