@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cin/mr-cassop/controllers/util"
@@ -178,9 +179,12 @@ func generalValidation(cc *CassandraCluster) (errors []error) {
 
 func validateCassandra(cc *CassandraCluster) (errors []error) {
 	if len(cc.Spec.Cassandra.ConfigOverrides) > 0 {
-		err := yaml.Unmarshal([]byte(cc.Spec.Cassandra.ConfigOverrides), map[string]interface{}{})
+		overrides := make(map[string]interface{})
+		err := yaml.Unmarshal([]byte(cc.Spec.Cassandra.ConfigOverrides), &overrides)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("cassandra config override should be a string with valid YAML: %s", err.Error()))
+		} else if err = validateStorageCompatibilityModeOverrides(overrides); err != nil {
+			errors = append(errors, err)
 		}
 	}
 
@@ -191,6 +195,45 @@ func validateCassandra(cc *CassandraCluster) (errors []error) {
 	}
 
 	return
+}
+
+// storageCompatibilityModeCassandra4 is the vendored cassandra.yaml default for
+// storage_compatibility_mode (see mr-cassop/config/cassandra.yaml). Some sstable/storage
+// features are rejected by Cassandra itself at startup - not gracefully, but as a crash loop -
+// unless the cluster has already been rolled through UPGRADING/NONE. See
+// docs/docs/upgrading-to-cassandra-5.md.
+const storageCompatibilityModeCassandra4 = "CASSANDRA_4"
+
+// validateStorageCompatibilityModeOverrides catches known-incompatible configOverrides
+// combinations before they reach the StatefulSet, e.g. requesting the "bti" sstable format
+// while storage_compatibility_mode is unset (vendored default) or still CASSANDRA_4. Extend the
+// checks here as more CASSANDRA_4-gated settings are identified.
+func validateStorageCompatibilityModeOverrides(overrides map[string]interface{}) error {
+	mode := storageCompatibilityModeCassandra4
+	if v, ok := overrides["storage_compatibility_mode"].(string); ok && strings.TrimSpace(v) != "" {
+		mode = strings.ToUpper(strings.TrimSpace(v))
+	}
+
+	if mode != storageCompatibilityModeCassandra4 {
+		return nil
+	}
+
+	if format, ok := sstableSelectedFormatOverride(overrides); ok && strings.EqualFold(format, "bti") {
+		return fmt.Errorf("cassandra config override sets `sstable.selected_format: %s` while `storage_compatibility_mode` "+
+			"is unset or `%s`; the bti sstable format is rejected by Cassandra at startup until storage_compatibility_mode "+
+			"is rolled to UPGRADING or NONE - see docs/docs/upgrading-to-cassandra-5.md", format, storageCompatibilityModeCassandra4)
+	}
+
+	return nil
+}
+
+func sstableSelectedFormatOverride(overrides map[string]interface{}) (string, bool) {
+	sstable, ok := overrides["sstable"].(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+	format, ok := sstable["selected_format"].(string)
+	return format, ok
 }
 
 func validateReaper(cc *CassandraCluster) (errors []error) {
