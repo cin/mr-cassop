@@ -73,6 +73,15 @@ so walking it forward after the upgrade is done through `.spec.cassandra.configO
    cluster. Don't skip straight to `NONE` from `CASSANDRA_4` -- if a node ends up back on the old version by
    accident, `NONE` mode no longer toggles behaviors the way `UPGRADING` mode does.
 
+### Features gated behind `storage_compatibility_mode`
+
+Some newer sstable formats and features are only available once `storage_compatibility_mode` has moved past
+`CASSANDRA_4` -- for example, the trie-indexed `bti` sstable format (`.spec.cassandra.configOverrides: |
+sstable:\n  selected_format: bti`). Requesting one of these while `storage_compatibility_mode` is unset (the
+vendored default) or still `CASSANDRA_4` crashes the Cassandra process at startup rather than failing gracefully.
+The operator's admission webhook rejects known-bad combinations like this one up front, at `kubectl apply` time,
+instead of letting the pod crash-loop.
+
 ## Monitoring agent
 
 The `datastax` and `instaclustr` Cassandra monitoring agents were dropped as of

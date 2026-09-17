@@ -579,6 +579,45 @@ var _ = Describe("cassandracluster validation", func() {
 			expectWebhookError(err, "cassandra config override should be a string with valid YAML: error converting YAML to JSON: yaml: line 1: did not find expected key")
 		})
 	})
+	Context("with a bti sstable format while storage_compatibility_mode is CASSANDRA_4", func() {
+		It("should fail the validation when storage_compatibility_mode is left at its vendored default", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				ConfigOverrides: "sstable:\n  selected_format: bti\n",
+			}
+			markMocksAsReady(cc)
+			err := k8sClient.Create(ctx, cc)
+			expectWebhookError(err, "the bti sstable format is rejected by Cassandra at startup")
+		})
+
+		It("should fail the validation when storage_compatibility_mode is explicitly CASSANDRA_4", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				ConfigOverrides: "storage_compatibility_mode: CASSANDRA_4\nsstable:\n  selected_format: bti\n",
+			}
+			markMocksAsReady(cc)
+			err := k8sClient.Create(ctx, cc)
+			expectWebhookError(err, "the bti sstable format is rejected by Cassandra at startup")
+		})
+
+		It("should pass validation once storage_compatibility_mode has moved past CASSANDRA_4", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				ConfigOverrides: "storage_compatibility_mode: NONE\nsstable:\n  selected_format: bti\n",
+			}
+			markMocksAsReady(cc)
+			Expect(k8sClient.Create(ctx, cc)).To(Succeed())
+		})
+
+		It("should pass validation when bti isn't requested at all", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				ConfigOverrides: "storage_compatibility_mode: CASSANDRA_4\n",
+			}
+			markMocksAsReady(cc)
+			Expect(k8sClient.Create(ctx, cc)).To(Succeed())
+		})
+	})
 	Context("with invalid seeds config", func() {
 		It("should fail the validation", func() {
 			cc := validCluster.DeepCopy()
