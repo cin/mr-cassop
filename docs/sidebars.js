@@ -48,6 +48,7 @@ module.exports = {
         'cassandracluster-lifecycle',
         'prober',
         'jolokia',
+        'nodetool-ui',
       ],
     },
     'development',
