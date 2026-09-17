@@ -19,6 +19,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	authReadConsistencyLevelKey       = "auth_read_consistency_level"
+	temporaryAuthReadConsistencyLevel = "LOCAL_ONE"
+)
+
 func (r *CassandraClusterReconciler) reconcileCassandraConfigMap(ctx context.Context, cc *v1alpha1.CassandraCluster, restartChecksum checksumContainer) error {
 	operatorCM, err := r.getConfigMap(ctx, names.OperatorCassandraConfigCM(), r.Cfg.Namespace)
 	if err != nil {
@@ -39,6 +44,10 @@ func (r *CassandraClusterReconciler) reconcileCassandraConfigMap(ctx context.Con
 	err = yaml.Unmarshal([]byte(data["cassandra.yaml"]), &cassandraYaml)
 	if err != nil {
 		return errors.Wrap(err, "can't unmarshal 'cassandra.yaml'")
+	}
+
+	if err = r.applyTemporaryAuthRelaxation(ctx, cc, cassandraYaml); err != nil {
+		return err
 	}
 
 	// override user provided configs
@@ -126,6 +135,39 @@ func (r *CassandraClusterReconciler) reconcileCassandraConfigMap(ctx context.Con
 	}
 
 	return r.reconcileConfigMap(ctx, desiredCM)
+}
+
+// applyTemporaryAuthRelaxation temporarily sets auth_read_consistency_level to a level
+// achievable by a single node (LOCAL_ONE) while this cluster is bootstrapping against
+// Cassandra data PVCs that already existed (see createClusterAdminSecrets). Without this,
+// the vendored default (effectively Cassandra's own QUORUM/LOCAL_QUORUM default) can never be
+// satisfied until multiple nodes are up, but those other nodes are themselves waiting on the
+// first node's readiness probe to pass first - a permanent deadlock (issue #150).
+//
+// It must run before user configOverrides are merged in, so a user's own explicit
+// auth_read_consistency_level is never masked, and it self-clears once every DC is ready so the
+// relaxation never outlives the one-time bootstrap it exists for.
+func (r *CassandraClusterReconciler) applyTemporaryAuthRelaxation(ctx context.Context, cc *v1alpha1.CassandraCluster, cassandraYaml map[string]interface{}) error {
+	if !cc.Status.RecreatedFromExistingPVCs {
+		return nil
+	}
+
+	unready, err := r.unreadyDCs(ctx, cc)
+	if err != nil {
+		return errors.Wrap(err, "failed to check DC readiness for temporary auth relaxation")
+	}
+
+	if len(unready) > 0 {
+		r.Log.Infof("Cluster is bootstrapping against pre-existing PVCs and DCs %q are not ready yet; "+
+			"temporarily setting %s to %s", unready, authReadConsistencyLevelKey, temporaryAuthReadConsistencyLevel)
+		cassandraYaml[authReadConsistencyLevelKey] = temporaryAuthReadConsistencyLevel
+		return nil
+	}
+
+	r.Log.Info("Cluster bootstrapped from pre-existing PVCs is now fully ready; " +
+		"no longer relaxing auth_read_consistency_level")
+	cc.Status.RecreatedFromExistingPVCs = false
+	return nil
 }
 
 func cassandraConfigVolume(cc *v1alpha1.CassandraCluster) v1.Volume {
