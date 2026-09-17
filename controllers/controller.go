@@ -150,9 +150,13 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 
 	clusterReady := false
 	ccStatus := cc.DeepCopy()
+	// cc is mutated by pointer throughout this reconcile (e.g. createClusterAdminSecrets sets
+	// cc.Status.RecreatedFromExistingPVCs, applyTemporaryAuthRelaxation clears it once ready), so
+	// its final value is read here rather than snapshotted up front alongside clusterReady.
 	defer func() {
-		if ccStatus.Status.Ready != clusterReady {
+		if ccStatus.Status.Ready != clusterReady || ccStatus.Status.RecreatedFromExistingPVCs != cc.Status.RecreatedFromExistingPVCs {
 			ccStatus.Status.Ready = clusterReady
+			ccStatus.Status.RecreatedFromExistingPVCs = cc.Status.RecreatedFromExistingPVCs
 			statusErr := r.Status().Update(ctx, ccStatus)
 			if statusErr != nil {
 				r.Log.Errorf("Failed to update cluster readiness state: %#v", statusErr)

@@ -367,6 +367,11 @@ type SystemKeyspaceDC struct {
 type CassandraClusterStatus struct {
 	MaintenanceState []Maintenance `json:"maintenanceState,omitempty"`
 	Ready            bool          `json:"ready,omitempty"`
+	// RecreatedFromExistingPVCs is set when the operator detects, while creating the admin
+	// secrets for this cluster, that Cassandra data PVCs already existed (i.e. it is
+	// bootstrapping against storage left over from a previous cluster instance rather than
+	// starting fresh). It is automatically cleared once all DCs report ready.
+	RecreatedFromExistingPVCs bool `json:"recreatedFromExistingPVCs,omitempty"`
 }
 
 // +kubebuilder:object:root=true

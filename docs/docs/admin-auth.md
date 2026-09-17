@@ -48,6 +48,21 @@ The operator supports recreating clusters with previously created PVCs. In this 
 
 The PVCs are identified by labels `cassandra-cluster-instance=<cassandracluster-name>&cassandra-cluster-component=cassandra`. Those are set automatically when using the volume claim template. For manually provided volumes, you have to label your PVCs manually.
 
+##### Bootstrap auth relaxation
+
+Recreating a cluster against existing PVCs restarts every Cassandra node from scratch at the
+same time, so no node is yet able to satisfy the quorum that `system_auth` reads normally
+require by default. Left unhandled, this is a deadlock: the first node waits forever for peers
+that themselves wait for the first node to become ready.
+
+To avoid this, while the operator has detected pre-existing PVCs and the cluster isn't fully
+ready yet, it temporarily renders `cassandra.yaml` with `auth_read_consistency_level: LOCAL_ONE`
+layered on top of your own `.spec.cassandra.configOverrides` (an explicit
+`auth_read_consistency_level` in `configOverrides` always wins and is never overridden). Once
+every DC reports ready, the operator stops injecting the override on the next reconcile, which
+triggers one final rolling restart back to the normal configuration - safe at that point because
+every node is already up and quorum-capable. No user action is required either way.
+
 ### Changing the role
 
 mr-cassop also supports changing the admin role password or even creating and switching to a new role. In order to do so, the user just needs to change the role password (and also the role name if desired) in the provided secret.

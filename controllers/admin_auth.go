@@ -101,6 +101,10 @@ func (r *CassandraClusterReconciler) createClusterAdminSecrets(ctx context.Conte
 		if len(pvcs.Items) > 0 { // cluster existed before. Use the credentials from the provided secret to recreate the cluster.
 			r.Log.Infof("PVCs found. Assuming cluster existed before. Using credentials from secret %s", cc.Spec.AdminRoleSecretName)
 			storageExists = true
+			// Recorded on the CR status (and persisted by reconcileWithContext's deferred status
+			// update) so reconcileCassandraConfigMap can temporarily relax auth_read_consistency_level
+			// until the cluster reaches quorum on its own. See applyTemporaryAuthRelaxation.
+			cc.Status.RecreatedFromExistingPVCs = true
 		}
 	}
 
