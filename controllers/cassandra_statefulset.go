@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -68,6 +69,9 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 		desiredSts.Spec.Template.Annotations = util.MergeMap(actualSts.Spec.Template.Annotations, desiredSts.Spec.Template.Annotations)
 		// scaling is handled by the scaling logic
 		desiredSts.Spec.Replicas = actualSts.Spec.Replicas
+		// podManagementPolicy is immutable once the statefulset exists - migrateToOrderedReady
+		// (below) is the only thing allowed to change it, via a delete+recreate, never a plain Update.
+		desiredSts.Spec.PodManagementPolicy = actualSts.Spec.PodManagementPolicy
 		if !compare.EqualStatefulSet(desiredSts, actualSts) {
 			r.Log.Info("Updating cassandra statefulset")
 			r.Log.Debug(compare.DiffStatefulSet(actualSts, desiredSts))
@@ -78,6 +82,109 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 			}
 		} else {
 			r.Log.Debugf("No updates to cassandra statefulset")
+		}
+
+		if err = r.migrateToOrderedReady(ctx, cc, dc, actualSts); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateToOrderedReady flips a DC's statefulset from the fast-bootstrap ParallelPodManagement
+// policy to OrderedReady once the DC has gone fully ready for the first time. It's a one-shot,
+// idempotent migration: once the recreated statefulset reports OrderedReady, this is a no-op on
+// every later reconcile (checked via sts.Spec.PodManagementPolicy itself - no separate status
+// field needed).
+//
+// ParallelPodManagement lets Kubernetes replace every pod in the statefulset concurrently on any
+// spec change (image bump, config change, ...); on an already-running, already-quorate cluster
+// that can drop `system_auth` below LOCAL_QUORUM on every node at once, deadlocking the DC (#155).
+// OrderedReady caps updates to one pod at a time - but it's immutable on an existing statefulset,
+// so switching to it requires deleting the object and recreating it with the same spec except
+// that one field. Deleting a statefulset normally cascades to delete the pods it owns, so this
+// first strips its controller ownerReference from each of them (see orphanStatefulSetPods) -
+// deliberately not `client.PropagationPolicy(metav1.DeletePropagationOrphan)`, since that instead
+// relies on the garbage collector controller to strip those same ownerReferences asynchronously,
+// which envtest doesn't run at all and even a real cluster's GC controller does on its own
+// schedule - either way leaving the statefulset's name stuck "object is being deleted" for a
+// window in which the recreate below would fail. Stripping ownerReferences synchronously here
+// means nothing is left for any deletion to cascade to, so a plain Delete is immediate and safe.
+func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, sts *appsv1.StatefulSet) error {
+	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
+		return nil // already migrated
+	}
+
+	if dc.Replicas == nil || *dc.Replicas == 0 || sts.Status.ReadyReplicas != *dc.Replicas {
+		return nil // only migrate once the DC's initial (fast, parallel) bootstrap has completed
+	}
+
+	r.Log.Infof("DC %q of cluster %q is fully ready for the first time; migrating its statefulset "+
+		"from Parallel to OrderedReady pod management so future updates replace one pod at a time "+
+		"instead of all at once", dc.Name, cc.Name)
+
+	if err := r.orphanStatefulSetPods(ctx, sts); err != nil {
+		return errors.Wrap(err, "failed to detach statefulset's pods ahead of OrderedReady migration")
+	}
+
+	recreated := sts.DeepCopy()
+	recreated.ResourceVersion = ""
+	recreated.UID = ""
+	recreated.CreationTimestamp = metav1.Time{}
+	recreated.Spec.PodManagementPolicy = appsv1.OrderedReadyPodManagement
+
+	if err := r.Delete(ctx, sts); err != nil {
+		return errors.Wrap(err, "failed to delete statefulset for OrderedReady migration")
+	}
+
+	oldStatus := sts.Status
+	if err := r.Create(ctx, recreated); err != nil {
+		return errors.Wrap(err, "failed to recreate statefulset with OrderedReady pod management")
+	}
+
+	// Create ignores .status (it's a subresource), so the recreated object starts at zero
+	// ReadyReplicas even though the pods it just adopted are already running and ready. Seed it
+	// with the old object's status immediately so nothing (this cluster's own readiness check,
+	// prober, ...) briefly sees the DC as unready right after a migration that shouldn't have
+	// disturbed any pod. A real cluster's statefulset controller would recompute this from actual
+	// pod state within moments regardless; this just closes that gap immediately instead of
+	// waiting on it.
+	recreated.Status = oldStatus
+	if err := r.Status().Update(ctx, recreated); err != nil {
+		return errors.Wrap(err, "failed to seed recreated statefulset's status")
+	}
+
+	return nil
+}
+
+// orphanStatefulSetPods removes sts's controller ownerReference from every pod it owns, via a
+// merge patch scoped to just that field so it can't conflict with kubelet's own frequent status
+// updates to the same pods. The pods are left running completely untouched - only their metadata
+// changes - and get adopted back (via label selector match, not ownerReference) by the
+// recreated statefulset moments later once migrateToOrderedReady creates it.
+func (r *CassandraClusterReconciler) orphanStatefulSetPods(ctx context.Context, sts *appsv1.StatefulSet) error {
+	pods := &v1.PodList{}
+	if err := r.List(ctx, pods, client.InNamespace(sts.Namespace), client.MatchingLabels(sts.Spec.Selector.MatchLabels)); err != nil {
+		return errors.Wrap(err, "failed to list statefulset's pods")
+	}
+
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		remaining := make([]metav1.OwnerReference, 0, len(pod.OwnerReferences))
+		for _, ref := range pod.OwnerReferences {
+			if ref.UID != sts.UID {
+				remaining = append(remaining, ref)
+			}
+		}
+		if len(remaining) == len(pod.OwnerReferences) {
+			continue // not owned by sts - nothing to strip
+		}
+
+		patch := client.MergeFrom(pod.DeepCopy())
+		pod.OwnerReferences = remaining
+		if err := r.Patch(ctx, pod, patch); err != nil {
+			return errors.Wrapf(err, "failed to detach pod %q from statefulset", pod.Name)
 		}
 	}
 
