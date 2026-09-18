@@ -73,7 +73,7 @@ cd docs && npm install && npm start
 ## Requirements
 
 - Kubernetes 1.28+ for deployments; envtest coverage uses Kubernetes 1.32.x assets.
-- Cassandra 4.1.11 is the default supported image target.
+- Cassandra 5.0.x (5.0.9) is the default supported image target as of the `0.7.x` release line; `0.6.x` targeted Cassandra 4.1.x.
 - Go 1.26+ for local development.
 - Node.js 24+ for documentation builds.
 - Helm 3.15.4+ for installation and chart validation.
