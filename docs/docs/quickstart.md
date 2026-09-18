@@ -16,7 +16,7 @@ Released mr-cassop images are published to GitHub Container Registry under `ghcr
 Set the release you want to install:
 
 ```bash
-export MR_CASSOP_VERSION=0.6.0
+export MR_CASSOP_VERSION=0.7.1
 ```
 
 Download the chart and create the operator namespace:

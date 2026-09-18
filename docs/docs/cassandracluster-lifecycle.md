@@ -33,6 +33,8 @@ Depending on the changed config one of the following scenarios will occur:
 * Change is causing a rolling upgrade. This refers to most of the configs - overriding a `cassandra.yaml` config, changing log level, enabling monitoring, etc.
 * Change is not possible because the field is immutable. The restriction comes from the StatefulSet managing the pods. If the change is needed, the cluster has to be removed and created again with the same storage.  
 
+A rolling upgrade always replaces one node at a time, waiting for it to be fully ready before moving to the next. Once a DC has gone ready for the first time, the operator switches its statefulset from the fast, parallel pod management used during the initial bootstrap (step 2 above) to Kubernetes' `OrderedReady` policy, which is what actually enforces this one-at-a-time cap for every later update - without it, a single config change could otherwise restart every node at once and risk `system_auth` losing quorum.
+
 ## Scaling CassandraClusters
 
 ### Scaling Up
