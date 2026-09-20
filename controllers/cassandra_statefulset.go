@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -211,10 +212,21 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 			Selector:            &metav1.LabelSelector{MatchLabels: stsLabels},
 			PodManagementPolicy: appsv1.ParallelPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type:          appsv1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{Partition: ptr.To[int32](0)},
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+					Partition: ptr.To[int32](0),
+					// the API server defaults this to 1 when absent; setting it explicitly keeps
+					// desiredSts equal to what's read back, avoiding a spurious diff (and pointless
+					// Update) on every single reconcile.
+					MaxUnavailable: ptr.To(intstr.FromInt32(1)),
+				},
 			},
 			RevisionHistoryLimit: ptr.To[int32](10),
+			// same reasoning as MaxUnavailable above: match the API server's defaulted value.
+			PersistentVolumeClaimRetentionPolicy: &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+				WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: stsLabels,
