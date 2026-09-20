@@ -5,12 +5,12 @@
 # Dockerfile buildable in CI with no local prerequisites.
 FROM eclipse-temurin:11-jdk-noble AS builder
 ARG ICARUS_FORK_REPO=https://github.com/cin/icarus.git
-ARG ICARUS_FORK_REF=icarus-4.1.13
+ARG ICARUS_VERSION=4.1.13
 
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-RUN git clone --branch "${ICARUS_FORK_REF}" --depth 1 "${ICARUS_FORK_REPO}" .
+RUN git clone --branch "icarus-${ICARUS_VERSION}" --depth 1 "${ICARUS_FORK_REPO}" .
 RUN ./mvnw -B -q -DskipTests -Dmaven.javadoc.skip=true clean package
 
 FROM eclipse-temurin:11-jre-noble
