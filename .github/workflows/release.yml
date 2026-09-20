@@ -12,7 +12,7 @@ permissions:
 env:
   HELM_VERSION: v3.15.4
   NODE_VERSION: "24"
-  ICARUS_FORK_REF: "icarus-4.1.13"
+  ICARUS_VERSION: "icarus-4.1.13"
 
 jobs:
   images:
@@ -70,7 +70,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-            ICARUS_FORK_REF=${{ env.ICARUS_FORK_REF }}
+            ICARUS_FORK_REF=${{ env.ICARUS_VERSION }}
 
   helm-chart:
     runs-on: ubuntu-latest
