@@ -29,6 +29,9 @@ type Environment struct {
 
 var environments []Environment
 
+// Version is set via -ldflags at build time (see ui/Dockerfile), matching the operator and prober.
+var Version = "undefined"
+
 // loadEnvironments reads the single Prober target this backend talks to
 // from its own process env vars -- a POC/dev-scale setup (one environment),
 // not a multi-tenant config file, hence no config parsing here.
@@ -173,6 +176,6 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	log.Printf("nodetool-ui listening on %s (%d environment(s) configured)", addr, len(environments))
+	log.Printf("nodetool-ui %s listening on %s (%d environment(s) configured)", Version, addr, len(environments))
 	log.Fatal(http.ListenAndServe(addr, mux))
 }

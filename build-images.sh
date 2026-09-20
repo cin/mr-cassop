@@ -99,6 +99,10 @@ build_image "jolokia" "jolokia/Dockerfile" "jolokia"
 echo -e "${BLUE}🔨 Building icarus...${NC}"
 build_image "icarus" "icarus/Dockerfile" "icarus"
 
+# Build ui
+echo -e "${BLUE}🔨 Building ui...${NC}"
+build_image "ui" "ui/Dockerfile" "ui"
+
 echo ""
 echo -e "${GREEN}🎉 All images built successfully!${NC}"
 echo ""
@@ -118,6 +122,7 @@ else
     echo -e "   docker push ${REGISTRY}/cassandra:${VERSION}"
     echo -e "   docker push ${REGISTRY}/jolokia:${VERSION}"
     echo -e "   docker push ${REGISTRY}/icarus:${VERSION}"
+    echo -e "   docker push ${REGISTRY}/ui:${VERSION}"
 fi
 echo ""
 echo -e "${BLUE}🔧 To update dev-env.sh with new images:${NC}"

@@ -31,6 +31,9 @@ type Config struct {
 	DefaultJolokiaImage   string        `env:"DEFAULT_JOLOKIA_IMAGE,required"`
 	DefaultReaperImage    string        `env:"DEFAULT_REAPER_IMAGE,required"`
 	DefaultIcarusImage    string        `env:"DEFAULT_ICARUS_IMAGE,required"`
+	// Not `required`: only used when a CassandraCluster opts into spec.ui.enabled, unlike the
+	// other components above which are always deployed.
+	DefaultUIImage string `env:"DEFAULT_UI_IMAGE"`
 }
 
 func LoadConfig() (*Config, error) {

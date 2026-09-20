@@ -5,9 +5,7 @@ slug: /nodetool-ui
 
 `ui/` is a small standalone web UI for running [Prober](prober.md)'s read-only `nodetool`-style stats
 catalog, and a handful of destructive `nodectl` operations, across a cluster's nodes from a browser
-instead of `kubectl exec`-ing into pods one at a time. It's a developer/operator diagnostic tool -- it
-isn't deployed by the Helm chart, has no Dockerfile, and isn't part of the reconciled `CassandraCluster`
-resources.
+instead of `kubectl exec`-ing into pods one at a time.
 
 :::info
 
@@ -21,9 +19,36 @@ below for how those are gated.
 
 ## Running it
 
+The operator can deploy the UI for you, alongside Prober -- no manual `go run` or hand-copied
+credentials needed. It's opt-in and off by default: set `spec.ui.enabled: true` on your
+`CassandraCluster`.
+
+```yaml
+spec:
+  ui:
+    enabled: true
+    # image, imagePullPolicy, resources, tolerations, nodeSelector are all optional,
+    # same as the other components (prober, icarus, ...)
+```
+
+The operator creates a Deployment and a ClusterIP Service (`<cluster>-cassandra-ui`), pointed at the
+cluster's own in-cluster Prober service, with `PROBER_USER`/`PROBER_PASSWORD` sourced automatically from
+the same admin credentials secret Prober itself validates against -- nothing to look up or paste in by
+hand. It's ClusterIP-only by design: this tool has real (if gated) destructive operations, so it isn't
+exposed publicly. Reach it the same way you'd reach Prober or Reaper:
+
+```bash
+kubectl port-forward -n <namespace> svc/<cluster>-cassandra-ui 8090:8080
+```
+
+Then open `http://localhost:8090`.
+
+### Running it locally (developing the UI itself)
+
 `ui/main.go` is a self-contained Go binary that serves the frontend (`ui/static/index.html`) and proxies
 a fixed set of read/write API calls to one configured Prober instance. It never exposes Prober's URL or
-credentials to the browser -- only this backend process sees them.
+credentials to the browser -- only this backend process sees them. For iterating on the UI's own code
+(not just using it), run it straight from source instead of via the operator:
 
 ```bash
 # Port-forward the target cluster's prober service (adjust namespace/name)
@@ -45,8 +70,9 @@ the same credentials via HTTP Basic Auth.
 
 `loadEnvironments()` in `ui/main.go` only ever configures the single environment described by its own
 process env vars (`PROBER_ENV_NAME`/`PROBER_URL`/`PROBER_USER`/`PROBER_PASSWORD`) -- there's no config
-file for multiple named environments today. The environment dropdown in the header exists in the
-frontend for when that changes, but currently only ever shows the one configured environment.
+file for multiple named environments today, operator-managed or otherwise. The environment dropdown in
+the header exists in the frontend for when that changes, but currently only ever shows the one
+configured environment.
 
 ## Layout
 

@@ -60,13 +60,14 @@ The build system automatically detects your platform, but you can override:
 
 ## Available Images
 
-The project builds 5 Docker images for Kubernetes deployment:
+The project builds 6 Docker images for Kubernetes deployment:
 
 1. **mr-cassop** - Main Kubernetes operator
 2. **prober** - Health monitoring component  
 3. **cassandra** - Enhanced Cassandra image with monitoring
 4. **jolokia** - JMX monitoring proxy
 5. **icarus** - Backup/restore component
+6. **ui** - Nodetool-style diagnostic dashboard over Prober
 
 ## Build Scripts
 
@@ -79,7 +80,7 @@ The project builds 5 Docker images for Kubernetes deployment:
   - `./build-local.sh --cassandra` - Complete local development (+ cassandra)
 
 ### `./build-images.sh`
-- **Purpose**: All 5 images with full configuration options
+- **Purpose**: All 6 images with full configuration options
 - **Platform**: Single or multi-platform via `MULTI_PLATFORM=true`
 - **Use Case**: Complete builds, CI/CD, production releases
 
@@ -92,6 +93,7 @@ make docker-build-prober      # Build prober image
 make docker-build-cassandra   # Build cassandra image
 make docker-build-jolokia     # Build jolokia image
 make docker-build-icarus      # Build icarus image
+make docker-build-ui          # Build nodetool UI image
 ```
 
 ### Batch Operations

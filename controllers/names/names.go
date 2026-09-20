@@ -51,6 +51,14 @@ func ProberIngressDomain(cc *dbv1alpha1.CassandraCluster, externalRegion dbv1alp
 	return ProberIngressHost(cc.Name, namespace, externalRegion.Domain)
 }
 
+func UIDeployment(clusterName string) string {
+	return clusterName + "-cassandra-ui"
+}
+
+func UIService(clusterName string) string {
+	return clusterName + "-cassandra-ui"
+}
+
 func ReaperDeployment(clusterName, dcName string) string {
 	return DC(clusterName, dcName) + "-reaper"
 }
