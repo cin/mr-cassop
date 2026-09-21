@@ -176,7 +176,7 @@ func (r *CassandraClusterReconciler) reconcileProberService(ctx context.Context,
 		},
 		Spec: v1.ServiceSpec{
 			Type:     v1.ServiceTypeClusterIP,
-			Selector: labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
+			Selector: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 			Ports: []v1.ServicePort{
 				{
 					Port:       dbv1alpha1.ProberServicePort,
