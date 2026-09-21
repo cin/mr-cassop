@@ -1,0 +1,37 @@
+# IoT-style time-series data model: one row per (device_id, timestamp), 5000
+# devices, ~7 days of history. Needs NOW_MS / SEVEN_DAYS_AGO_MS (epoch-ms)
+# exported before rendering with envsubst — see SKILL.md step 1. Without an
+# explicit population range, cassandra-stress seeds `timestamp` from epoch 0,
+# which silently lands every row years in the past.
+keyspace: device_stress
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS device_stress WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 3};
+table: device_data
+table_definition: |
+  CREATE TABLE IF NOT EXISTS device_data (
+        device_id text,
+        timestamp timestamp,
+        data_id int,
+        data_value blob,
+        PRIMARY KEY (device_id, timestamp)
+  ) WITH CLUSTERING ORDER BY (timestamp DESC)
+    AND compaction = { 'class': 'SizeTieredCompactionStrategy' };
+columnspec:
+  - name: device_id
+    size: uniform(8..12)
+    population: uniform(1..5000)
+  - name: timestamp
+    cluster: fixed(5000)
+    population: uniform(${SEVEN_DAYS_AGO_MS}..${NOW_MS})
+  - name: data_id
+    population: uniform(1..50)
+  - name: data_value
+    size: uniform(100..256)
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/5000
+  batchtype: UNLOGGED
+queries:
+  by_device_range:
+    cql: select * from device_data where device_id = ? and timestamp >= ? and timestamp <= ? LIMIT 200
+    fields: multirow

@@ -127,6 +127,16 @@ Once the operator is up, apply a `CassandraCluster` manifest. The [Quickstart](q
 
 If all set correctly, you should see the components getting created.
 
+## Load Testing with cassandra-stress
+
+Once a `CassandraCluster` is installed and ready, load-testing it is automated as a [Claude Code](https://claude.com/claude-code) skill at `.claude/skills/cassandra-stress/SKILL.md`. It runs `cassandra-stress` as a one-off Kubernetes `Job`, and supports both the built-in `keyspace1.standard1` schema and pluggable custom stress-profile YAMLs (under `profiles/` in the skill) for specific data models and read/write patterns — it ships with an IoT-style time-series `device_data` profile to start from. If you're using Claude Code, invoke it with e.g.:
+
+```
+/cassandra-stress PROFILE=device-data OPERATION=insert N=2000000 THREADS=8 TARGET_RATE=400
+```
+
+See the skill file for the full input list, how to add a new data model, and the Job/ConfigMap details.
+
 ## Tests
 
 ### Integration and unit tests
