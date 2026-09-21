@@ -193,6 +193,19 @@ kubectl delete job -n <NAMESPACE> -l app=cassandra-stress
 kubectl delete configmap cassandra-stress-profile -n <NAMESPACE> --ignore-not-found
 ```
 
+## Full teardown (stop the cluster and operator too)
+
+The cleanup above only clears stress artifacts so you can run again against the same cluster. To stop everything after you're done testing — the `CassandraCluster`, the operator, and any in-flight stress Job — tear down in this order, not in parallel, since deleting the CR out from under a running stress Job just makes it error instead of exiting cleanly:
+
+```bash
+kubectl delete job -n <NAMESPACE> -l app=cassandra-stress --ignore-not-found
+kubectl delete configmap cassandra-stress-profile -n <NAMESPACE> --ignore-not-found
+kubectl delete cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --ignore-not-found
+helm uninstall mr-cassop -n mr-cassop-system
+```
+
+This is destructive — it drops any stress run in progress and deletes the cluster's data (PVCs aren't removed by this either way, but there's nothing left to attach them to). Confirm with the user before tearing down a cluster with a load test still running; only skip that confirmation if they've explicitly said to stop it now regardless. Bringing it back up afterward is the `local-install` skill's job, not this one's.
+
 ## Adding a new data model / read-write pattern
 
 Drop a new [cassandra-stress user profile YAML](https://cassandra.apache.org/doc/latest/cassandra/tools/cassandra_stress.html) under `profiles/<name>.yaml`: `keyspace`/`keyspace_definition`, `table`/`table_definition`, `columnspec`, an `insert:` section for writes, and a `queries:` section (one entry per named read pattern) for reads. Then run with `PROFILE=<name>` and `OPERATION=insert` or `OPERATION=<query name>`.
