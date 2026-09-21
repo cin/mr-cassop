@@ -42,6 +42,14 @@ jobs:
         working-directory: prober
         run: go test ./... -v -coverprofile=prober_unit.out -coverpkg=./...
 
+      # ui/ is its own module with no dependencies (no go.sum), so it's
+      # neither covered by the operator's ./... nor needs a download step.
+      - name: Vet and test ui
+        working-directory: ui
+        run: |
+          go vet ./...
+          go test ./... -race -v
+
       - name: Report coverage
         run: |
           go tool cover -func=operator_unit.out | awk 'END {print "Operator unit tests coverage: " $3}'
@@ -129,6 +137,9 @@ jobs:
           - name: icarus
             context: icarus
             dockerfile: icarus/Dockerfile
+          - name: ui
+            context: ui
+            dockerfile: ui/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v7

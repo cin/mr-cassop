@@ -80,6 +80,7 @@ docker-help:
 unit-tests:
 	go test ./controllers/... -v -coverprofile=operator_unit.out -coverpkg=./...
 	cd ./prober && go test ./... -v -coverprofile=prober_unit.out -coverpkg=./...
+	cd ./ui && go test ./... -v
 
 # Run integration tests
 integration-tests:
