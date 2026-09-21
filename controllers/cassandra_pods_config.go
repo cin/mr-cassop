@@ -107,7 +107,16 @@ func (r *CassandraClusterReconciler) podsConfigMapData(ctx context.Context, cc *
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_BROADCAST_ADDRESS=" + broadcastAddress)
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_BROADCAST_RPC_ADDRESS=" + pod.Status.PodIP)
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_SEEDS=" + strings.Join(seedsList, ","))
-		cmData[entryName] += fmt.Sprintln("export CASSANDRA_NODE_PREVIOUS_IP=" + originalPodIPs[pod.Name])
+
+		// Only pass the previously recorded IP when it actually differs from the pod's current
+		// address. Otherwise a container that crashes and restarts in place (same pod, same IP)
+		// would tell Cassandra to replace_address its own live address, which it refuses to do,
+		// leaving the pod permanently crash-looping.
+		previousIP := originalPodIPs[pod.Name]
+		if previousIP == broadcastAddress {
+			previousIP = ""
+		}
+		cmData[entryName] += fmt.Sprintln("export CASSANDRA_NODE_PREVIOUS_IP=" + previousIP)
 
 		pauseInit, pauseReason := pausePodInit(pod, nextDCToInit, currentRegionPaused, seedNodesReady, nextNonSeedPodName)
 		cmData[entryName] += fmt.Sprintln("export PAUSE_INIT=" + fmt.Sprint(pauseInit))
