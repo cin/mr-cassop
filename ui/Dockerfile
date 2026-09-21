@@ -4,7 +4,6 @@ LABEL org.opencontainers.image.source="https://github.com/cin/mr-cassop" \
       description="This docker image is used for the mr-cassop nodetool UI"
 
 WORKDIR /build
-COPY go.mod ./
 COPY . .
 
 ARG VERSION=undefined

@@ -6,6 +6,7 @@ import (
 
 	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/compare"
+	"github.com/cin/mr-cassop/controllers/events"
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/pkg/errors"
@@ -25,6 +26,14 @@ import (
 // wait on cluster readiness the way Cassandra-dependent components do.
 func (r *CassandraClusterReconciler) reconcileUI(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
 	if !cc.Spec.UI.Enabled {
+		return r.cleanupUI(ctx, cc)
+	}
+
+	if cc.Spec.UI.Image == "" {
+		warnMsg := "spec.ui.enabled is true but no UI image is configured (neither spec.ui.image nor the " +
+			"operator's DEFAULT_UI_IMAGE) - skipping until one is set"
+		r.Events.Warning(cc, events.EventUIImageMissing, warnMsg)
+		r.Log.Warn(warnMsg)
 		return nil
 	}
 
@@ -34,6 +43,32 @@ func (r *CassandraClusterReconciler) reconcileUI(ctx context.Context, cc *dbv1al
 
 	if err := r.reconcileUIService(ctx, cc); err != nil {
 		return errors.Wrap(err, "failed to reconcile ui service")
+	}
+
+	return nil
+}
+
+// cleanupUI deletes the UI Deployment/Service left over from spec.ui.enabled having previously been
+// true, mirroring cleanupNetworkPolicies' delete-on-disable behavior for NetworkPolicies.Enabled.
+func (r *CassandraClusterReconciler) cleanupUI(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
+	deployment := &appsv1.Deployment{}
+	err := r.Get(ctx, types.NamespacedName{Name: names.UIDeployment(cc.Name), Namespace: cc.Namespace}, deployment)
+	if err == nil {
+		if err = r.Delete(ctx, deployment); err != nil {
+			return errors.Wrap(err, "failed to delete ui deployment")
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "failed to get ui deployment")
+	}
+
+	service := &v1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: names.UIService(cc.Name), Namespace: cc.Namespace}, service)
+	if err == nil {
+		if err = r.Delete(ctx, service); err != nil {
+			return errors.Wrap(err, "failed to delete ui service")
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return errors.Wrap(err, "failed to get ui service")
 	}
 
 	return nil
@@ -112,8 +147,13 @@ func (r *CassandraClusterReconciler) reconcileUIService(ctx context.Context, cc 
 			// ClusterIP only - this is an internal diagnostic tool with real (if gated) write and
 			// destructive operations, not something to expose publicly by default. Reach it via
 			// `kubectl port-forward`, same as prober/reaper today.
-			Type:     v1.ServiceTypeClusterIP,
-			Selector: labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
+			Type: v1.ServiceTypeClusterIP,
+			// Must match the Pods' own labels (ComponentLabels, set on the Deployment's pod
+			// template below), not CombinedComponentLabels - the latter also inherits the
+			// CassandraCluster CR's own metadata.labels, which the Pods never get, so using it
+			// here would under-select down to zero endpoints as soon as the CR itself has any
+			// labels set.
+			Selector: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
 			Ports: []v1.ServicePort{
 				{
 					Port:       dbv1alpha1.UIContainerPort,
@@ -199,6 +239,19 @@ func uiContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 				ContainerPort: dbv1alpha1.UIContainerPort,
 				Protocol:      v1.ProtocolTCP,
 			},
+		},
+		ReadinessProbe: &v1.Probe{
+			ProbeHandler: v1.ProbeHandler{
+				HTTPGet: &v1.HTTPGetAction{
+					Port:   intstr.FromString("ui"),
+					Path:   "/api/environments",
+					Scheme: v1.URISchemeHTTP,
+				},
+			},
+			TimeoutSeconds:   1,
+			PeriodSeconds:    10,
+			SuccessThreshold: 1,
+			FailureThreshold: 3,
 		},
 	}
 }

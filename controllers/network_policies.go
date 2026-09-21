@@ -134,6 +134,19 @@ func (r *CassandraClusterReconciler) reconcileProberNetworkPolicies(ctx context.
 		},
 	}
 
+	if cc.Spec.UI.Enabled {
+		// Allow the nodetool UI - it only ever proxies calls to prober's HTTP API, so it needs the
+		// same ingress access as any other prober client here.
+		desiredProberPolicy.Spec.Ingress = append(desiredProberPolicy.Spec.Ingress, nwv1.NetworkPolicyIngressRule{
+			Ports: []nwv1.NetworkPolicyPort{
+				nwPolicyPort(dbv1alpha1.ProberContainerPort),
+			},
+			From: []nwv1.NetworkPolicyPeer{
+				nwPolicyPeer(map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentUI}, cc.Namespace),
+			},
+		})
+	}
+
 	if cc.Spec.NetworkPolicies.ExtraPrometheusRules != nil && cc.Spec.Prober.ServiceMonitor.Enabled {
 		for _, rule := range cc.Spec.NetworkPolicies.ExtraPrometheusRules {
 			desiredProberPolicy.Spec.Ingress = append(desiredProberPolicy.Spec.Ingress, nwv1.NetworkPolicyIngressRule{
