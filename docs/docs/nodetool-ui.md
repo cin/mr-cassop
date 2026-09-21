@@ -32,9 +32,10 @@ spec:
 ```
 
 The operator creates a Deployment and a ClusterIP Service (`<cluster>-cassandra-ui`), pointed at the
-cluster's own in-cluster Prober service, with `PROBER_USER`/`PROBER_PASSWORD` sourced automatically from
-the same admin credentials secret Prober itself validates against -- nothing to look up or paste in by
-hand. It's ClusterIP-only by design: this tool has real (if gated) destructive operations, so it isn't
+cluster's own in-cluster Prober service. It mounts the same admin credentials secret Prober itself
+validates against at `/etc/prober-credentials` (`PROBER_CREDENTIALS_DIR`) and re-reads it on every
+request, so there's nothing to look up or paste in by hand, and an admin password rotation reaches the UI
+without restarting it. It's ClusterIP-only by design: this tool has real (if gated) destructive operations, so it isn't
 exposed publicly. Reach it the same way you'd reach Prober or Reaper:
 
 ```bash
@@ -69,7 +70,8 @@ used for CQL and JMX (see [Admin Auth Management](admin-auth.md)) -- Prober's ow
 the same credentials via HTTP Basic Auth.
 
 `loadEnvironments()` in `ui/main.go` only ever configures the single environment described by its own
-process env vars (`PROBER_ENV_NAME`/`PROBER_URL`/`PROBER_USER`/`PROBER_PASSWORD`) -- there's no config
+process env vars (`PROBER_ENV_NAME`/`PROBER_URL`, plus `PROBER_CREDENTIALS_DIR` or
+`PROBER_USER`/`PROBER_PASSWORD`) -- there's no config
 file for multiple named environments today, operator-managed or otherwise. The environment dropdown in
 the header exists in the frontend for when that changes, but currently only ever shows the one
 configured environment.

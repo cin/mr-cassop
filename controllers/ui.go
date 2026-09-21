@@ -94,6 +94,7 @@ func (r *CassandraClusterReconciler) reconcileUIDeployment(ctx context.Context, 
 				},
 				Spec: v1.PodSpec{
 					Containers:       []v1.Container{uiContainer(cc)},
+					Volumes:          []v1.Volume{uiProberCredentialsVolume(cc)},
 					RestartPolicy:    v1.RestartPolicyAlways,
 					DNSPolicy:        v1.DNSClusterFirst,
 					SecurityContext:  &v1.PodSecurityContext{},
@@ -203,8 +204,33 @@ func (r *CassandraClusterReconciler) reconcileUIService(ctx context.Context, cc 
 	return nil
 }
 
+const (
+	uiProberCredentialsVolumeName = "prober-credentials"
+	uiProberCredentialsDir        = "/etc/prober-credentials"
+)
+
+// uiProberCredentialsVolume mounts the secret prober validates its HTTP Basic Auth against. It's a
+// volume rather than secretKeyRef env vars because the operator rotates this secret's password in
+// place, and kubelet refreshes a secret volume's files (env vars are fixed at container start). The
+// UI re-reads the files on every request, so a rotation reaches it without a pod restart.
+func uiProberCredentialsVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
+	return v1.Volume{
+		Name: uiProberCredentialsVolumeName,
+		VolumeSource: v1.VolumeSource{
+			Secret: &v1.SecretVolumeSource{
+				SecretName: proberAuthSecretName(cc),
+				Items: []v1.KeyToPath{
+					{Key: dbv1alpha1.CassandraOperatorAdminRole, Path: dbv1alpha1.CassandraOperatorAdminRole},
+					{Key: dbv1alpha1.CassandraOperatorAdminPassword, Path: dbv1alpha1.CassandraOperatorAdminPassword},
+				},
+				// Set explicitly to the server default so desired matches what's read back.
+				DefaultMode: ptr.To[int32](v1.SecretVolumeSourceDefaultMode),
+			},
+		},
+	}
+}
+
 func uiContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
-	adminSecret := proberAuthSecretName(cc)
 	return v1.Container{
 		Name:            "ui",
 		Image:           cc.Spec.UI.Image,
@@ -213,25 +239,11 @@ func uiContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 		Env: []v1.EnvVar{
 			{Name: "PROBER_ENV_NAME", Value: cc.Name},
 			{Name: "PROBER_URL", Value: proberURL(cc).String()},
-			{
-				Name: "PROBER_USER",
-				ValueFrom: &v1.EnvVarSource{
-					SecretKeyRef: &v1.SecretKeySelector{
-						LocalObjectReference: v1.LocalObjectReference{Name: adminSecret},
-						Key:                  dbv1alpha1.CassandraOperatorAdminRole,
-					},
-				},
-			},
-			{
-				Name: "PROBER_PASSWORD",
-				ValueFrom: &v1.EnvVarSource{
-					SecretKeyRef: &v1.SecretKeySelector{
-						LocalObjectReference: v1.LocalObjectReference{Name: adminSecret},
-						Key:                  dbv1alpha1.CassandraOperatorAdminPassword,
-					},
-				},
-			},
+			{Name: "PROBER_CREDENTIALS_DIR", Value: uiProberCredentialsDir},
 			{Name: "LISTEN_ADDR", Value: fmt.Sprintf(":%d", dbv1alpha1.UIContainerPort)},
+		},
+		VolumeMounts: []v1.VolumeMount{
+			{Name: uiProberCredentialsVolumeName, MountPath: uiProberCredentialsDir, ReadOnly: true},
 		},
 		Ports: []v1.ContainerPort{
 			{
