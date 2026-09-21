@@ -35,6 +35,25 @@ kubectl get secret admin-secret -n <NAMESPACE> >/dev/null
 
 Stop if the CR isn't `true`-ready or `admin-secret` doesn't exist — getting the cluster into that state is the `local-install` skill's job, not this one's.
 
+### Enable Cassandra monitoring if prometheus-operator is present
+
+`local-install` always installs the prometheus-operator stack, and the chart always ships the `tlp-*` Grafana dashboards (write-path, read-path, jvm-overview, client-connections) — but they stay empty unless the target CR itself has `spec.cassandra.monitoring.enabled: true` (it defaults to `false` in `test-cluster.yaml`/`test-cluster-pvc.yaml`). Without it there's no jolokia sidecar and no `ServiceMonitor`, so a stress run produces no Cassandra-side metrics to look at — only generic pod CPU from cAdvisor. Check and fix this **before** step 1, never mid-run:
+
+```bash
+if helm status prometheus-operator -n prometheus-operator >/dev/null 2>&1; then
+  MONITORING_ENABLED=$(kubectl get cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> -o jsonpath='{.spec.cassandra.monitoring.enabled}')
+  if [ "$MONITORING_ENABLED" != "true" ]; then
+    echo "prometheus-operator is installed but monitoring is off on <CR_NAME> — enabling it before the run."
+    kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p '{"spec":{"cassandra":{"monitoring":{"enabled":true}}}}'
+    for sts in $(kubectl get statefulset -n <NAMESPACE> -l cassandra-cluster-instance=<CR_NAME> -o name); do
+      kubectl rollout status "$sts" -n <NAMESPACE> --timeout=600s
+    done
+  fi
+fi
+```
+
+**This rolls every Cassandra pod once** (jolokia sidecar gets added to the pod spec) — the operator does it one pod at a time the same safe way it handles a version upgrade, but it's still a real rolling restart. Never run this against a cluster that already has a stress Job in flight; it'll drop the client's connections mid-run and invalidate the results. If a run is already going, wait for it to finish first.
+
 ## 1. Custom profile: render and load it
 
 Skip this step entirely when `PROFILE=default`.
