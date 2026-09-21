@@ -36,6 +36,11 @@ func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Conte
 		return false, errors.Wrap(err, "can't get statefulsets")
 	}
 
+	pendingPVCPods, err := r.deleteDecommissionedPVCs(ctx, cc, podList.Items)
+	if err != nil {
+		return false, errors.Wrap(err, "can't clean up decommissioned PVCs")
+	}
+
 	if len(stsList.Items) == 0 {
 		r.Log.Warn("couldn't find any statefulset to reconcile scaling")
 		return false, nil
@@ -60,6 +65,10 @@ func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Conte
 		}
 
 		if oldReplicas < newReplicas { // scale up
+			if podName, blocked := scaleUpBlockedByPVC(sts.Name, oldReplicas, newReplicas, pendingPVCPods); blocked {
+				r.Log.Infof("waiting for the decommissioned PVCs of %s to be deleted before scaling up", podName)
+				return true, nil
+			}
 			sts.Spec.Replicas = &newReplicas
 			err = r.Update(ctx, &sts)
 			if err != nil {
@@ -224,6 +233,10 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 			return errors.Wrap(err, "failed to check if the pod is decommissioned")
 		}
 		if decommissioned {
+			// mark before scaling down, so a failure here is retried while the pod still exists
+			if err = r.markPodPVCsDecommissioned(ctx, sts, decommissionPod.Name); err != nil {
+				return err
+			}
 			*sts.Spec.Replicas = *sts.Spec.Replicas - 1
 			r.Log.Infof("node %s/%s is decommissioned, scaling down the statefulset", decommissionPod.Namespace, decommissionPod.Name)
 			updateErr := r.Update(ctx, &sts)
