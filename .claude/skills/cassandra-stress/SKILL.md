@@ -66,14 +66,16 @@ RATE="threads=<THREADS>"
 
 COUNT="n=<N>"            # or: COUNT="duration=<DURATION>"
 
+STRESS_BIN="/opt/cassandra/tools/bin/cassandra-stress"   # not on PATH in the cassandra image
+
 if [ "<PROFILE>" = "default" ]; then
-  STRESS_CMD="cassandra-stress <OPERATION> $COUNT -rate $RATE $COMMON"
+  STRESS_CMD="$STRESS_BIN <OPERATION> $COUNT -rate $RATE $COMMON"
 else
-  STRESS_CMD="cassandra-stress user profile=/profiles/profile.yaml ops(<OPERATION>=1) $COUNT -rate $RATE $COMMON"
+  STRESS_CMD="$STRESS_BIN user profile=/profiles/profile.yaml ops\(<OPERATION>=1\) $COUNT -rate $RATE $COMMON"
 fi
 ```
 
-`\$CASSANDRA_USER` / `\$CASSANDRA_PASSWORD` are escaped on purpose — they must stay literal here and only get expanded later, inside the container, by the Job's own shell (see step 3), using the env vars sourced from `admin-secret`.
+`\$CASSANDRA_USER` / `\$CASSANDRA_PASSWORD` are escaped on purpose — they must stay literal here and only get expanded later, inside the container, by the Job's own shell (see step 3), using the env vars sourced from `admin-secret`. `ops\(...\)` is escaped for the same reason: `$STRESS_CMD` ends up as a single string handed to `sh -c` inside the Job's `command`, and an unescaped `(` there is a shell metacharacter (subshell grouping), not a literal character — it'll fail with `Syntax error: "(" unexpected` otherwise.
 
 The built-in `keyspace1.standard1` write needs `-pop seq=1..<N>` (and a matching `-pop seq=<same range>` on any concurrent read) rather than a bare `n=`, for a "populate then read" flow — it errors on read ("Failed to execute warmup") against not-yet-written keys. A custom profile's named queries don't have this problem: querying a not-yet-inserted key just returns 0 rows, which is harmless, so write and read can run concurrently. If populating the default schema first, run write to completion before starting read.
 
