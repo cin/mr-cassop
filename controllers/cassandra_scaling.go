@@ -299,9 +299,14 @@ func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *
 			return false, errors.Wrap(nctlErr, "can't get cluster view")
 		}
 
-		// Checking LiveNodes alone would treat a node that's merely down as decommissioned, and
-		// scaling it away would delete the PVC of a node that still owns tokens.
-		if !clusterView.Contains(broadcastAddresses[decommissionPod.Name]) {
+		// Not being in LiveNodes also covers a node that's merely down, and scaling that away
+		// would delete the PVC of a node that still owns tokens. Only token ownership says the
+		// node actually left the ring.
+		ownsTokens, err := clusterView.OwnsTokens(broadcastAddresses[decommissionPod.Name])
+		if err != nil {
+			return false, errors.Wrapf(err, "can't tell from node %s whether %s left the ring", pod.Name, decommissionPod.Name)
+		}
+		if !ownsTokens {
 			notInRingView++
 		}
 	}

@@ -99,14 +99,21 @@ func TestPodDecommissioned(t *testing.T) {
 		"test-cluster-cassandra-dc1-2": "10.0.0.3",
 	}
 
+	live := []string{"10.0.0.1", "10.0.0.2"}
+	remaining := map[string]string{"10.0.0.1": "host-1", "10.0.0.2": "host-2"}
+	withNode3 := map[string]string{"10.0.0.1": "host-1", "10.0.0.2": "host-2", "10.0.0.3": "host-3"}
 	tests := []struct {
-		name string
-		view nodectl.ClusterView
-		want bool
+		name    string
+		view    nodectl.ClusterView
+		want    bool
+		wantErr bool
 	}{
-		{"left the ring", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2"}}, true},
-		{"down but still in the ring", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2"}, UnreachableNodes: []string{"10.0.0.3"}}, false},
-		{"still leaving", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}, LeavingNodes: []string{"10.0.0.3"}}, false},
+		// what the kind test showed: after decommission, peers still list the node as
+		// unreachable (gossip status LEFT), but it's gone from token metadata
+		{"left the ring", nodectl.ClusterView{LiveNodes: live, UnreachableNodes: []string{"10.0.0.3"}, EndpointToHostId: remaining}, true, false},
+		{"down but still in the ring", nodectl.ClusterView{LiveNodes: live, UnreachableNodes: []string{"10.0.0.3"}, EndpointToHostId: withNode3}, false, false},
+		{"still leaving", nodectl.ClusterView{LiveNodes: append(live, "10.0.0.3"), LeavingNodes: []string{"10.0.0.3"}, EndpointToHostId: withNode3}, false, false},
+		{"no token metadata", nodectl.ClusterView{LiveNodes: live}, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,7 +123,11 @@ func TestPodDecommissioned(t *testing.T) {
 
 			reconciler := &CassandraClusterReconciler{Log: zap.NewNop().Sugar()}
 			got, err := reconciler.podDecommissioned(context.Background(), cc, nctl, pods, pods[2], broadcastAddresses)
-			asserts.Expect(err).To(BeNil())
+			if tt.wantErr {
+				asserts.Expect(err).To(HaveOccurred())
+				return
+			}
+			asserts.Expect(err).To(Succeed())
 			asserts.Expect(got).To(Equal(tt.want))
 		})
 	}
