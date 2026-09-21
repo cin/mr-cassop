@@ -34,12 +34,10 @@ func TestReconcileProberServiceSelectorMatchesPodLabels(t *testing.T) {
 	reconciler := createBasicMockedReconciler()
 	reconciler.Client = fake.NewClientBuilder().WithScheme(baseScheme).Build()
 
-	err := reconciler.reconcileProberService(context.Background(), cc)
-	asserts.Expect(err).To(BeNil())
+	asserts.Expect(reconciler.reconcileProberService(context.Background(), cc)).To(Succeed())
 
 	svc := &v1.Service{}
-	err = reconciler.Client.Get(context.Background(), types.NamespacedName{Name: names.ProberService(cc.Name), Namespace: cc.Namespace}, svc)
-	asserts.Expect(err).To(BeNil())
+	asserts.Expect(reconciler.Client.Get(context.Background(), types.NamespacedName{Name: names.ProberService(cc.Name), Namespace: cc.Namespace}, svc)).To(Succeed())
 
 	proberPodLabels := labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber)
 	asserts.Expect(svc.Spec.Selector).To(BeEquivalentTo(proberPodLabels),
