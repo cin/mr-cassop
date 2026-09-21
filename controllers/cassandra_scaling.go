@@ -14,7 +14,6 @@ import (
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/nodectl"
-	"github.com/cin/mr-cassop/controllers/util"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -35,6 +34,11 @@ func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Conte
 	err = r.List(ctx, stsList, client.InNamespace(cc.Namespace), client.MatchingLabels(labels.Cassandra(cc)))
 	if err != nil {
 		return false, errors.Wrap(err, "can't get statefulsets")
+	}
+
+	pendingPVCPods, err := r.deleteDecommissionedPVCs(ctx, cc, podList.Items)
+	if err != nil {
+		return false, errors.Wrap(err, "can't clean up decommissioned PVCs")
 	}
 
 	if len(stsList.Items) == 0 {
@@ -61,6 +65,10 @@ func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Conte
 		}
 
 		if oldReplicas < newReplicas { // scale up
+			if podName, blocked := scaleUpBlockedByPVC(sts.Name, oldReplicas, newReplicas, pendingPVCPods); blocked {
+				r.Log.Infof("waiting for the decommissioned PVCs of %s to be deleted before scaling up", podName)
+				return true, nil
+			}
 			sts.Spec.Replicas = &newReplicas
 			err = r.Update(ctx, &sts)
 			if err != nil {
@@ -225,6 +233,10 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 			return errors.Wrap(err, "failed to check if the pod is decommissioned")
 		}
 		if decommissioned {
+			// mark before scaling down, so a failure here is retried while the pod still exists
+			if err = r.markPodPVCsDecommissioned(ctx, sts, decommissionPod.Name); err != nil {
+				return err
+			}
 			*sts.Spec.Replicas = *sts.Spec.Replicas - 1
 			r.Log.Infof("node %s/%s is decommissioned, scaling down the statefulset", decommissionPod.Namespace, decommissionPod.Name)
 			updateErr := r.Update(ctx, &sts)
@@ -238,7 +250,11 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 
 			return nil
 		} else {
-			return errors.Wrap(opModeErr, "failed to get operation mode, but some peer node(s) still see the node as ready")
+			// Either the decommission hasn't finished propagating, or the node is down (unreachable)
+			// but still owns tokens. Wait rather than scale it away; a down node blocks scale-down
+			// until it's back or removed from the ring by hand (nodetool removenode).
+			return errors.Wrapf(opModeErr, "can't reach node %s to check its operation mode, and peer node(s) still list it in the ring (down, or not yet fully decommissioned); waiting before scaling down",
+				decommissionPodName)
 		}
 	}
 
@@ -281,7 +297,7 @@ func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *
 
 	desiredDCs := dcsMap(cc)
 
-	notLiveView := 0
+	notInRingView := 0
 	for _, pod := range pods {
 		_, exists := desiredDCs[pod.Labels[dbv1alpha1.CassandraClusterDC]]
 
@@ -296,13 +312,20 @@ func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *
 			return false, errors.Wrap(nctlErr, "can't get cluster view")
 		}
 
-		if !util.Contains(clusterView.LiveNodes, broadcastAddresses[decommissionPod.Name]) {
-			notLiveView++
+		// Not being in LiveNodes also covers a node that's merely down, and scaling that away
+		// would delete the PVC of a node that still owns tokens. Only token ownership says the
+		// node actually left the ring.
+		ownsTokens, err := clusterView.OwnsTokens(broadcastAddresses[decommissionPod.Name])
+		if err != nil {
+			return false, errors.Wrapf(err, "can't tell from node %s whether %s left the ring", pod.Name, decommissionPod.Name)
+		}
+		if !ownsTokens {
+			notInRingView++
 		}
 	}
 
-	r.Log.Debugf("%d nodes don't see node %s as live", notLiveView, decommissionPod.Name)
-	return notLiveView >= quorum, nil
+	r.Log.Debugf("%d nodes don't see node %s in the ring", notInRingView, decommissionPod.Name)
+	return notInRingView >= quorum, nil
 }
 
 func (r *CassandraClusterReconciler) removeDC(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet) error {

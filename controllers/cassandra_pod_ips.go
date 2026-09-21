@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/compare"
@@ -44,8 +46,10 @@ func (r *CassandraClusterReconciler) reconcilePodIPsConfigMap(ctx context.Contex
 			actualCM.Data = make(map[string]string)
 		}
 
-		// copy the previous data to save IPs for pods that doesn't exist anymore (scale down)
+		// keep previous IPs for pods that are only temporarily gone (e.g. being recreated), but drop
+		// the ones that were scaled away
 		data := util.MergeMap(make(map[string]string, len(broadcastAddresses)), actualCM.Data)
+		prunePodIPsOfRemovedPods(cc, data, pods)
 
 		for _, pod := range pods {
 			if data[pod.Name] != broadcastAddresses[pod.Name] && broadcastAddresses[pod.Name] != "" && podReady(pod) {
@@ -74,6 +78,40 @@ func (r *CassandraClusterReconciler) reconcilePodIPsConfigMap(ctx context.Contex
 	}
 
 	return actualCM.Data, nil
+}
+
+// prunePodIPsOfRemovedPods deletes entries for pods that no longer exist and whose ordinal is at or
+// beyond their DC's replica count, or whose DC was removed. Those nodes were decommissioned, so a
+// pod that later reuses the ordinal starts empty; handing it the old IP as CASSANDRA_NODE_PREVIOUS_IP
+// would make it replace_address a node that already left the ring, which Cassandra refuses.
+func prunePodIPsOfRemovedPods(cc *v1alpha1.CassandraCluster, data map[string]string, pods []v1.Pod) {
+	existing := make(map[string]bool, len(pods))
+	for _, pod := range pods {
+		existing[pod.Name] = true
+	}
+
+	for podName := range data {
+		if !existing[podName] && !podWithinDesiredReplicas(cc, podName) {
+			delete(data, podName)
+		}
+	}
+}
+
+// podWithinDesiredReplicas reports whether podName belongs to one of cc's DCs and its ordinal is
+// below that DC's replica count.
+func podWithinDesiredReplicas(cc *v1alpha1.CassandraCluster, podName string) bool {
+	for _, dc := range cc.Spec.DCs {
+		ordinalStr, found := strings.CutPrefix(podName, names.DC(cc.Name, dc.Name)+"-")
+		if !found {
+			continue
+		}
+		ordinal, err := strconv.Atoi(ordinalStr)
+		if err != nil { // a DC whose name has this DC's name as a prefix
+			continue
+		}
+		return dc.Replicas != nil && int32(ordinal) < *dc.Replicas
+	}
+	return false
 }
 
 func podReady(pod v1.Pod) bool {
