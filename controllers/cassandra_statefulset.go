@@ -219,17 +219,14 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			},
 			RevisionHistoryLimit: ptr.To[int32](10),
-			// Set explicitly to the API server's default (Retain/Retain) so desiredSts matches what's
-			// read back; leaving it nil caused a spurious diff on every reconcile.
-			// WhenDeleted: Retain keeps data volumes if the statefulset is deleted.
-			// WhenScaled: Retain is NOT a data-safety measure for Cassandra: the operator only scales
-			// down after the node is decommissioned, and a decommissioned node's data is marked
-			// DECOMMISSIONED. If the statefulset later scales back up, the new pod reattaches that
-			// PVC and Cassandra refuses to start unless cassandra.override_decommission is set.
-			// WhenScaled: Delete is the correct setting and is left as a follow-up change.
+			// WhenDeleted: Retain keeps data volumes if the statefulset itself is deleted.
+			// WhenScaled: Delete removes a scaled-away pod's PVCs. The operator only lowers replicas
+			// once the node has left the ring (podDecommissioned) or never joined it (no pod IP), and
+			// a decommissioned node's data is marked DECOMMISSIONED: kept around, it would make the
+			// pod that reuses that ordinal on a later scale-up refuse to start.
 			PersistentVolumeClaimRetentionPolicy: &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
 				WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
-				WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+				WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{

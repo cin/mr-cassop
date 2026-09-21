@@ -15,6 +15,20 @@ type ClusterView struct {
 	MovingNodes      []string `json:"MovingNodes"`
 }
 
+// Contains reports whether nodeIP is still a member of the ring in this view, in any state.
+// A node that's down is in UnreachableNodes, not LiveNodes; only a node that has left the ring
+// (decommissioned or removed) is absent from every list.
+func (v ClusterView) Contains(nodeIP string) bool {
+	for _, nodes := range [][]string{v.LiveNodes, v.UnreachableNodes, v.LeavingNodes, v.JoiningNodes, v.MovingNodes} {
+		for _, node := range nodes {
+			if node == nodeIP {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (n *client) ClusterView(ctx context.Context, nodeIP string) (ClusterView, error) {
 	req := jolokia.JMXRequest{
 		Type:       jmxRequestTypeRead,

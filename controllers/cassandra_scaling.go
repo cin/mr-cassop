@@ -14,7 +14,6 @@ import (
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/nodectl"
-	"github.com/cin/mr-cassop/controllers/util"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -281,7 +280,7 @@ func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *
 
 	desiredDCs := dcsMap(cc)
 
-	notLiveView := 0
+	notInRingView := 0
 	for _, pod := range pods {
 		_, exists := desiredDCs[pod.Labels[dbv1alpha1.CassandraClusterDC]]
 
@@ -296,13 +295,15 @@ func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *
 			return false, errors.Wrap(nctlErr, "can't get cluster view")
 		}
 
-		if !util.Contains(clusterView.LiveNodes, broadcastAddresses[decommissionPod.Name]) {
-			notLiveView++
+		// Checking LiveNodes alone would treat a node that's merely down as decommissioned, and
+		// scaling it away would delete the PVC of a node that still owns tokens.
+		if !clusterView.Contains(broadcastAddresses[decommissionPod.Name]) {
+			notInRingView++
 		}
 	}
 
-	r.Log.Debugf("%d nodes don't see node %s as live", notLiveView, decommissionPod.Name)
-	return notLiveView >= quorum, nil
+	r.Log.Debugf("%d nodes don't see node %s in the ring", notInRingView, decommissionPod.Name)
+	return notInRingView >= quorum, nil
 }
 
 func (r *CassandraClusterReconciler) removeDC(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet) error {

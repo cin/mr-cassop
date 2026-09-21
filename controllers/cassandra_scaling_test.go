@@ -6,6 +6,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/jobs"
+	"github.com/cin/mr-cassop/controllers/mocks"
+	"github.com/cin/mr-cassop/controllers/nodectl"
 )
 
 // TestHandlePodDecommission_UnscheduledPod covers the scale-down deadlock from
@@ -74,4 +77,47 @@ func TestHandlePodDecommission_UnscheduledPod(t *testing.T) {
 	updatedSts := &appsv1.StatefulSet{}
 	asserts.Expect(tClient.Get(context.Background(), client.ObjectKeyFromObject(&sts), updatedSts)).To(Succeed())
 	asserts.Expect(*updatedSts.Spec.Replicas).To(BeEquivalentTo(4))
+}
+
+// A node that's down shows up in UnreachableNodes, not LiveNodes. It must not count as
+// decommissioned: with WhenScaled: Delete, scaling it away would delete the PVC of a node that
+// still owns tokens.
+func TestPodDecommissioned(t *testing.T) {
+	cc := &v1alpha1.CassandraCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec:       v1alpha1.CassandraClusterSpec{DCs: []v1alpha1.DC{{Name: "dc1", Replicas: proto.Int(2)}}},
+	}
+	dcLabels := map[string]string{v1alpha1.CassandraClusterDC: "dc1"}
+	pods := []v1.Pod{
+		{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-cassandra-dc1-0", Labels: dcLabels}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-cassandra-dc1-1", Labels: dcLabels}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-cassandra-dc1-2", Labels: dcLabels}},
+	}
+	broadcastAddresses := map[string]string{
+		"test-cluster-cassandra-dc1-0": "10.0.0.1",
+		"test-cluster-cassandra-dc1-1": "10.0.0.2",
+		"test-cluster-cassandra-dc1-2": "10.0.0.3",
+	}
+
+	tests := []struct {
+		name string
+		view nodectl.ClusterView
+		want bool
+	}{
+		{"left the ring", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2"}}, true},
+		{"down but still in the ring", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2"}, UnreachableNodes: []string{"10.0.0.3"}}, false},
+		{"still leaving", nodectl.ClusterView{LiveNodes: []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}, LeavingNodes: []string{"10.0.0.3"}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+			nctl := mocks.NewMockNodectl(gomock.NewController(t))
+			nctl.EXPECT().ClusterView(gomock.Any(), gomock.Any()).Return(tt.view, nil).AnyTimes()
+
+			reconciler := &CassandraClusterReconciler{Log: zap.NewNop().Sugar()}
+			got, err := reconciler.podDecommissioned(context.Background(), cc, nctl, pods, pods[2], broadcastAddresses)
+			asserts.Expect(err).To(BeNil())
+			asserts.Expect(got).To(Equal(tt.want))
+		})
+	}
 }
