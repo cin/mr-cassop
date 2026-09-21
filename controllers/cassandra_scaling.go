@@ -237,7 +237,11 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 
 			return nil
 		} else {
-			return errors.Wrap(opModeErr, "failed to get operation mode, but some peer node(s) still see the node as ready")
+			// Either the decommission hasn't finished propagating, or the node is down (unreachable)
+			// but still owns tokens. Wait rather than scale it away; a down node blocks scale-down
+			// until it's back or removed from the ring by hand (nodetool removenode).
+			return errors.Wrapf(opModeErr, "can't reach node %s to check its operation mode, and peer node(s) still list it in the ring (down, or not yet fully decommissioned); waiting before scaling down",
+				decommissionPodName)
 		}
 	}
 
