@@ -24,7 +24,7 @@ Runs `cassandra-stress` as a one-off Kubernetes `Job` against an already-running
   - `DURATION` — time-bounded run, e.g. `90m`.
 - `THREADS` — client thread count (default `4`).
 - `TARGET_RATE` — optional throttle in ops/s, becomes `fixed=<TARGET_RATE>/s`. Omit for unthrottled (cassandra-stress runs at max speed) — fine for a short smoke test, but easily saturates a 3-node kind cluster on a laptop; throttle anything longer than a couple of minutes.
-- `IMAGE_TAG` — cassandra image tag to run the stress client from (default `dev`). Must already be loaded into the kind cluster (`imagePullPolicy: Never`) — if not, run `kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/cassandra:<IMAGE_TAG>` first (see the `local-install` skill).
+- `IMAGE_TAG` — cassandra image tag to run the stress client from (default `dev`). Must already be loaded into the kind cluster (`imagePullPolicy: Never`), and `dev` often isn't — check what's actually there first with `docker exec cassandra-control-plane crictl images | grep mr-cassop/cassandra` and use one of the tags it lists. If the tag you want is missing, run `kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/cassandra:<IMAGE_TAG>` first (see the `local-install` skill).
 
 Confirm `PROFILE`, `OPERATION`, and `N`/`DURATION` with the user before running if not already given.
 
@@ -37,24 +37,57 @@ kubectl get secret admin-secret -n <NAMESPACE> >/dev/null
 
 Stop if the CR isn't `true`-ready or `admin-secret` doesn't exist — getting the cluster into that state is the `local-install` skill's job, not this one's.
 
-### Enable Cassandra monitoring if prometheus-operator is present
+### Enable monitoring if prometheus-operator is present
 
-`local-install` always installs the prometheus-operator stack, and the chart always ships the `tlp-*` Grafana dashboards (write-path, read-path, jvm-overview, client-connections) — but they stay empty unless the target CR itself has `spec.cassandra.monitoring.enabled: true` (it defaults to `false` in `test-cluster.yaml`/`test-cluster-pvc.yaml`). Without it there's no jolokia sidecar and no `ServiceMonitor`, so a stress run produces no Cassandra-side metrics to look at — only generic pod CPU from cAdvisor. Check and fix this **before** step 1, never mid-run:
+`local-install` always installs the prometheus-operator stack, and with `local-values.yaml` the chart ships all four dashboard sets — `tlp-*` (overview, write-path, read-path, jvm-overview, client-connections), `prober-overview`, `reaper-overview` and the operator's own `mr-cassop` dashboard. The ConfigMaps are there from install (`kubectl get cm -A -l grafana_dashboard=1`), but every one of them stays **empty until the matching `ServiceMonitor` exists and Prometheus actually selects it**. Each of the four has its own switch, and three of the four are off by default. Without them a stress run produces no Cassandra-side metrics at all — only generic pod CPU from cAdvisor.
+
+Two things are needed for each source:
+
+1. The `ServiceMonitor` has to exist — a per-component `serviceMonitor.enabled: true`, not just `monitoring.enabled`.
+2. It has to carry the label Prometheus selects on. Check it, don't assume: `kubectl get prometheus -A -o jsonpath='{..serviceMonitorSelector}'` — for the kube-prometheus-stack install that's `release: prometheus-operator`. A `ServiceMonitor` without that label is simply ignored, silently.
+
+| Source | Switch | Dashboards |
+| --- | --- | --- |
+| Cassandra | `spec.cassandra.monitoring.{enabled,agent,serviceMonitor}` on the CR | `tlp-*` |
+| Prober | `spec.prober.serviceMonitor` on the CR | `prober-overview` |
+| Reaper | `spec.reaper.serviceMonitor` on the CR | `reaper-overview` |
+| Operator | chart's `monitoring.serviceMonitor.labels` in `local-values.yaml` | `mr-cassop` |
+
+Check and fix this **before** step 1, never mid-run:
 
 ```bash
 if helm status prometheus-operator -n prometheus-operator >/dev/null 2>&1; then
   MONITORING_ENABLED=$(kubectl get cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> -o jsonpath='{.spec.cassandra.monitoring.enabled}')
   if [ "$MONITORING_ENABLED" != "true" ]; then
     echo "prometheus-operator is installed but monitoring is off on <CR_NAME> — enabling it before the run."
-    kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p '{"spec":{"cassandra":{"monitoring":{"enabled":true}}}}'
+    kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p \
+      '{"spec":{"cassandra":{"monitoring":{"enabled":true,"agent":"tlp","serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}}}}'
     for sts in $(kubectl get statefulset -n <NAMESPACE> -l cassandra-cluster-instance=<CR_NAME> -o name); do
       kubectl rollout status "$sts" -n <NAMESPACE> --timeout=600s
     done
   fi
+
+  # Prober and Reaper: ServiceMonitor objects only, no pod restarts.
+  kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p \
+    '{"spec":{"prober":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}},"reaper":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}}}'
+
+  # Operator: the chart sets labels to {operator: mr-cassop} only, which Prometheus doesn't select.
+  kubectl label servicemonitor -n mr-cassop-system mr-cassop-metrics release=prometheus-operator --overwrite
 fi
 ```
 
-**This rolls every Cassandra pod once** (jolokia sidecar gets added to the pod spec) — the operator does it one pod at a time the same safe way it handles a version upgrade, but it's still a real rolling restart. Never run this against a cluster that already has a stress Job in flight; it'll drop the client's connections mid-run and invalidate the results. If a run is already going, wait for it to finish first.
+`agent: tlp` is the only valid value (`controllers/cassandra_container.go:116`) and is what the CR defaults to, but set it explicitly so the intent is on the page. `monitoring.enabled: true` on its own adds the agent and rolls the pods, yet creates no `ServiceMonitor` — that needs `monitoring.serviceMonitor.enabled: true` as well (`controllers/cassandra_service_monitor.go:49`). Getting that wrong is easy to miss: the pods restart, everything looks like it worked, and the dashboards stay blank.
+
+**The Cassandra patch rolls every Cassandra pod once.** The tlp agent is a JVM option (`JVM_EXTRA_OPTS=-javaagent:/prometheus/jmx_prometheus_javaagent.jar=8090:...`), so it needs a restart to take effect — the operator does it one pod at a time the same safe way it handles a version upgrade, but it's still a real rolling restart. There's no new sidecar: pods stay `2/2`, the second container being `icarus`, so container counts tell you nothing about whether monitoring is on. Adding the Prober, Reaper and operator `ServiceMonitor`s restarts nothing. Never patch a cluster that already has a stress Job in flight; it'll drop the client's connections mid-run and invalidate the results. If a run is already going, wait for it to finish first, and never roll Prober, Cassandra and Reaper at the same time.
+
+The `kubectl label` on `mr-cassop-metrics` is in-place and helm will revert it on the next `helm upgrade`. The durable fix belongs to `local-install`: add `release: prometheus-operator` alongside `operator: mr-cassop` under `monitoring.serviceMonitor.labels` in `local-values.yaml` (the chart's `toYaml` replaces the label map wholesale, so both keys have to be listed).
+
+Verify — the only check that actually proves it's working is Prometheus's own target list. Four jobs should be `up`: the 3 Cassandra nodes on `:8090`, the prober on `:8888/metrics`, the reaper on `:8081/prometheusMetrics`, and `mr-cassop-metrics` on `:8329/metrics`. Give Prometheus 30-60s to reload after a `ServiceMonitor` appears; targets show `unknown` until the first scrape.
+
+```bash
+kubectl get --raw '/api/v1/namespaces/prometheus-operator/services/prometheus-operator-kube-p-prometheus:9090/proxy/api/v1/targets?state=active' \
+  | python3 -c 'import sys,json; [print(t["labels"].get("job"), t["scrapeUrl"], t["health"], t.get("lastError","")) for t in json.load(sys.stdin)["data"]["activeTargets"] if "cassop" in json.dumps(t["labels"])]'
+```
 
 ## 1. Custom profile: render and load it
 
