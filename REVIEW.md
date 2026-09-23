@@ -7,7 +7,9 @@ explain in the PR why an exception applies.
 ## Function length
 
 - **Functions and methods must not exceed 20 lines of code** (excluding the signature,
-  closing brace, blank lines and comments).
+  closing brace, blank lines and comments). A multi-line struct/slice/map literal counts
+  as its rendered lines, not as one line — the large-literal exception below is how those
+  stay readable, not a reason to undercount them.
 - Split long functions into small, focused helpers with descriptive names. Each helper
   should do one thing.
 - Exceptions are allowed only when splitting would hurt readability, e.g.:
@@ -19,12 +21,19 @@ explain in the PR why an exception applies.
   above the function.
 - Refactoring an existing long function is welcome but not required when making a
   small, unrelated change to it. Don't make an existing function longer.
+- Known existing outlier: `reconcileWithContext` in `controllers/controller.go` predates
+  this rule and is not required to shrink on unrelated changes; a PR that touches it is
+  still expected to avoid growing it further.
 
 ## Formatting and static checks
 
-- Code must be `gofmt`-formatted and pass `go vet` (`make fmt vet`).
+- Code must be `gofmt`-formatted and pass `go vet` (`make fmt vet`). This covers the
+  `api`, `controllers` and root (`main.go`) packages plus the `prober` and `ui` modules.
 - Imports are grouped: standard library, third-party, then local (`github.com/cin/mr-cassop/...`).
 - No commented-out code or leftover debug logging.
+- Not enforced, but reviewers should flag lines over 120 characters. Use
+  [golines](https://github.com/golangci/golines) to reflow over-long lines. Embedded test
+  fixtures (e.g. certificate literals) are exempt under the large-literal exception above.
 
 ## Naming
 
@@ -41,6 +50,9 @@ explain in the PR why an exception applies.
   saying why.
 - Wrap errors with context using `github.com/pkg/errors` (`errors.Wrap` / `errors.Wrapf`),
   matching the rest of the codebase. Messages are lowercase with no trailing punctuation.
+- Create new errors with `errors.New` / `errors.Errorf` (`github.com/pkg/errors`), not
+  `fmt.Errorf`. Existing `fmt.Errorf` calls are grandfathered; don't rewrite them in
+  unrelated changes, but new code should use `errors.Errorf`.
 - Return errors instead of logging them and continuing; log an error only where it is handled.
 - Don't `panic` outside of `main`/init code or truly unrecoverable programmer errors.
 - Prefer early returns to deep `if/else` nesting; keep the happy path unindented.
