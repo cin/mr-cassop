@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -51,53 +52,68 @@ func (r *CassandraClusterReconciler) reconcileUI(ctx context.Context, cc *dbv1al
 // cleanupUI deletes the UI Deployment/Service left over from spec.ui.enabled having previously been
 // true, mirroring cleanupNetworkPolicies' delete-on-disable behavior for NetworkPolicies.Enabled.
 func (r *CassandraClusterReconciler) cleanupUI(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
-	deployment := &appsv1.Deployment{}
-	err := r.Get(ctx, types.NamespacedName{Name: names.UIDeployment(cc.Name), Namespace: cc.Namespace}, deployment)
-	if err == nil {
-		if err = r.Delete(ctx, deployment); err != nil {
-			return errors.Wrap(err, "failed to delete ui deployment")
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "failed to get ui deployment")
+	meta := metav1.ObjectMeta{Name: names.UI(cc.Name), Namespace: cc.Namespace}
+	if err := client.IgnoreNotFound(r.Delete(ctx, &appsv1.Deployment{ObjectMeta: meta})); err != nil {
+		return errors.Wrap(err, "failed to delete ui deployment")
 	}
-
-	service := &v1.Service{}
-	err = r.Get(ctx, types.NamespacedName{Name: names.UIService(cc.Name), Namespace: cc.Namespace}, service)
-	if err == nil {
-		if err = r.Delete(ctx, service); err != nil {
-			return errors.Wrap(err, "failed to delete ui service")
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return errors.Wrap(err, "failed to get ui service")
+	if err := client.IgnoreNotFound(r.Delete(ctx, &v1.Service{ObjectMeta: meta})); err != nil {
+		return errors.Wrap(err, "failed to delete ui service")
 	}
-
 	return nil
 }
 
 func (r *CassandraClusterReconciler) reconcileUIDeployment(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
+	desired := desiredUIDeployment(cc)
+	if err := controllerutil.SetControllerReference(cc, desired, r.Scheme); err != nil {
+		return errors.Wrap(err, "cannot set controller reference")
+	}
+
+	actual := &appsv1.Deployment{}
+	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, actual)
+	if apierrors.IsNotFound(err) {
+		r.Log.Info("Creating ui deployment")
+		return errors.Wrap(r.Create(ctx, desired), "failed to create deployment")
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to get deployment")
+	}
+	return r.updateUIDeployment(ctx, desired, actual)
+}
+
+func (r *CassandraClusterReconciler) updateUIDeployment(ctx context.Context, desired, actual *appsv1.Deployment) error {
+	desired.Annotations = actual.Annotations
+	if compare.EqualDeployment(desired, actual) {
+		r.Log.Debug("No updates to ui deployment")
+		return nil
+	}
+	r.Log.Info("Updating ui deployment")
+	r.Log.Debug(compare.DiffDeployment(actual, desired))
+	actual.Spec = desired.Spec
+	actual.Labels = desired.Labels
+	return errors.Wrap(r.Update(ctx, actual), "failed to update deployment")
+}
+
+// desiredUIDeployment is a single Kubernetes manifest literal, left unsplit for readability.
+func desiredUIDeployment(cc *dbv1alpha1.CassandraCluster) *appsv1.Deployment {
 	uiLabels := labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI)
-	desiredDeployment := &appsv1.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.UIDeployment(cc.Name),
+			Name:      names.UI(cc.Name),
 			Namespace: cc.Namespace,
 			Labels:    labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: ptr.To[int32](1),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: uiLabels,
-			},
+			Replicas:             ptr.To[int32](1),
+			Selector:             &metav1.LabelSelector{MatchLabels: uiLabels},
 			RevisionHistoryLimit: ptr.To[int32](10),
 			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: uiLabels,
-				},
+				ObjectMeta: metav1.ObjectMeta{Labels: uiLabels},
 				Spec: v1.PodSpec{
 					Containers:       []v1.Container{uiContainer(cc)},
 					Volumes:          []v1.Volume{uiProberCredentialsVolume(cc)},
 					RestartPolicy:    v1.RestartPolicyAlways,
 					DNSPolicy:        v1.DNSClusterFirst,
-					SecurityContext:  &v1.PodSecurityContext{},
+					SecurityContext:  uiPodSecurityContext(),
 					ImagePullSecrets: imagePullSecrets(cc),
 					Tolerations:      cc.Spec.UI.Tolerations,
 					NodeSelector:     cc.Spec.UI.NodeSelector,
@@ -105,42 +121,69 @@ func (r *CassandraClusterReconciler) reconcileUIDeployment(ctx context.Context, 
 			},
 		},
 	}
+}
 
-	if err := controllerutil.SetControllerReference(cc, desiredDeployment, r.Scheme); err != nil {
-		return errors.Wrap(err, "Cannot set controller reference")
+// uiNonRootUID is the distroless "nonroot" user the UI image runs as (ui/Dockerfile).
+const uiNonRootUID = 65532
+
+func uiPodSecurityContext() *v1.PodSecurityContext {
+	return &v1.PodSecurityContext{
+		RunAsNonRoot:   ptr.To(true),
+		RunAsUser:      ptr.To[int64](uiNonRootUID),
+		RunAsGroup:     ptr.To[int64](uiNonRootUID),
+		SeccompProfile: &v1.SeccompProfile{Type: v1.SeccompProfileTypeRuntimeDefault},
 	}
+}
 
-	actualDeployment := &appsv1.Deployment{}
-	err := r.Get(ctx, types.NamespacedName{Name: names.UIDeployment(cc.Name), Namespace: cc.Namespace}, actualDeployment)
-	if err != nil && apierrors.IsNotFound(err) {
-		r.Log.Info("Creating ui deployment")
-		if err = r.Create(ctx, desiredDeployment); err != nil {
-			return errors.Wrap(err, "Failed to create deployment")
-		}
-	} else if err != nil {
-		return errors.Wrap(err, "Failed to get deployment")
-	} else {
-		desiredDeployment.Annotations = actualDeployment.Annotations
-		if !compare.EqualDeployment(desiredDeployment, actualDeployment) {
-			r.Log.Info("Updating ui deployment")
-			r.Log.Debug(compare.DiffDeployment(actualDeployment, desiredDeployment))
-			actualDeployment.Spec = desiredDeployment.Spec
-			actualDeployment.Labels = desiredDeployment.Labels
-			if err = r.Update(ctx, actualDeployment); err != nil {
-				return errors.Wrap(err, "failed to update deployment")
-			}
-		} else {
-			r.Log.Debugf("No updates to ui deployment")
-		}
+func uiContainerSecurityContext() *v1.SecurityContext {
+	return &v1.SecurityContext{
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(true),
+		Capabilities:             &v1.Capabilities{Drop: []v1.Capability{"ALL"}},
 	}
-
-	return nil
 }
 
 func (r *CassandraClusterReconciler) reconcileUIService(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
-	desiredService := &v1.Service{
+	desired := desiredUIService(cc)
+	if err := controllerutil.SetControllerReference(cc, desired, r.Scheme); err != nil {
+		return errors.Wrap(err, "cannot set controller reference")
+	}
+
+	actual := &v1.Service{}
+	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, actual)
+	if apierrors.IsNotFound(err) {
+		r.Log.Info("Creating ui service")
+		return errors.Wrap(r.Create(ctx, desired), "failed to create service")
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to get service")
+	}
+	return r.updateUIService(ctx, desired, actual)
+}
+
+func (r *CassandraClusterReconciler) updateUIService(ctx context.Context, desired, actual *v1.Service) error {
+	// ClusterIP is immutable once created, so always enforce the same as existing
+	desired.Spec.ClusterIP = actual.Spec.ClusterIP
+	desired.Spec.ClusterIPs = actual.Spec.ClusterIPs
+	desired.Spec.IPFamilies = actual.Spec.IPFamilies
+	desired.Spec.IPFamilyPolicy = actual.Spec.IPFamilyPolicy
+	desired.Spec.InternalTrafficPolicy = actual.Spec.InternalTrafficPolicy
+	if compare.EqualService(desired, actual) {
+		r.Log.Debug("No updates to ui service")
+		return nil
+	}
+	r.Log.Info("Updating ui service")
+	r.Log.Debug(compare.DiffService(actual, desired))
+	actual.Spec = desired.Spec
+	actual.Labels = desired.Labels
+	actual.Annotations = desired.Annotations
+	return errors.Wrap(r.Update(ctx, actual), "failed to update service")
+}
+
+func desiredUIService(cc *dbv1alpha1.CassandraCluster) *v1.Service {
+	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      names.UIService(cc.Name),
+			Name:      names.UI(cc.Name),
 			Labels:    labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
 			Namespace: cc.Namespace,
 		},
@@ -149,11 +192,9 @@ func (r *CassandraClusterReconciler) reconcileUIService(ctx context.Context, cc 
 			// destructive operations, not something to expose publicly by default. Reach it via
 			// `kubectl port-forward`, same as prober/reaper today.
 			Type: v1.ServiceTypeClusterIP,
-			// Must match the Pods' own labels (ComponentLabels, set on the Deployment's pod
-			// template below), not CombinedComponentLabels - the latter also inherits the
-			// CassandraCluster CR's own metadata.labels, which the Pods never get, so using it
-			// here would under-select down to zero endpoints as soon as the CR itself has any
-			// labels set.
+			// Must match the Pods' own labels (ComponentLabels), not CombinedComponentLabels - the
+			// latter also inherits the CR's own metadata.labels, which the Pods never get, so the
+			// Service would select zero endpoints as soon as the CR has any labels set.
 			Selector: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
 			Ports: []v1.ServicePort{
 				{
@@ -166,42 +207,6 @@ func (r *CassandraClusterReconciler) reconcileUIService(ctx context.Context, cc 
 			SessionAffinity: v1.ServiceAffinityNone,
 		},
 	}
-
-	if err := controllerutil.SetControllerReference(cc, desiredService, r.Scheme); err != nil {
-		return errors.Wrap(err, "Cannot set controller reference")
-	}
-
-	actualService := &v1.Service{}
-	err := r.Get(ctx, types.NamespacedName{Name: names.UIService(cc.Name), Namespace: cc.Namespace}, actualService)
-	if err != nil && apierrors.IsNotFound(err) {
-		r.Log.Info("Creating ui service")
-		if err = r.Create(ctx, desiredService); err != nil {
-			return errors.Wrap(err, "Failed to create service")
-		}
-	} else if err != nil {
-		return errors.Wrap(err, "Failed to get service")
-	} else {
-		// ClusterIP is immutable once created, so always enforce the same as existing
-		desiredService.Spec.ClusterIP = actualService.Spec.ClusterIP
-		desiredService.Spec.ClusterIPs = actualService.Spec.ClusterIPs
-		desiredService.Spec.IPFamilies = actualService.Spec.IPFamilies
-		desiredService.Spec.IPFamilyPolicy = actualService.Spec.IPFamilyPolicy
-		desiredService.Spec.InternalTrafficPolicy = actualService.Spec.InternalTrafficPolicy
-		if !compare.EqualService(desiredService, actualService) {
-			r.Log.Info("Updating ui service")
-			r.Log.Debugf(compare.DiffService(actualService, desiredService))
-			actualService.Spec = desiredService.Spec
-			actualService.Labels = desiredService.Labels
-			actualService.Annotations = desiredService.Annotations
-			if err = r.Update(ctx, actualService); err != nil {
-				return errors.Wrap(err, "failed to update service")
-			}
-		} else {
-			r.Log.Debugf("No updates to ui service")
-		}
-	}
-
-	return nil
 }
 
 const (
@@ -242,6 +247,7 @@ func uiContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 			{Name: "PROBER_CREDENTIALS_DIR", Value: uiProberCredentialsDir},
 			{Name: "LISTEN_ADDR", Value: fmt.Sprintf(":%d", dbv1alpha1.UIContainerPort)},
 		},
+		SecurityContext: uiContainerSecurityContext(),
 		VolumeMounts: []v1.VolumeMount{
 			{Name: uiProberCredentialsVolumeName, MountPath: uiProberCredentialsDir, ReadOnly: true},
 		},

@@ -51,12 +51,10 @@ func ProberIngressDomain(cc *dbv1alpha1.CassandraCluster, externalRegion dbv1alp
 	return ProberIngressHost(cc.Name, namespace, externalRegion.Domain)
 }
 
-func UIDeployment(clusterName string) string {
-	return clusterName + "-cassandra-ui"
-}
-
-func UIService(clusterName string) string {
-	return clusterName + "-cassandra-ui"
+// UI names both the nodetool UI's Deployment and Service. It deliberately avoids the
+// "<cluster>-cassandra-<dc>" shape DCService uses, so a DC named "ui" can't collide with it.
+func UI(clusterName string) string {
+	return clusterName + "-nodetool-ui"
 }
 
 func ReaperDeployment(clusterName, dcName string) string {

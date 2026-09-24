@@ -31,7 +31,7 @@ spec:
     # same as the other components (prober, icarus, ...)
 ```
 
-The operator creates a Deployment and a ClusterIP Service (`<cluster>-cassandra-ui`), pointed at the
+The operator creates a Deployment and a ClusterIP Service (`<cluster>-nodetool-ui`), pointed at the
 cluster's own in-cluster Prober service. It mounts the same admin credentials secret Prober itself
 validates against at `/etc/prober-credentials` (`PROBER_CREDENTIALS_DIR`) and re-reads it on every
 request, so there's nothing to look up or paste in by hand, and an admin password rotation reaches the UI
@@ -39,7 +39,7 @@ without restarting it. It's ClusterIP-only by design: this tool has real (if gat
 exposed publicly. Reach it the same way you'd reach Prober or Reaper:
 
 ```bash
-kubectl port-forward -n <namespace> svc/<cluster>-cassandra-ui 8090:8080
+kubectl port-forward -n <namespace> svc/<cluster>-nodetool-ui 8090:8080
 ```
 
 Then open `http://localhost:8090`.
