@@ -29,7 +29,7 @@ If any of these return something (helm release exists, the CR exists, or C* pods
 
 ## 0. Prometheus operator stack
 
-Idempotent — safe to run every time, no-ops if already installed at the same chart version:
+Safe to rerun, but not a no-op: no chart version is pinned and `helm repo update` runs first, so every run upgrades kube-prometheus-stack to the latest published chart:
 
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -142,7 +142,7 @@ kubectl create namespace cassop --dry-run=client -o yaml | kubectl apply -f -
 sed 's/:dev/:<VERSION>/g' local-values.yaml > local-values-<VERSION>.yaml
 ```
 
-This file is untracked/local by convention (see existing `local-values-0.7.2.yaml`) — don't `git add` it.
+This file is gitignored (`local-values-*.yaml`), so it stays out of commits.
 
 ## 5. Install/upgrade the operator
 

@@ -139,7 +139,7 @@ Pass `UI=false` to skip bringing up the [Nodetool UI](nodetool-ui.md) (on by def
 
 What it does, in order:
 
-1. Installs/updates the prometheus-operator stack (idempotent).
+1. Installs the prometheus-operator stack, or upgrades it to the latest kube-prometheus-stack chart if it's already installed.
 2. Gets images for `VERSION` — checks GHCR for already-published `ghcr.io/cin/mr-cassop/{operator,prober,cassandra,jolokia,icarus}:<version>` images first and only builds locally what isn't already released, instead of always rebuilding. Reaper is excluded on purpose: it's an external, independently-versioned image (`thelastpickle/cassandra-reaper:5.0.1`) that isn't loaded via `kind load`.
 3. Gets the Helm chart for `VERSION` the same way: for a stable release, downloads the actual released `mr-cassop-<version>.tgz` package from that GitHub release (the only place the released chart exists — there's no chart repo index) rather than assuming the local working tree's chart matches what shipped. Falls back to the local chart tree for a dev/non-semver version. It then checks that chart's CRD for `spec.ui` to decide how to run the Nodetool UI, and gets the `ui` image if needed.
 4. Loads the images into the kind cluster (`imagePullPolicy: Never`).
