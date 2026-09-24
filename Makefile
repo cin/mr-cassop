@@ -32,6 +32,7 @@ PROBER_IMG ?= $(REGISTRY)/prober:$(DOCKER_VERSION)
 CASSANDRA_IMG ?= $(REGISTRY)/cassandra:$(DOCKER_VERSION)
 JOLOKIA_IMG ?= $(REGISTRY)/jolokia:$(DOCKER_VERSION)
 ICARUS_IMG ?= $(REGISTRY)/icarus:$(DOCKER_VERSION)
+UI_IMG ?= $(REGISTRY)/ui:$(DOCKER_VERSION)
 
 # Produce Kubernetes v1 CRDs.
 CRD_OPTIONS ?= "crd:crdVersions=v1"
@@ -56,6 +57,7 @@ docker-help:
 	@echo "    make docker-build-cassandra   # Build cassandra image"
 	@echo "    make docker-build-jolokia     # Build jolokia image"
 	@echo "    make docker-build-icarus      # Build icarus image"
+	@echo "    make docker-build-ui          # Build nodetool UI image"
 	@echo ""
 	@echo "  Batch Operations:"
 	@echo "    make docker-build-core        # Build core images (operator + prober)"
@@ -78,6 +80,7 @@ docker-help:
 unit-tests:
 	go test ./controllers/... -v -coverprofile=operator_unit.out -coverpkg=./...
 	cd ./prober && go test ./... -v -coverprofile=prober_unit.out -coverpkg=./...
+	cd ./ui && go test ./... -v
 
 # Run integration tests
 integration-tests:
@@ -171,7 +174,7 @@ docker-buildx-setup:
 	fi
 
 # Build individual Docker images
-.PHONY: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus
+.PHONY: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus docker-build-ui
 
 docker-build-operator: manager docker-buildx-setup
 	@echo "🔨 Building operator image: $(OPERATOR_IMG)"
@@ -228,8 +231,19 @@ else
 endif
 	@echo "✅ Built $(ICARUS_IMG)"
 
+docker-build-ui: docker-buildx-setup
+	@echo "🔨 Building ui image: $(UI_IMG)"
+ifeq ($(MULTI_PLATFORM),true)
+	@echo "   Building for multiple platforms: linux/amd64,linux/arm64"
+	docker buildx build --platform=linux/amd64,linux/arm64 --build-arg VERSION=$(DOCKER_VERSION) -t $(UI_IMG) -t $(REGISTRY)/ui:latest --push ui
+else
+	@echo "   Building for platform: $(PLATFORM)"
+	docker buildx build --platform=$(PLATFORM) --build-arg VERSION=$(DOCKER_VERSION) -t $(UI_IMG) -t $(REGISTRY)/ui:latest --load ui
+endif
+	@echo "✅ Built $(UI_IMG)"
+
 # Build all images
-docker-build-all: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus
+docker-build-all: docker-build-operator docker-build-prober docker-build-cassandra docker-build-jolokia docker-build-icarus docker-build-ui
 	@echo "🎉 All images built successfully!"
 
 # Build all images for multiple platforms and push
@@ -270,8 +284,12 @@ docker-push-icarus:
 	docker push $(ICARUS_IMG)
 	docker push $(REGISTRY)/icarus:latest
 
+docker-push-ui:
+	docker push $(UI_IMG)
+	docker push $(REGISTRY)/ui:latest
+
 # Push all images
-docker-push-all: docker-push-operator docker-push-prober docker-push-cassandra docker-push-jolokia docker-push-icarus
+docker-push-all: docker-push-operator docker-push-prober docker-push-cassandra docker-push-jolokia docker-push-icarus docker-push-ui
 
 # find or download controller-gen
 # download controller-gen if necessary

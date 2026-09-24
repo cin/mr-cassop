@@ -221,6 +221,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return ctrl.Result{}, errors.Wrap(err, "Error reconciling prober")
 	}
 
+	if err = r.reconcileUI(ctx, cc); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "Error reconciling ui")
+	}
+
 	proberClient := r.ProberClient(proberURL(cc), auth.desiredRole, auth.desiredPassword)
 
 	proberReady, err := proberClient.Ready(ctx)

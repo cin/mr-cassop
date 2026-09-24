@@ -193,11 +193,11 @@ Don't set `spec.ui` when `UI_SUPPORTED=false` — the older CRD doesn't know the
 
 ## 8. Reach the nodetool UI (skip if `UI=false`)
 
-**Operator-managed (`UI_SUPPORTED=true`)** — the operator creates `test-cluster-cassandra-ui` (Deployment + ClusterIP Service) with Prober's credentials already wired in. Wait for it, then port-forward as a background task:
+**Operator-managed (`UI_SUPPORTED=true`)** — the operator creates `test-cluster-nodetool-ui` (Deployment + ClusterIP Service) with Prober's credentials already wired in. Wait for it, then port-forward as a background task:
 
 ```bash
-kubectl rollout status -n cassop deploy/test-cluster-cassandra-ui --timeout=5m
-kubectl port-forward -n cassop svc/test-cluster-cassandra-ui 8090:8080
+kubectl rollout status -n cassop deploy/test-cluster-nodetool-ui --timeout=5m
+kubectl port-forward -n cassop svc/test-cluster-nodetool-ui 8090:8080
 ```
 
 **From source (`UI_SUPPORTED=false`, e.g. 0.7.x)** — run the local `ui/` tree against the cluster's Prober, both as background tasks. Credentials come from the dev `admin-secret` created in step 6:
