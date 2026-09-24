@@ -150,6 +150,16 @@ What it does, in order:
 
 It also runs a pre-flight check for an already-existing install (helm release, CR, or running pods) and asks before overwriting, unless `OVERWRITE=true` is passed up front. Real backup/restore credentials are documented (secret name and keys) but never created automatically — see the skill file for the exact command to run manually with your own cloud credentials.
 
+## Load Testing with cassandra-stress
+
+Once a `CassandraCluster` is installed and ready, load-testing it is automated as a [Claude Code](https://claude.com/claude-code) skill at `.claude/skills/cassandra-stress/SKILL.md`. It runs `cassandra-stress` as a one-off Kubernetes `Job`, and supports both the built-in `keyspace1.standard1` schema and pluggable custom stress-profile YAMLs (under `profiles/` in the skill) for specific data models and read/write patterns — it ships with an IoT-style time-series `device_data` profile to start from. If you're using Claude Code, invoke it with e.g.:
+
+```
+/cassandra-stress PROFILE=device-data OPERATION=insert N=2000000 THREADS=8 TARGET_RATE=400
+```
+
+See the skill file for the full input list, how to add a new data model, and the Job/ConfigMap details.
+
 ## Tests
 
 ### Integration and unit tests
