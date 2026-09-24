@@ -22,9 +22,10 @@ Runs `cassandra-stress` as a one-off Kubernetes `Job` against an already-running
 - One of:
   - `N` — fixed op count, e.g. `2000000`.
   - `DURATION` — time-bounded run, e.g. `90m`.
+- `POP_SIZE` — `PROFILE=default` only: size of the key population, becomes `-pop seq=1..<POP_SIZE>`. Defaults to `N`. A `read` must use the same value as the `write` that populated the keys, so a `DURATION`-bounded read needs it set explicitly to the write's `N`.
 - `THREADS` — client thread count (default `4`).
 - `TARGET_RATE` — optional throttle in ops/s, becomes `fixed=<TARGET_RATE>/s`. Omit for unthrottled (cassandra-stress runs at max speed) — fine for a short smoke test, but easily saturates a 3-node kind cluster on a laptop; throttle anything longer than a couple of minutes.
-- `IMAGE_TAG` — cassandra image tag to run the stress client from (default `dev`). Must already be loaded into the kind cluster (`imagePullPolicy: Never`), and `dev` often isn't — check what's actually there first with `docker exec cassandra-control-plane crictl images | grep mr-cassop/cassandra` and use one of the tags it lists. If the tag you want is missing, run `kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/cassandra:<IMAGE_TAG>` first (see the `local-install` skill).
+- `IMAGE` — full cassandra image to run the stress client from. Optional; defaults to whatever image the cluster's own Cassandra pods are running (see step 2), which keeps client and server on the same build and is guaranteed to already be loaded into kind. Only override it if you deliberately want a different client build, and then `kind load docker-image --name cassandra <IMAGE>` it first (`imagePullPolicy: Never`).
 
 Confirm `PROFILE`, `OPERATION`, and `N`/`DURATION` with the user before running if not already given.
 
@@ -57,26 +58,30 @@ Check and fix this **before** step 1, never mid-run:
 
 ```bash
 if helm status prometheus-operator -n prometheus-operator >/dev/null 2>&1; then
-  MONITORING_ENABLED=$(kubectl get cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> -o jsonpath='{.spec.cassandra.monitoring.enabled}')
-  if [ "$MONITORING_ENABLED" != "true" ]; then
-    echo "prometheus-operator is installed but monitoring is off on <CR_NAME> — enabling it before the run."
+  # Cassandra agent: a JVM option, so changing it rolls every Cassandra pod. Only patch when it's actually off.
+  MON=$(kubectl get cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> \
+    -o jsonpath='{.spec.cassandra.monitoring.enabled}/{.spec.cassandra.monitoring.agent}')
+  if [ "$MON" != "true/tlp" ]; then
+    echo "prometheus-operator is installed but the tlp agent is off on <CR_NAME> — enabling it before the run."
     kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p \
-      '{"spec":{"cassandra":{"monitoring":{"enabled":true,"agent":"tlp","serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}}}}'
+      '{"spec":{"cassandra":{"monitoring":{"enabled":true,"agent":"tlp"}}}}'
     for sts in $(kubectl get statefulset -n <NAMESPACE> -l cassandra-cluster-instance=<CR_NAME> -o name); do
       kubectl rollout status "$sts" -n <NAMESPACE> --timeout=600s
     done
   fi
 
-  # Prober and Reaper: ServiceMonitor objects only, no pod restarts.
+  # Cassandra, Prober and Reaper ServiceMonitors: objects only, no pod restarts. Always applied —
+  # a merge patch is a no-op when they're already right, and it also fixes monitoring that's
+  # enabled but missing its ServiceMonitor or the release label.
   kubectl patch cassandraclusters.db.ibm.com -n <NAMESPACE> <CR_NAME> --type merge -p \
-    '{"spec":{"prober":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}},"reaper":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}}}'
+    '{"spec":{"cassandra":{"monitoring":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}},"prober":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}},"reaper":{"serviceMonitor":{"enabled":true,"labels":{"release":"prometheus-operator"}}}}}'
 
   # Operator: the chart sets labels to {operator: mr-cassop} only, which Prometheus doesn't select.
   kubectl label servicemonitor -n mr-cassop-system mr-cassop-metrics release=prometheus-operator --overwrite
 fi
 ```
 
-`agent: tlp` is the only valid value (`controllers/cassandra_container.go:116`) and is what the CR defaults to, but set it explicitly so the intent is on the page. `monitoring.enabled: true` on its own adds the agent and rolls the pods, yet creates no `ServiceMonitor` — that needs `monitoring.serviceMonitor.enabled: true` as well (`controllers/cassandra_service_monitor.go:49`). Getting that wrong is easy to miss: the pods restart, everything looks like it worked, and the dashboards stay blank.
+`agent: tlp` is the only valid value (`controllers/cassandra_container.go:116`) and is what the CR defaults to, but set it explicitly so the intent is on the page. `monitoring.enabled: true` on its own adds the agent and rolls the pods, yet creates no `ServiceMonitor` — that needs `monitoring.serviceMonitor.enabled: true` as well (`controllers/cassandra_service_monitor.go:49`). Getting that wrong is easy to miss: the pods restart, everything looks like it worked, and the dashboards stay blank. That's why the check above keys the restart on `enabled`/`agent` only and applies the `ServiceMonitor` half unconditionally — a CR with `enabled: true` but no `ServiceMonitor` (or one without the `release` label) would otherwise pass the check and still produce nothing.
 
 **The Cassandra patch rolls every Cassandra pod once.** The tlp agent is a JVM option (`JVM_EXTRA_OPTS=-javaagent:/prometheus/jmx_prometheus_javaagent.jar=8090:...`), so it needs a restart to take effect — the operator does it one pod at a time the same safe way it handles a version upgrade, but it's still a real rolling restart. There's no new sidecar: pods stay `2/2`, the second container being `icarus`, so container counts tell you nothing about whether monitoring is on. Adding the Prober, Reaper and operator `ServiceMonitor`s restarts nothing. Never patch a cluster that already has a stress Job in flight; it'll drop the client's connections mid-run and invalidate the results. If a run is already going, wait for it to finish first, and never roll Prober, Cassandra and Reaper at the same time.
 
@@ -123,11 +128,17 @@ RATE="threads=<THREADS>"
 [ -n "<TARGET_RATE>" ] && RATE="$RATE fixed=<TARGET_RATE>/s"
 
 COUNT="n=<N>"            # or: COUNT="duration=<DURATION>"
+POP_SIZE="<POP_SIZE>"; [ -z "$POP_SIZE" ] && POP_SIZE="<N>"
+
+STRESS_IMAGE="<IMAGE>"
+[ -z "$STRESS_IMAGE" ] && STRESS_IMAGE=$(kubectl get pod -n <NAMESPACE> <CR_NAME>-cassandra-<DC>-0 \
+  -o jsonpath='{.spec.containers[?(@.name=="cassandra")].image}')
 
 STRESS_BIN="/opt/cassandra/tools/bin/cassandra-stress"   # not on PATH in the cassandra image
 
 if [ "<PROFILE>" = "default" ]; then
-  STRESS_CMD="$STRESS_BIN <OPERATION> $COUNT cl=<CL> -rate $RATE -schema 'replication(strategy=NetworkTopologyStrategy,<DC>=<RF>)' $COMMON"
+  POP=""; [ -n "$POP_SIZE" ] && POP="-pop seq=1..$POP_SIZE"
+  STRESS_CMD="$STRESS_BIN <OPERATION> $COUNT cl=<CL> $POP -rate $RATE -schema 'replication(strategy=NetworkTopologyStrategy,<DC>=<RF>)' $COMMON"
 else
   STRESS_CMD="$STRESS_BIN user profile=/profiles/profile.yaml 'ops(<OPERATION>=1)' $COUNT cl=<CL> -rate $RATE $COMMON"
 fi
@@ -137,7 +148,7 @@ fi
 
 Without `-schema`, cassandra-stress creates `keyspace1` with `SimpleStrategy` RF=1: every row lives on one node, so a single pod restart makes part of the data unavailable and the numbers don't reflect a replicated cluster. `-schema` only takes effect when stress creates the keyspace — if `keyspace1` already exists from an earlier run with different replication, drop it first (`DROP KEYSPACE keyspace1;`).
 
-The built-in `keyspace1.standard1` write needs `-pop seq=1..<N>` (and a matching `-pop seq=<same range>` on any concurrent read) rather than a bare `n=`, for a "populate then read" flow — it errors on read ("Failed to execute warmup") against not-yet-written keys. A custom profile's named queries don't have this problem: querying a not-yet-inserted key just returns 0 rows, which is harmless, so write and read can run concurrently. If populating the default schema first, run write to completion before starting read.
+The built-in `keyspace1.standard1` schema gets an explicit `-pop seq=1..<POP_SIZE>` so write and read cover the same keys — without it a read picks keys that were never written and fails with "Failed to execute warmup". A write run by `DURATION` with no `POP_SIZE` falls back to stress's own default population, so a read against it won't line up; prefer `N` for the populating write. A custom profile's named queries don't have this problem: querying a not-yet-inserted key just returns 0 rows, which is harmless, so write and read can run concurrently. If populating the default schema first, run write to completion before starting read.
 
 ## 3. Run it as a Job
 
@@ -164,7 +175,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: cassandra-stress
-          image: ghcr.io/cin/mr-cassop/cassandra:<IMAGE_TAG>
+          image: $STRESS_IMAGE
           imagePullPolicy: Never
           command: ["/bin/sh", "-c"]
           args:
@@ -200,7 +211,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: cassandra-stress
-          image: ghcr.io/cin/mr-cassop/cassandra:<IMAGE_TAG>
+          image: $STRESS_IMAGE
           imagePullPolicy: Never
           command: ["/bin/sh", "-c"]
           args:
