@@ -127,6 +127,29 @@ Once the operator is up, apply a `CassandraCluster` manifest. The [Quickstart](q
 
 If all set correctly, you should see the components getting created.
 
+## Repeatable Local Install / Upgrade Testing
+
+The manual steps above (build, load, secrets, apply) are automated as a [Claude Code](https://claude.com/claude-code) skill at `.claude/skills/local-install/SKILL.md`, for repeatable installs against the `cassandra` kind cluster and for testing in-place version upgrades. If you're using Claude Code, invoke it with:
+
+```
+/local-install VERSION=0.7.2 PERSISTENCE=pvc
+```
+
+Pass `UI=false` to skip bringing up the [Nodetool UI](nodetool-ui.md) (on by default).
+
+What it does, in order:
+
+1. Installs the prometheus-operator stack, or upgrades it to the latest kube-prometheus-stack chart if it's already installed.
+2. Gets images for `VERSION` — checks GHCR for already-published `ghcr.io/cin/mr-cassop/{operator,prober,cassandra,jolokia,icarus}:<version>` images first and only builds locally what isn't already released, instead of always rebuilding. Reaper is excluded on purpose: it's an external, independently-versioned image (`thelastpickle/cassandra-reaper:5.0.1`) that isn't loaded via `kind load`.
+3. Gets the Helm chart for `VERSION` the same way: for a stable release, downloads the actual released `mr-cassop-<version>.tgz` package from that GitHub release (the only place the released chart exists — there's no chart repo index) rather than assuming the local working tree's chart matches what shipped. Falls back to the local chart tree for a dev/non-semver version. It then checks that chart's CRD for `spec.ui` to decide how to run the Nodetool UI, and gets the `ui` image if needed.
+4. Loads the images into the kind cluster (`imagePullPolicy: Never`).
+5. Creates namespaces, a version-pinned `local-values-<version>.yaml` (generated from the tracked `local-values.yaml` template), applies the chart's CRDs (Helm never upgrades them itself), and installs/upgrades the operator via Helm.
+6. Creates dev-only secrets (`test-secret`, `admin-secret`) — created once and never regenerated on a rerun, since the operator treats a changed `admin-secret` password as a live credential-rotation request against the running cluster.
+7. Applies a `CassandraCluster` CR — `test-cluster.yaml` (no PVCs, ephemeral) or `test-cluster-pvc.yaml` (5Gi PVC per node), depending on `PERSISTENCE`. Use `pvc` to test that an in-place upgrade preserves data across the rolling restart. When the chart supports it, `spec.ui.enabled: true` is set on the CR.
+8. Makes the Nodetool UI available at `http://localhost:8090`: port-forwards the operator-managed UI service, or, for versions whose chart has no `spec.ui` (e.g. 0.7.x), runs `ui/` from source against the cluster's Prober.
+
+It also runs a pre-flight check for an already-existing install (helm release, CR, or running pods) and asks before overwriting, unless `OVERWRITE=true` is passed up front. Real backup/restore credentials are documented (secret name and keys) but never created automatically — see the skill file for the exact command to run manually with your own cloud credentials.
+
 ## Load Testing with cassandra-stress
 
 Once a `CassandraCluster` is installed and ready, load-testing it is automated as a [Claude Code](https://claude.com/claude-code) skill at `.claude/skills/cassandra-stress/SKILL.md`. It runs `cassandra-stress` as a one-off Kubernetes `Job`, and supports both the built-in `keyspace1.standard1` schema and pluggable custom stress-profile YAMLs (under `profiles/` in the skill) for specific data models and read/write patterns — it ships with an IoT-style time-series `device_data` profile to start from. If you're using Claude Code, invoke it with e.g.:

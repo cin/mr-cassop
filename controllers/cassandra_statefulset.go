@@ -211,10 +211,26 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 			Selector:            &metav1.LabelSelector{MatchLabels: stsLabels},
 			PodManagementPolicy: appsv1.ParallelPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type:          appsv1.RollingUpdateStatefulSetStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{Partition: ptr.To[int32](0)},
+				// RollingUpdate is deliberately left nil: the API server only defaults partition and
+				// maxUnavailable when it's set, and maxUnavailable's default depends on the
+				// MaxUnavailableStatefulSet feature gate (on in 1.35.0-1.35.3 and 1.37+, off otherwise).
+				// Leaving it nil keeps desiredSts equal to what's read back on every k8s version, and
+				// keeps rollouts at one Cassandra pod at a time.
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			},
 			RevisionHistoryLimit: ptr.To[int32](10),
+			// Set explicitly to the API server's default (Retain/Retain) so desiredSts matches what's
+			// read back; leaving it nil caused a spurious diff on every reconcile.
+			// WhenDeleted: Retain keeps data volumes if the statefulset is deleted.
+			// WhenScaled: Retain is NOT a data-safety measure for Cassandra: the operator only scales
+			// down after the node is decommissioned, and a decommissioned node's data is marked
+			// DECOMMISSIONED. If the statefulset later scales back up, the new pod reattaches that
+			// PVC and Cassandra refuses to start unless cassandra.override_decommission is set.
+			// WhenScaled: Delete is the correct setting and is left as a follow-up change.
+			PersistentVolumeClaimRetentionPolicy: &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+				WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: stsLabels,
