@@ -1,6 +1,6 @@
 ---
 name: local-install
-description: Build, load and install mr-cassop into the local "cassandra" kind cluster (prometheus-operator stack + operator via Helm + a CassandraCluster CR), including dummy dev secrets and a PVC vs no-PVC choice. Use for repeatable local dev installs and in-place version upgrade testing. Not for production or real backup/restore credentials.
+description: Build, load and install mr-cassop into the local "cassandra" kind cluster (prometheus-operator stack + operator via Helm + a CassandraCluster CR + the nodetool UI), including dummy dev secrets and a PVC vs no-PVC choice. Use for repeatable local dev installs and in-place version upgrade testing. Not for production or real backup/restore credentials.
 ---
 
 # mr-cassop local install
@@ -12,6 +12,7 @@ Repeatable install/upgrade flow for the `cassandra` kind cluster. Always confirm
 - `VERSION` — image tag to build/deploy, e.g. `0.7.2`. Required.
 - `PERSISTENCE` — `pvc` or `no-pvc`. Required. Determines which cluster manifest to apply.
 - `OVERWRITE` — optional, `true`/`false` (default `false`). When `true`, skip the pre-flight confirmation below and proceed straight through even if an install already exists. Pass it up front to avoid a mid-run prompt.
+- `UI` — optional, `true`/`false` (default `true`). Brings up the [nodetool UI](../../../docs/docs/nodetool-ui.md) alongside the cluster — operator-managed via `spec.ui.enabled` when the chart for `VERSION` supports it, otherwise run from the local `ui/` source (see step 8). Pass `UI=false` to skip it.
 - Assumes the `cassandra` kind cluster already exists (`kind get clusters`).
 
 ## Pre-flight: check for an existing install
@@ -99,6 +100,18 @@ fi
 
 `$CHART_REF` is what step 5's `helm upgrade` installs from — carry it forward.
 
+### 1c. Nodetool UI support + image (skip if `UI=false`)
+
+The operator-managed UI (`spec.ui` on `CassandraCluster`, `ghcr.io/cin/mr-cassop/ui` image) only exists in charts that ship it — check the chart's own CRD rather than guessing from the version number:
+
+```bash
+UI_SUPPORTED=$(helm show crds "$CHART_REF" \
+  | yq 'select(.metadata.name == "cassandraclusters.db.ibm.com")
+        | .spec.versions[0].schema.openAPIV3Schema.properties.spec.properties | has("ui")')
+```
+
+If `UI_SUPPORTED` is `true`, get the `ui` image the same way as step 1 — pull `ghcr.io/cin/mr-cassop/ui:<VERSION>` from GHCR for a published stable version, otherwise `make docker-build-ui DOCKER_VERSION=<VERSION>`. If it's `false`, there's no image to get; step 8 runs the UI from source instead. Carry `UI_SUPPORTED` forward to steps 2, 7 and 8.
+
 ## 2. Load images into the kind cluster
 
 `imagePullPolicy: Never` in the operator deployment — images must be loaded directly, never pulled.
@@ -109,6 +122,9 @@ kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/prober:<VERSION>
 kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/cassandra:<VERSION>
 kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/jolokia:<VERSION>
 kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/icarus:<VERSION>
+
+# only if UI=true and UI_SUPPORTED=true:
+kind load docker-image --name cassandra ghcr.io/cin/mr-cassop/ui:<VERSION>
 ```
 
 ## 3. Namespaces (idempotent)
@@ -131,10 +147,13 @@ This file is untracked/local by convention (see existing `local-values-0.7.2.yam
 ## 5. Install/upgrade the operator
 
 ```bash
+helm show crds "$CHART_REF" | kubectl apply --server-side --force-conflicts -f -
 helm upgrade mr-cassop "$CHART_REF" --install -n mr-cassop-system -f local-values-<VERSION>.yaml
 ```
 
-`$CHART_REF` comes from step 1b — the downloaded `.tgz` for a stable version, or `mr-cassop` (the local tree) otherwise. Re-running this step with a new `VERSION` (after steps 1, 1b, 2 and 4 for that version) is the in-place upgrade path — the operator picks up new default images via env vars and rolls the existing `CassandraCluster`.
+Helm only installs `crds/` on a fresh install and never upgrades them, so on an upgrade the cluster would keep the old CRD schema and any manifest using a new field (e.g. `spec.ui`) would be rejected as an unknown field. The explicit apply keeps the CRDs in step with `$CHART_REF`; server-side apply because the `CassandraCluster` CRD is too large for client-side apply's last-applied annotation.
+
+`$CHART_REF` comes from step 1b — the downloaded `.tgz` for a stable version, or `mr-cassop` (the local tree) otherwise. Re-running this step with a new `VERSION` (after steps 1, 1b, 1c, 2 and 4 for that version) is the in-place upgrade path — the operator picks up new default images via env vars and rolls the existing `CassandraCluster`.
 
 ## 6. Dev secrets (dummy values — never real credentials)
 
@@ -162,7 +181,40 @@ kubectl get secret admin-secret -n cassop >/dev/null 2>&1 || \
 
 For the "upgrade in place" scenario the user is testing, always use the `pvc` manifest — data must survive the rolling image bump from step 5.
 
+If `UI=true` and `UI_SUPPORTED=true`, enable the operator-managed UI as part of the same apply instead of applying the file as-is:
+
+```bash
+yq '.spec.ui.enabled = true' <manifest> | kubectl apply -n cassop -f -
+```
+
+Don't set `spec.ui` when `UI_SUPPORTED=false` — the older CRD doesn't know the field, and kubectl's strict field validation rejects the whole apply (`unknown field "spec.ui"`).
+
 **Switching PERSISTENCE mode on an already-applied `test-cluster` is a no-op, not a migration.** StatefulSet `volumeClaimTemplates` are immutable in Kubernetes, so re-applying with the other manifest after the cluster already exists won't add or remove persistence. To actually change modes, delete the CR (and PVCs, if any) first — see Cleanup below — then apply the new manifest.
+
+## 8. Reach the nodetool UI (skip if `UI=false`)
+
+**Operator-managed (`UI_SUPPORTED=true`)** — the operator creates `test-cluster-cassandra-ui` (Deployment + ClusterIP Service) with Prober's credentials already wired in. Wait for it, then port-forward as a background task:
+
+```bash
+kubectl rollout status -n cassop deploy/test-cluster-cassandra-ui --timeout=5m
+kubectl port-forward -n cassop svc/test-cluster-cassandra-ui 8090:8080
+```
+
+**From source (`UI_SUPPORTED=false`, e.g. 0.7.x)** — run the local `ui/` tree against the cluster's Prober, both as background tasks. Credentials come from the dev `admin-secret` created in step 6:
+
+```bash
+kubectl port-forward -n cassop svc/test-cluster-cassandra-prober 18080:80
+
+cd ui && \
+PROBER_ENV_NAME=test-cluster \
+PROBER_URL=http://localhost:18080 \
+PROBER_USER="$(kubectl get secret admin-secret -n cassop -o jsonpath='{.data.admin-role}' | base64 -d)" \
+PROBER_PASSWORD="$(kubectl get secret admin-secret -n cassop -o jsonpath='{.data.admin-password}' | base64 -d)" \
+LISTEN_ADDR=:8090 \
+go run .
+```
+
+Either way, tell the user the UI is at `http://localhost:8090` and which mode it's running in. Node data only shows up once the Cassandra pods are ready. Don't echo the password.
 
 ## Backup/restore credentials (documented, never run automatically)
 
@@ -184,3 +236,5 @@ kubectl delete cassandraclusters.db.ibm.com -n cassop test-cluster
 kubectl delete pvc -n cassop -l cassandra-cluster-dc=dc1   # only relevant in pvc mode
 helm uninstall -n mr-cassop-system mr-cassop
 ```
+
+Also stop any background `kubectl port-forward` / `go run` tasks started in step 8.
