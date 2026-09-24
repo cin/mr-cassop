@@ -1339,6 +1339,149 @@ export PAUSE_REASON="pod is not paused"
 			},
 			expectedError: nil,
 		},
+		{
+			// Regression test for #160: a pod that crashes and restarts in place (same pod, same
+			// IP) must not have its own current IP echoed back as CASSANDRA_NODE_PREVIOUS_IP - that
+			// would make the entrypoint pass replace_address_first_boot for the node's own live
+			// address, which Cassandra refuses, permanently crash-looping the pod.
+			name: "in-place restart with unchanged IP does not set CASSANDRA_NODE_PREVIOUS_IP",
+			cc: &v1alpha1.CassandraCluster{
+				ObjectMeta: ccObjMeta,
+				Spec: v1alpha1.CassandraClusterSpec{
+					DCs: []v1alpha1.DC{
+						{
+							Name:     "dc1",
+							Replicas: proto.Int(3),
+						},
+					},
+				},
+			},
+			podList: &v1.PodList{
+				Items: []v1.Pod{
+					createTestPod("test-cluster-cassandra-dc1-0", ccNamespace, "uid1", "10.1.1.3", "node1", true, cLabels(ccName, "dc1", true)),
+					createTestPod("test-cluster-cassandra-dc1-1", ccNamespace, "uid2", "10.1.1.4", "node2", true, cLabels(ccName, "dc1", true)),
+					createTestPod("test-cluster-cassandra-dc1-2", ccNamespace, "uid3", "10.1.1.5", "node3", true, cLabels(ccName, "dc1", false)),
+				},
+			},
+			nodeList: &v1.NodeList{},
+			k8sObjects: []client.Object{
+				&appsv1.StatefulSet{
+					ObjectMeta: stsObjectMeta,
+					Spec: appsv1.StatefulSetSpec{
+						Replicas: proto.Int32(3),
+					},
+					Status: appsv1.StatefulSetStatus{
+						Replicas:      3,
+						ReadyReplicas: 3,
+					},
+				},
+				&v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster-pod-ips",
+						Namespace: ccNamespace,
+					},
+					Data: map[string]string{
+						// pod-0 already went Ready once at this same IP before the in-place crash
+						"test-cluster-cassandra-dc1-0": "10.1.1.3",
+					},
+				},
+			},
+			expectedCMData: map[string]string{
+				"test-cluster-cassandra-dc1-0_uid1.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.3
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.3
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+				"test-cluster-cassandra-dc1-1_uid2.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.4
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.4
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+				"test-cluster-cassandra-dc1-2_uid3.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.5
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.5
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+			},
+			expectedError: nil,
+		},
+		{
+			// A pod that was genuinely recreated at a new address (e.g. after node eviction) must
+			// still get CASSANDRA_NODE_PREVIOUS_IP set to the old address so gossip peers are told
+			// the node's identity moved.
+			name: "pod recreated with a new IP still sets CASSANDRA_NODE_PREVIOUS_IP to the old address",
+			cc: &v1alpha1.CassandraCluster{
+				ObjectMeta: ccObjMeta,
+				Spec: v1alpha1.CassandraClusterSpec{
+					DCs: []v1alpha1.DC{
+						{
+							Name:     "dc1",
+							Replicas: proto.Int(3),
+						},
+					},
+				},
+			},
+			podList: &v1.PodList{
+				Items: []v1.Pod{
+					// pod-0 was rescheduled with a new IP and hasn't gone Ready again yet
+					createTestPod("test-cluster-cassandra-dc1-0", ccNamespace, "uid1", "10.1.1.3", "node1", false, cLabels(ccName, "dc1", true)),
+					createTestPod("test-cluster-cassandra-dc1-1", ccNamespace, "uid2", "10.1.1.4", "node2", true, cLabels(ccName, "dc1", true)),
+					createTestPod("test-cluster-cassandra-dc1-2", ccNamespace, "uid3", "10.1.1.5", "node3", true, cLabels(ccName, "dc1", false)),
+				},
+			},
+			nodeList: &v1.NodeList{},
+			k8sObjects: []client.Object{
+				&appsv1.StatefulSet{
+					ObjectMeta: stsObjectMeta,
+					Spec: appsv1.StatefulSetSpec{
+						Replicas: proto.Int32(3),
+					},
+					Status: appsv1.StatefulSetStatus{
+						Replicas:      3,
+						ReadyReplicas: 2,
+					},
+				},
+				&v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster-pod-ips",
+						Namespace: ccNamespace,
+					},
+					Data: map[string]string{
+						"test-cluster-cassandra-dc1-0": "10.1.1.99",
+					},
+				},
+			},
+			expectedCMData: map[string]string{
+				"test-cluster-cassandra-dc1-0_uid1.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.3
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.3
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=10.1.1.99
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+				"test-cluster-cassandra-dc1-1_uid2.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.4
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.4
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+				"test-cluster-cassandra-dc1-2_uid3.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.5
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.5
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local,test-cluster-cassandra-dc1-1.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=true
+export PAUSE_REASON="waiting for seed nodes to init"
+`,
+			},
+			expectedError: nil,
+		},
 	}
 
 	for _, c := range cases {
