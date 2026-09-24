@@ -153,8 +153,10 @@ The built-in `keyspace1.standard1` schema gets an explicit `-pop seq=1..<POP_SIZ
 ## 3. Run it as a Job
 
 ```bash
-JOB_NAME=cassandra-stress-<OPERATION>-$(date +%s)
+JOB_NAME=cassandra-stress-$(echo "<OPERATION>" | tr '_A-Z' '-a-z')-$(date +%s)
 ```
+
+Query names like `by_device_range` contain underscores, which aren't valid in a Kubernetes object name — hence the `tr`.
 
 For `PROFILE=default` (no profile volume needed):
 
