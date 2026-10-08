@@ -25,6 +25,7 @@ const (
 	EventCassandraBackupNotFound          = "CassandraBackupNotFound"
 	EventStorageCredentialsSecretNotFound = "StorageCredentialsSecretNotFound"
 	EventStorageCredentialsSecretInvalid  = "StorageCredentialsSecretInvalid"
+	EventUIImageMissing                   = "UIImageMissing"
 
 	EventAdminRoleChanged = "AdminRoleChanged"
 	EventRegionInit       = "RegionInit"

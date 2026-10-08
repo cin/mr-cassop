@@ -17,6 +17,7 @@ jolokiaImage: ghcr.io/cin/mr-cassop/jolokia:dev
 cassandraImage: ghcr.io/cin/mr-cassop/cassandra:dev
 reaperImage: thelastpickle/cassandra-reaper:5.0.1
 icarusImage: ghcr.io/cin/mr-cassop/icarus:dev
+uiImage: ghcr.io/cin/mr-cassop/ui:dev
 clusterDashboards:
   enabled:
     - prober

@@ -32,6 +32,7 @@ func (r *CassandraClusterReconciler) defaultCassandraCluster(cc *dbv1alpha1.Cass
 	r.defaultProber(cc)
 	r.defaultIcarus(cc)
 	r.defaultReaper(cc)
+	r.defaultUI(cc)
 
 	if len(cc.Spec.Maintenance) > 0 {
 		for i, entry := range cc.Spec.Maintenance {
@@ -163,6 +164,20 @@ func (r *CassandraClusterReconciler) defaultProber(cc *dbv1alpha1.CassandraClust
 		if _, err := time.ParseDuration(cc.Spec.Prober.ServiceMonitor.ScrapeInterval); err != nil {
 			cc.Spec.Prober.ServiceMonitor.ScrapeInterval = "30s"
 		}
+	}
+}
+
+func (r *CassandraClusterReconciler) defaultUI(cc *dbv1alpha1.CassandraCluster) {
+	if !cc.Spec.UI.Enabled {
+		return
+	}
+
+	if cc.Spec.UI.Image == "" {
+		cc.Spec.UI.Image = r.Cfg.DefaultUIImage
+	}
+
+	if cc.Spec.UI.ImagePullPolicy == "" {
+		cc.Spec.UI.ImagePullPolicy = v1.PullIfNotPresent
 	}
 }
 

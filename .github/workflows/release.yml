@@ -36,6 +36,9 @@ jobs:
           - name: icarus
             context: icarus
             dockerfile: icarus/Dockerfile
+          - name: ui
+            context: ui
+            dockerfile: ui/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v7
