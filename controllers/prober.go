@@ -176,7 +176,7 @@ func (r *CassandraClusterReconciler) reconcileProberService(ctx context.Context,
 		},
 		Spec: v1.ServiceSpec{
 			Type:     v1.ServiceTypeClusterIP,
-			Selector: labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
+			Selector: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 			Ports: []v1.ServicePort{
 				{
 					Port:       dbv1alpha1.ProberServicePort,
@@ -233,11 +233,18 @@ func (r *CassandraClusterReconciler) reconcileProberService(ctx context.Context,
 	return nil
 }
 
-func proberContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
-	adminSecret := names.ActiveAdminSecret(cc.Name)
+// proberAuthSecretName returns the secret prober validates its own HTTP Basic Auth callers
+// against (set as ADMIN_SECRET_NAME on its container) - any client authenticating to prober's API,
+// including the nodetool UI, must present credentials from this same secret.
+func proberAuthSecretName(cc *dbv1alpha1.CassandraCluster) string {
 	if cc.Spec.JMXAuth == jmxAuthenticationLocalFiles {
-		adminSecret = cc.Spec.AdminRoleSecretName
+		return cc.Spec.AdminRoleSecretName
 	}
+	return names.ActiveAdminSecret(cc.Name)
+}
+
+func proberContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
+	adminSecret := proberAuthSecretName(cc)
 	return v1.Container{
 		Name:            "prober",
 		Image:           cc.Spec.Prober.Image,

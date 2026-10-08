@@ -1,0 +1,55 @@
+apiVersion: db.ibm.com/v1alpha1
+kind: CassandraCluster
+metadata:
+  name: test-cluster
+  namespace: cassop
+spec:
+  imagePullSecretName: "test-secret"
+  adminRoleSecretName: "admin-secret"
+  cassandra:
+    numSeeds: 1
+    logLevel: info
+    persistence:
+      enabled: true
+      dataVolumeClaimSpec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
+    resources:
+      limits:
+        cpu: "2"
+        memory: 2Gi
+      requests:
+        memory: 1536Mi
+        cpu: "750m"
+    jvmOptions:
+    - -Xmx1024M
+    - -Xms1024M
+    monitoring:
+      enabled: false
+  dcs:
+  - name: dc1
+    replicas: 3
+  prober:
+    logLevel: info
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    jolokia:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  hostPort:
+    enabled: false
+  encryption:
+    server:
+      internodeEncryption: none
+    client:
+      enabled: false
+  networkPolicies:
+    enabled: false

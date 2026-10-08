@@ -57,7 +57,7 @@ See the [Architecture Overview](docs/docs/architecture-overview.md) for detailed
 ## Documentation
 
 - [Quickstart](docs/docs/quickstart.md)
-- [Development](docs/docs/development.md)
+- [Development](docs/docs/development.md) (includes the [repeatable local install/upgrade-testing skill](docs/docs/development.md#repeatable-local-install--upgrade-testing) and the [cassandra-stress load-testing skill](docs/docs/development.md#load-testing-with-cassandra-stress))
 - [CassandraCluster configuration](docs/docs/cassandracluster-configuration.md)
 - [Backup and restore](docs/docs/backup-restore.md)
 - [Multi-region cluster configuration](docs/docs/multi-region-cluster-configuration.md)

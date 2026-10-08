@@ -27,6 +27,10 @@ export DEFAULT_PROBER_IMAGE="ghcr.io/cin/mr-cassop/prober:dev"
 export DEFAULT_JOLOKIA_IMAGE="ghcr.io/cin/mr-cassop/jolokia:0.6.6"
 export DEFAULT_REAPER_IMAGE="thelastpickle/cassandra-reaper:5.0.1"
 export DEFAULT_ICARUS_IMAGE="ghcr.io/cin/mr-cassop/icarus:0.6.5"
+# UI has no published release yet (only just added) - build it locally with
+# `make docker-build-ui` and it'll pick up this :dev tag. Only used when a
+# CassandraCluster opts into spec.ui.enabled.
+export DEFAULT_UI_IMAGE="ghcr.io/cin/mr-cassop/ui:dev"
 
 echo "✅ Environment variables set for local development"
 echo "📋 Key settings:"

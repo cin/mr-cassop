@@ -67,6 +67,8 @@ spec:
               value: {{ .Values.reaperImage | quote }}
             - name: DEFAULT_ICARUS_IMAGE
               value: {{ .Values.icarusImage | default (printf "%s/icarus:%s" $imageRepo $imageTag) | quote }}
+            - name: DEFAULT_UI_IMAGE
+              value: {{ .Values.uiImage | default (printf "%s/ui:%s" $imageRepo $imageTag) | quote }}
             - name: WEBHOOKS_ENABLED
               value: {{ .Values.admissionWebhooks.enabled | quote }}
           volumeMounts:

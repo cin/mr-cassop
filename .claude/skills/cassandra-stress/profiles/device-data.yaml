@@ -1,0 +1,52 @@
+# IoT-style time-series data model: one row per (device_id, day, timestamp),
+# 5000 devices, ~7 days of history. Needs NOW_MS / SEVEN_DAYS_AGO_MS (epoch-ms)
+# and TODAY_EPOCH_DAY / SEVEN_DAYS_AGO_EPOCH_DAY (days since epoch) exported
+# before rendering with envsubst — see SKILL.md step 1. Without an explicit
+# population range, cassandra-stress seeds `timestamp` from epoch 0, which
+# silently lands every row years in the past.
+#
+# Partitions are bucketed by day so no partition grows without bound — keying on
+# device_id alone would keep one ever-growing partition per device. cassandra-stress
+# can't derive one column from another, so `day` and `timestamp` are drawn
+# independently from the same 7-day window; a row's `day` won't always match its
+# `timestamp`, which doesn't matter for load but does for reading the data by eye.
+#
+# UnifiedCompactionStrategy (Cassandra 5.0+) replaces STCS/LCS/TWCS as the
+# general-purpose default. Rows expire after 7 days, the retention an IoT
+# table would realistically have.
+keyspace: device_stress
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS device_stress WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 3};
+table: device_data
+table_definition: |
+  CREATE TABLE IF NOT EXISTS device_data (
+        device_id text,
+        day int,
+        timestamp timestamp,
+        data_id int,
+        data_value blob,
+        PRIMARY KEY ((device_id, day), timestamp)
+  ) WITH CLUSTERING ORDER BY (timestamp DESC)
+    AND compaction = { 'class': 'UnifiedCompactionStrategy' }
+    AND default_time_to_live = 604800;
+columnspec:
+  - name: device_id
+    size: uniform(8..12)
+    population: uniform(1..5000)
+  - name: day
+    population: uniform(${SEVEN_DAYS_AGO_EPOCH_DAY}..${TODAY_EPOCH_DAY})
+  - name: timestamp
+    cluster: fixed(1000)
+    population: uniform(${SEVEN_DAYS_AGO_MS}..${NOW_MS})
+  - name: data_id
+    population: uniform(1..50)
+  - name: data_value
+    size: uniform(100..256)
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1000
+  batchtype: UNLOGGED
+queries:
+  by_device_range:
+    cql: select * from device_data where device_id = ? and day = ? and timestamp >= ? and timestamp <= ? LIMIT 200
+    fields: multirow

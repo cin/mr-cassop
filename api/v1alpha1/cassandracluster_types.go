@@ -31,6 +31,7 @@ const (
 	CassandraClusterComponentProber    = "prober"
 	CassandraClusterComponentReaper    = "reaper"
 	CassandraClusterComponentCassandra = "cassandra"
+	CassandraClusterComponentUI        = "ui"
 	CassandraClusterNetworkPolicy      = "network-policy"
 
 	CassandraAgentTlp = "tlp"
@@ -49,6 +50,8 @@ const (
 
 	ReaperAppPort   = 8080
 	ReaperAdminPort = 8081
+
+	UIContainerPort = 8080
 
 	IntraPort  = 7000
 	TlsPort    = 7001
@@ -91,7 +94,10 @@ type CassandraClusterSpec struct {
 	Icarus               Icarus          `json:"icarus,omitempty"`
 	Prober               Prober          `json:"prober,omitempty"`
 	Reaper               *Reaper         `json:"reaper,omitempty"`
-	HostPort             HostPort        `json:"hostPort,omitempty"`
+	// (Optional) a read-mostly nodetool-style diagnostic dashboard over Prober. Disabled by
+	// default; see docs/docs/nodetool-ui.md for what it exposes and how it's gated.
+	UI       UI       `json:"ui,omitempty"`
+	HostPort HostPort `json:"hostPort,omitempty"`
 	// Authentication is always enabled and by default is set to `internal`. Available options: `internal`, `local_files`.
 	// +kubebuilder:validation:Enum:=local_files;internal
 	JMXAuth    string     `json:"jmxAuth,omitempty"`
@@ -319,6 +325,16 @@ type Prober struct {
 	Tolerations    []v1.Toleration   `json:"tolerations,omitempty"`
 	NodeSelector   map[string]string `json:"nodeSelector,omitempty"`
 	Affinity       *v1.Affinity      `json:"affinity,omitempty"`
+}
+
+type UI struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	Image   string `json:"image,omitempty"`
+	// +kubebuilder:validation:Enum=Always;Never;IfNotPresent
+	ImagePullPolicy v1.PullPolicy           `json:"imagePullPolicy,omitempty"`
+	Resources       v1.ResourceRequirements `json:"resources,omitempty"`
+	Tolerations     []v1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector    map[string]string       `json:"nodeSelector,omitempty"`
 }
 
 type Jolokia struct {

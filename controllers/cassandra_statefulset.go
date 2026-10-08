@@ -219,8 +219,8 @@ func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, res
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			},
 			RevisionHistoryLimit: ptr.To[int32](10),
-			// Retain/Retain (also the API server's default, set explicitly so desiredSts matches what's
-			// read back). The StatefulSet controller never deletes Cassandra PVCs: WhenScaled: Delete
+			// Retain/Retain (the API server's default, set explicitly so desiredSts matches what's read back;
+			// leaving it nil caused a spurious diff on every reconcile). The StatefulSet controller never deletes Cassandra PVCs: WhenScaled: Delete
 			// would fire on any scale-down, including a manual `kubectl scale` or one that skipped
 			// decommission, and lose that node's data. The operator deletes a scaled-away pod's PVCs
 			// itself, and only once it has confirmed the node left the ring (cassandra_pvc_cleanup.go).

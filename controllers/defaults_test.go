@@ -19,6 +19,7 @@ func TestDefaultingFunction(t *testing.T) {
 			DefaultJolokiaImage:   "jolokia/image",
 			DefaultCassandraImage: "cassandra/image",
 			DefaultReaperImage:    "reaper/image",
+			DefaultUIImage:        "ui/image",
 		},
 	}
 
@@ -51,6 +52,11 @@ func TestDefaultingFunction(t *testing.T) {
 	g.Expect(cc.Spec.Reaper.ServiceMonitor.Namespace).To(BeEmpty())
 	g.Expect(cc.Spec.Reaper.ServiceMonitor.Labels).To(BeEmpty())
 	g.Expect(cc.Spec.Reaper.ServiceMonitor.ScrapeInterval).To(BeEmpty())
+	// UI is disabled by default, so defaultUI must leave it untouched rather than always defaulting
+	// its image like the always-on components above.
+	g.Expect(cc.Spec.UI.Enabled).To(BeFalse())
+	g.Expect(cc.Spec.UI.Image).To(BeEmpty())
+	g.Expect(cc.Spec.UI.ImagePullPolicy).To(BeEmpty())
 	g.Expect(cc.Spec.Maintenance).To(BeNil())
 	g.Expect(cc.Status.MaintenanceState).To(BeNil())
 	g.Expect(cc.Spec.Encryption.Server.InternodeEncryption).To(Equal(v1alpha1.InternodeEncryptionNone))
@@ -166,9 +172,14 @@ func TestDefaultingFunction(t *testing.T) {
 				},
 			},
 			TopologySpreadByZone: proto.Bool(false),
+			UI: v1alpha1.UI{
+				Enabled: true,
+			},
 		},
 	}
 	reconciler.defaultCassandraCluster(cc)
+	g.Expect(cc.Spec.UI.Image).To(Equal("ui/image"))
+	g.Expect(cc.Spec.UI.ImagePullPolicy).To(Equal(v1.PullIfNotPresent))
 	g.Expect(cc.Spec.DCs[0].Tolerations).To(BeNil())
 	g.Expect(cc.Spec.DCs[0].Affinity).To(BeNil())
 	g.Expect(cc.Spec.SystemKeyspaces.DCs).To(BeNil())

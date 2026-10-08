@@ -13,8 +13,8 @@ var (
 		Help: "Total number of requests",
 	}, []string{"path", "status"})
 	responseTimeMillis = promauto.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_response_time_milliseconds",
-		Help: "Duration of HTTP requests in milliseconds",
+		Name:       "http_response_time_milliseconds",
+		Help:       "Duration of HTTP requests in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 	}, []string{"path"})
 )

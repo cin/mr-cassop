@@ -43,6 +43,7 @@ This way we have traceability (including `Resolves`) and can discuss the issue i
 - Improvements -> *
 * Add `Resolves #issue_number`.
 * Document release steps if the upgrade requires user interaction.
+* Follow the Go review rules in [REVIEW.md](REVIEW.md). Functions over 20 lines need a justified exception.
 
 Every PR MUST be reviewed by at least two maintainers before it can get merged.
 
