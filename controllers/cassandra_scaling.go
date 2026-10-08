@@ -66,8 +66,10 @@ func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Conte
 
 		if oldReplicas < newReplicas { // scale up
 			if podName, blocked := scaleUpBlockedByPVC(sts.Name, oldReplicas, newReplicas, pendingPVCPods); blocked {
-				r.Log.Infof("waiting for the decommissioned PVCs of %s to be deleted before scaling up", podName)
-				return true, nil
+				msg := fmt.Sprintf("Waiting for the decommissioned PVCs of pod %s to be deleted before scaling up", podName)
+				r.Events.Normal(cc, events.EventScaleUpWaitingForPVCs, msg)
+				r.Log.Info(msg)
+				continue
 			}
 			sts.Spec.Replicas = &newReplicas
 			err = r.Update(ctx, &sts)
