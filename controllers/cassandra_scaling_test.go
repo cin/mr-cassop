@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
@@ -12,13 +13,17 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/events"
 	"github.com/cin/mr-cassop/controllers/jobs"
+	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/mocks"
 	"github.com/cin/mr-cassop/controllers/nodectl"
+	"github.com/cin/mr-cassop/controllers/util"
 )
 
 // TestHandlePodDecommission_UnscheduledPod covers the scale-down deadlock from
@@ -131,4 +136,53 @@ func TestPodDecommissioned(t *testing.T) {
 			asserts.Expect(got).To(Equal(tt.want))
 		})
 	}
+}
+
+// A scale-up that has to wait for a decommissioned PVC to be deleted must only hold back its own
+// StatefulSet: the other DCs still scale in the same pass.
+func TestReconcileCassandraScaling_BlockedScaleUpDoesNotBlockOtherDCs(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+
+	cc := &v1alpha1.CassandraCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: v1alpha1.CassandraClusterSpec{DCs: []v1alpha1.DC{
+			{Name: "dc1", Replicas: proto.Int(3)},
+			{Name: "dc2", Replicas: proto.Int(3)},
+		}},
+	}
+	newSts := func(dc string) *appsv1.StatefulSet {
+		return &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-cassandra-" + dc,
+				Namespace: "default",
+				Labels:    util.MergeMap(map[string]string{v1alpha1.CassandraClusterDC: dc}, labels.Cassandra(cc)),
+			},
+			Spec: appsv1.StatefulSetSpec{Replicas: proto.Int32(2)},
+		}
+	}
+	// dc1-2 was decommissioned and its PVC is still being deleted (deletion timestamp set)
+	pendingPVC := testPVC("data-test-cluster-cassandra-dc1-2", map[string]string{decommissionedPVCAnnotation: "test-cluster-cassandra-dc1-2"})
+	pendingPVC.Finalizers = []string{"kubernetes.io/pvc-protection"}
+	pendingPVC.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+
+	tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(newSts("dc1"), newSts("dc2"), pendingPVC).Build()
+	recorder := record.NewFakeRecorder(10)
+	reconciler := &CassandraClusterReconciler{
+		Client: tClient,
+		Scheme: baseScheme,
+		Log:    zap.NewNop().Sugar(),
+		Events: events.NewEventRecorder(recorder),
+	}
+
+	_, err := reconciler.reconcileCassandraScaling(context.Background(), cc, &v1.PodList{}, &v1.NodeList{}, cc.Spec.DCs, nil)
+	asserts.Expect(err).To(Succeed())
+
+	replicas := func(dc string) int32 {
+		sts := &appsv1.StatefulSet{}
+		asserts.Expect(tClient.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: "test-cluster-cassandra-" + dc}, sts)).To(Succeed())
+		return *sts.Spec.Replicas
+	}
+	asserts.Expect(replicas("dc1")).To(BeEquivalentTo(2), "dc1 must wait for its PVC to be deleted")
+	asserts.Expect(replicas("dc2")).To(BeEquivalentTo(3), "dc2 must not be held back by dc1")
+	asserts.Expect(recorder.Events).To(Receive(ContainSubstring(events.EventScaleUpWaitingForPVCs)))
 }
