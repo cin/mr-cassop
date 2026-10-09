@@ -27,11 +27,12 @@ const (
 	EventStorageCredentialsSecretInvalid  = "StorageCredentialsSecretInvalid"
 	EventUIImageMissing                   = "UIImageMissing"
 
-	EventAdminRoleChanged = "AdminRoleChanged"
-	EventRegionInit       = "RegionInit"
-	EventDCInit           = "DCInit"
-	EventCQLScriptSuccess = "CQLScriptSuccess"
-	EventCQLScriptFailed  = "CQLScriptFailed"
+	EventScaleUpWaitingForPVCs = "ScaleUpWaitingForPVCs"
+	EventAdminRoleChanged      = "AdminRoleChanged"
+	EventRegionInit            = "RegionInit"
+	EventDCInit                = "DCInit"
+	EventCQLScriptSuccess      = "CQLScriptSuccess"
+	EventCQLScriptFailed       = "CQLScriptFailed"
 )
 
 // EventReason is the reason why the event was created. The value appears in the 'Reason' tab of the events list

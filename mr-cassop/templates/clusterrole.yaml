@@ -44,11 +44,22 @@ rules:
   resources:
   - namespaces
   - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - persistentvolumeclaims
   verbs:
   - get
   - list
   - watch
+  # patch/delete: the operator deletes a Cassandra pod's PVCs once it has confirmed the node
+  # left the ring (see controllers/cassandra_pvc_cleanup.go)
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:
