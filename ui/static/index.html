@@ -299,13 +299,22 @@
     overflow-y: auto;
   }
   .list-dc-label {
-    padding: 6px 14px 4px;
-    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 7px 14px;
+    margin-top: 4px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--muted);
+    color: var(--text);
+    background: rgba(255,255,255,0.05);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
   }
+  .list-dc-label:first-child { margin-top: 0; }
   .ks-header {
     display: flex;
     align-items: center;
@@ -354,9 +363,11 @@
     cursor: pointer;
     font-size: 12px;
   }
+  /* nodes sit under their DC heading: indented past the heading's checkbox, with a guide line */
+  .list-node { margin-left: 20px; padding-left: 14px; border-left: 1px solid var(--border); }
   .list-row:hover { background: rgba(255,255,255,0.03); }
   .list-row.active { background: rgba(91, 141, 239, 0.15); }
-  .list-checkbox { cursor: pointer; accent-color: var(--accent); }
+  .list-checkbox, .list-dc-checkbox { cursor: pointer; accent-color: var(--accent); }
   .list-ip {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     flex: 1;
@@ -889,6 +900,7 @@ let TOOLS = [
 // filter", not "put me in a category named all".
 let selectedToolCategory = 'all';
 let lastNodeListRows = []; // last renderNodeList() input, so the category select's change handler can re-render without a fresh /nodes fetch
+let nodeListGroups = []; // per DC / unknown group in the node list: the nodeKeys it contains
 
 function visibleTools() {
   if (selectedToolCategory === 'all') return TOOLS;
@@ -1450,13 +1462,19 @@ function renderNodeList(rows) {
   for (const row of rows) (byDc[row.dc] = byDc[row.dc] || []).push(row);
   const dcNames = Object.keys(byDc).sort();
 
+  nodeListGroups = dcNames.map(dc => byDc[dc].map(nodeKey));
+
   let rowsHtml = '';
-  for (const dc of dcNames) {
-    rowsHtml += `<div class="list-dc-label">${dc}</div>`;
+  for (const [groupIdx, dc] of dcNames.entries()) {
+    rowsHtml += `
+      <label class="list-dc-label">
+        <input type="checkbox" class="list-dc-checkbox" data-group="${groupIdx}" title="Select every node in ${dc}">
+        <span>${dc}</span>
+      </label>`;
     for (const row of [...byDc[dc]].sort((a, b) => a.ip.localeCompare(b.ip))) {
       const key = nodeKey(row);
       rowsHtml += `
-        <label class="list-row${key === selectedNodeKey ? ' active' : ''}" data-key="${key}">
+        <label class="list-row list-node${key === selectedNodeKey ? ' active' : ''}" data-key="${key}">
           <input type="checkbox" class="list-checkbox" data-key="${key}" ${multiSelected.has(key) ? 'checked' : ''}>
           <span class="dot ${statusClass(row)}"></span>
           <span class="list-ip">${row.ip}</span>
@@ -1559,8 +1577,31 @@ function renderNodeList(rows) {
       openSetSettings(targets);
     });
   }
+  nodeListPanelEl.querySelectorAll('.list-dc-checkbox').forEach(cb => {
+    cb.addEventListener('click', () => setGroupSelected(Number(cb.dataset.group), cb.checked));
+  });
+
   document.getElementById('listClearBtn').addEventListener('click', deselectAll);
   document.getElementById('listSelectAllBtn').addEventListener('click', () => selectAll(rows));
+  syncSelectionVisuals();
+}
+
+function setGroupSelected(groupIdx, selected) {
+  for (const key of nodeListGroups[groupIdx] || []) {
+    if (selected) multiSelected.add(key);
+    else multiSelected.delete(key);
+  }
+  syncSelectionVisuals();
+}
+
+// A group's checkbox is checked when all of its nodes are selected, and indeterminate when only some are.
+function syncGroupCheckboxes() {
+  document.querySelectorAll('.list-dc-checkbox').forEach(cb => {
+    const keys = nodeListGroups[Number(cb.dataset.group)] || [];
+    const selected = keys.filter(k => multiSelected.has(k)).length;
+    cb.checked = keys.length > 0 && selected === keys.length;
+    cb.indeterminate = selected > 0 && selected < keys.length;
+  });
 }
 
 function selectAll(rows) {
@@ -1599,6 +1640,7 @@ function syncSelectionVisuals() {
     const cb = rowEl.querySelector('.list-checkbox');
     if (cb) cb.checked = multiSelected.has(key);
   });
+  syncGroupCheckboxes();
 }
 
 // Targets for the side list's tool buttons (no "node under cursor" like the
