@@ -84,6 +84,27 @@ func cassandraResponse(endpoints map[string]string) jolokia.CassandraNodeState {
 	return cassResp
 }
 
+// leftNodesResponse is one live node plus two peers gossip reports as LEFT: one the way a node
+// reports a peer (STATUS_WITH_PORT only) and one with the legacy STATUS.
+func leftNodesResponse() jolokia.CassandraNodeState {
+	resp := cassandraResponse(map[string]string{"10.12.13.43": "UP"})
+	resp.SimpleStates["/10.12.13.46"] = "DOWN"
+	resp.SimpleStates["/10.12.13.47"] = "DOWN"
+	resp.AllEndpointStates["/10.12.13.46"] = jolokia.EndpointState{DC: "dc1", Status_With_Port: "LEFT,-1041975228702506363,1791764308170"}
+	resp.AllEndpointStates["/10.12.13.47"] = jolokia.EndpointState{DC: "dc1", Status: "removed,6731e175,1791763657601"}
+	return resp
+}
+
+func TestEndpointLeft(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	asserts.Expect(endpointLeft(jolokia.EndpointState{Status_With_Port: "LEFT,-1041975228702506363,1791764308170"})).To(gomega.BeTrue())
+	asserts.Expect(endpointLeft(jolokia.EndpointState{Status: "left,-1,2"})).To(gomega.BeTrue())
+	asserts.Expect(endpointLeft(jolokia.EndpointState{Status: "removed,abc,2"})).To(gomega.BeTrue())
+	for _, live := range []string{"", "NORMAL,-1591302511779084373", "LEAVING,-1", "BOOT,-1", "shutdown,true"} {
+		asserts.Expect(endpointLeft(jolokia.EndpointState{Status: live, Status_With_Port: live})).To(gomega.BeFalse(), live)
+	}
+}
+
 func TestUpdateNodeStates(t *testing.T) {
 	asserts := gomega.NewWithT(t)
 	successJMXResponse := jolokia.Response{
@@ -172,6 +193,30 @@ func TestUpdateNodeStates(t *testing.T) {
 						"10.12.13.45": "UP",
 						"10.12.13.46": "UP",
 					}),
+				},
+			},
+		},
+		{
+			name: "nodes that left the ring are not discovered",
+			initialState: state{
+				nodes:  map[string]nodeState{"/10.12.13.43": {}},
+				podIPs: map[string]string{"/10.12.13.43": "172.143.32.1"},
+				dcs:    []dc{{Name: "dc1", Replicas: 1}},
+			},
+			expectedState: state{
+				podIPs: map[string]string{"/10.12.13.43": "172.143.32.1"},
+				nodes: map[string]nodeState{
+					"/10.12.13.43": {
+						SimpleStates:  map[string]string{"/10.12.13.43": "UP", "/10.12.13.46": "DOWN", "/10.12.13.47": "DOWN"},
+						EndpointState: endpointState("10.12.13.43", "UP"),
+					},
+				},
+				dcs: []dc{{Name: "dc1", Replicas: 1}},
+			},
+			nodeStates: map[string]jolokia.CassandraResponse{
+				"172.143.32.1": {
+					Response: successJMXResponse,
+					Value:    leftNodesResponse(),
 				},
 			},
 		},
