@@ -92,8 +92,10 @@ func (p *Prober) updateNodesRequest() {
 			newNodeState.EndpointState.OwnedTokens = ownedTokens(cassandraNodeState.TokenToEndpointMap, polledIP)
 			// lookup new nodes from node's peers (`.AllEndpointsStates`)
 			for ip, endpointState := range cassandraNodeState.AllEndpointStates {
-				// if the peer node is not in the list of discovered DCs and it belongs to the DC owned by prober
-				if _, polledNode := newNodeStates[ip]; !polledNode && p.ownedDC(endpointState.DC) {
+				// if the peer node is not in the list of discovered DCs and it belongs to the DC owned by prober.
+				// Nodes that left the ring stay in gossip (with their DC) for days; they're not pollable
+				// and would otherwise be discovered and dropped again on every poll.
+				if _, polledNode := newNodeStates[ip]; !polledNode && p.ownedDC(endpointState.DC) && !endpointLeft(endpointState) {
 					if _, knownNode := p.state.nodes[ip]; !knownNode {
 						p.log.Infow("new node found", "ip", ip, "dc", endpointState.DC)
 					}
@@ -173,6 +175,19 @@ func ownedTokens(tokenToEndpoint map[string]string, broadcastIP string) []string
 		return a < b
 	})
 	return tokens
+}
+
+// endpointLeft reports whether gossip says the node left the ring (decommissioned or removed).
+// Peers only carry STATUS_WITH_PORT for other endpoints, while the node's own entry carries STATUS,
+// so both are checked. Values look like "LEFT,<token>,<expire time>".
+func endpointLeft(e jolokia.EndpointState) bool {
+	for _, status := range []string{e.Status, e.Status_With_Port} {
+		status = strings.ToUpper(status)
+		if strings.HasPrefix(status, "LEFT") || strings.HasPrefix(status, "REMOVED") {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Prober) ownedDC(dc string) bool {
