@@ -105,11 +105,12 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 // that can drop `system_auth` below LOCAL_QUORUM on every node at once, deadlocking the DC (#155).
 // OrderedReady caps updates to one pod at a time - but it's immutable on an existing statefulset,
 // so switching to it requires deleting the object and recreating it with the same spec except
-// that one field. Deleting a statefulset normally cascades to delete the pods it owns, so this
-// first strips its controller ownerReference from each of them (see orphanStatefulSetPods) and
-// then deletes it with orphan propagation (see deleteStatefulSetKeepingPods). Stripping the
-// ownerReferences alone is not enough: a plain Delete replaced every pod of the DC on Kubernetes
-// 1.37 even with the references stripped and the new object created seconds later.
+// that one field. Deleting a statefulset normally cascades to delete the pods it owns, so it is
+// deleted with orphan propagation and the pods' ownerReferences are stripped (see
+// deleteStatefulSetKeepingPods). The order matters: while the statefulset is not yet being
+// deleted, its controller re-adopts any pod whose ownerReference was stripped, and the garbage
+// collector then deletes that pod as a dependent of the missing owner. This replaced a pod of the
+// DC on Kubernetes 1.37 whenever the strip and the delete raced.
 func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, sts *appsv1.StatefulSet) error {
 	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		return nil // already migrated
@@ -122,10 +123,6 @@ func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, 
 	r.Log.Infof("DC %q of cluster %q is fully ready for the first time; migrating its statefulset "+
 		"from Parallel to OrderedReady pod management so future updates replace one pod at a time "+
 		"instead of all at once", dc.Name, cc.Name)
-
-	if err := r.orphanStatefulSetPods(ctx, sts); err != nil {
-		return errors.Wrap(err, "failed to detach statefulset's pods ahead of OrderedReady migration")
-	}
 
 	recreated := sts.DeepCopy()
 	recreated.ResourceVersion = ""
@@ -161,7 +158,8 @@ func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, 
 // merge patch scoped to just that field so it can't conflict with kubelet's own frequent status
 // updates to the same pods. The pods are left running completely untouched - only their metadata
 // changes - and get adopted back (via label selector match, not ownerReference) by the
-// recreated statefulset moments later once migrateToOrderedReady creates it.
+// recreated statefulset moments later once migrateToOrderedReady creates it. sts must already be
+// being deleted: otherwise its controller adopts the pods straight back.
 func (r *CassandraClusterReconciler) orphanStatefulSetPods(ctx context.Context, sts *appsv1.StatefulSet) error {
 	pods := &v1.PodList{}
 	if err := r.List(ctx, pods, client.InNamespace(sts.Namespace), client.MatchingLabels(sts.Spec.Selector.MatchLabels)); err != nil {
@@ -170,12 +168,7 @@ func (r *CassandraClusterReconciler) orphanStatefulSetPods(ctx context.Context, 
 
 	for i := range pods.Items {
 		pod := &pods.Items[i]
-		remaining := make([]metav1.OwnerReference, 0, len(pod.OwnerReferences))
-		for _, ref := range pod.OwnerReferences {
-			if ref.UID != sts.UID {
-				remaining = append(remaining, ref)
-			}
-		}
+		remaining := ownerReferencesWithout(pod.OwnerReferences, sts.UID)
 		if len(remaining) == len(pod.OwnerReferences) {
 			continue // not owned by sts - nothing to strip
 		}
@@ -190,14 +183,30 @@ func (r *CassandraClusterReconciler) orphanStatefulSetPods(ctx context.Context, 
 	return nil
 }
 
+func ownerReferencesWithout(refs []metav1.OwnerReference, uid types.UID) []metav1.OwnerReference {
+	remaining := make([]metav1.OwnerReference, 0, len(refs))
+	for _, ref := range refs {
+		if ref.UID != uid {
+			remaining = append(remaining, ref)
+		}
+	}
+	return remaining
+}
+
 // deleteStatefulSetKeepingPods deletes sts with orphan propagation so its pods are left running,
 // then waits for the object to be gone so the caller can recreate it under the same name.
-// The API server holds the object behind an "orphan" finalizer until the garbage collector has
-// detached its dependents. orphanStatefulSetPods already did that, so the finalizer is released
-// here rather than waiting on the garbage collector (which envtest doesn't run at all).
+// The delete comes first: once sts has a deletionTimestamp its controller can no longer adopt
+// pods, so the ownerReferences stripped next stay stripped. The API server holds the object
+// behind an "orphan" finalizer until the garbage collector has detached its dependents.
+// orphanStatefulSetPods already did that, so the finalizer is released here rather than waiting
+// on the garbage collector (which envtest doesn't run at all).
 func (r *CassandraClusterReconciler) deleteStatefulSetKeepingPods(ctx context.Context, sts *appsv1.StatefulSet) error {
 	if err := r.Delete(ctx, sts, client.PropagationPolicy(metav1.DeletePropagationOrphan)); client.IgnoreNotFound(err) != nil {
 		return err
+	}
+
+	if err := r.orphanStatefulSetPods(ctx, sts); err != nil {
+		return errors.Wrap(err, "failed to detach statefulset's pods ahead of OrderedReady migration")
 	}
 
 	key := client.ObjectKeyFromObject(sts)
