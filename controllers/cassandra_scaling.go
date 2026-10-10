@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 var errDCDecommissionBlocked = errors.New("DC decommission blocked")
@@ -205,12 +206,7 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 	}
 
 	if len(decommissionPod.Status.PodIP) == 0 {
-		// the pod never got scheduled/joined the ring (e.g. leftover from a scale-up that
-		// exceeded cluster capacity) - there's nothing to decommission, just scale it away.
-		r.Log.Infof("pod %s/%s never joined the cluster (no IP assigned), scaling down the statefulset without decommissioning",
-			decommissionPod.Namespace, decommissionPod.Name)
-		*sts.Spec.Replicas = *sts.Spec.Replicas - 1
-		return r.Update(ctx, &sts)
+		return r.handlePodWithoutIP(ctx, cc, sts, decommissionPod)
 	}
 
 	adminSecret, err := r.adminRoleSecret(ctx, cc)
@@ -282,6 +278,47 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// handlePodWithoutIP scales away a pod that has no IP, unless it's recorded in the pod IPs configmap.
+// An unrecorded pod never went Ready, so it never joined the ring (e.g. leftover from a scale-up
+// that exceeded cluster capacity) and there's nothing to decommission. A recorded pod joined and
+// only lost its IP because it can't run right now (e.g. its Kubernetes node died); scaling it away
+// would leave the node in the ring as down, owning tokens, until someone runs nodetool removenode.
+func (r *CassandraClusterReconciler) handlePodWithoutIP(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, pod *v1.Pod) error {
+	joined, err := r.podRecordedAsJoined(ctx, cc, pod.Name)
+	if err != nil {
+		return err
+	}
+
+	if joined {
+		msg := fmt.Sprintf("Pod %s has no IP but was part of the ring before, so it's not scaled away without being decommissioned. "+
+			"Bring the pod back, or remove its node from the ring by hand (nodetool removenode) if it's gone for good", pod.Name)
+		r.Events.Warning(cc, events.EventScaleDownWaitingForNode, msg)
+		return errors.Errorf("pod %s has no IP but joined the ring earlier; waiting before scaling down", pod.Name)
+	}
+
+	r.Log.Infof("pod %s/%s never joined the cluster (no IP assigned), scaling down the statefulset without decommissioning",
+		pod.Namespace, pod.Name)
+	*sts.Spec.Replicas = *sts.Spec.Replicas - 1
+	return r.Update(ctx, &sts)
+}
+
+// podRecordedAsJoined reports whether the pod IPs configmap has an entry for the pod. The operator
+// records a pod's IP the first time it goes Ready, and prober only reports a node Ready once its
+// gossip status is NORMAL, so an entry means the node joined the ring.
+func (r *CassandraClusterReconciler) podRecordedAsJoined(ctx context.Context, cc *dbv1alpha1.CassandraCluster, podName string) (bool, error) {
+	podIPsCM := &v1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: names.PodIPsConfigMap(cc.Name), Namespace: cc.Namespace}, podIPsCM)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "can't get pod IPs configmap")
+	}
+
+	_, recorded := podIPsCM.Data[podName]
+	return recorded, nil
 }
 
 func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pods []v1.Pod, decommissionPod v1.Pod, broadcastAddresses map[string]string) (bool, error) {
