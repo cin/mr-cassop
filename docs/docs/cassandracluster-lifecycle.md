@@ -67,6 +67,20 @@ Once decommissioned, the statefulset replicas parameter is decreased and the pod
 
 The process is repeated if needed. Only one DC at a time is scaled down.
 
+Only a node in the `NORMAL` operation mode gets a decommission started. A node in a transient mode (`LEAVING`, `JOINING`, `MOVING`, `DRAINING`...) is waited on.
+
+#### A failed decommission
+
+If Cassandra refuses or fails the decommission, the node ends up in `DECOMMISSION_FAILED`. It stays in the ring and keeps serving, and the pod stays Ready.
+The operator emits a `DecommissionFailed` warning event with Cassandra's error and does not retry on its own, since the cause doesn't go away by itself.
+The usual cause is a keyspace whose replication factor in the DC is not lower than the DC's node count.
+The operator never changes replication factors. To recover:
+
+1. Lower the replication factor of the keyspaces named in the error (`ALTER KEYSPACE ... WITH replication = ...`).
+2. Run `nodetool decommission` on the pod, or restart the pod to clear `DECOMMISSION_FAILED` and let the operator start the scale-down again.
+
+Raising the DC's replicas back doesn't clear the state. A node in `JOINING_FAILED` is reported with a `NodeJoiningFailed` event; restart the pod to retry the join.
+
 #### Removing a DC
 
 DC removal follows the same decommission process as above except it's for all nodes. 

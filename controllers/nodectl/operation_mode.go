@@ -20,7 +20,7 @@ const (
 	NodeOperationModeMoving         OperationMode = "MOVING"
 	NodeOperationModeDraining       OperationMode = "DRAINING"
 	NodeOperationModeDrained        OperationMode = "DRAINED"
-	// DECOMMISSION_FAILED and JOINING_FAILED are in Cassandra's StorageService.Mode since 4.1
+	// DECOMMISSION_FAILED and JOINING_FAILED are in Cassandra 5.0's StorageService.Mode; a decommission refused by the replication factor check leaves the node in DECOMMISSION_FAILED (seen on 5.0.9)
 	NodeOperationModeDecommissionFailed OperationMode = "DECOMMISSION_FAILED"
 	NodeOperationModeJoiningFailed      OperationMode = "JOINING_FAILED"
 )

@@ -243,14 +243,13 @@ func (r *CassandraClusterReconciler) handleDecommissionOpMode(ctx context.Contex
 	case nodectl.NodeOperationModeDecommissioned:
 		return r.scaleDownIfDecommissioned(ctx, cc, sts, nctl, pod, podList, broadcastAddresses, errors.Errorf("node %s is DECOMMISSIONED", pod.Name))
 	case nodectl.NodeOperationModeDecommissionFailed:
-		msg := fmt.Sprintf("Decommission of node %s failed and the node is in DECOMMISSION_FAILED. It's not retried automatically. "+
-			"A common cause is a keyspace whose replication factor in the DC is higher than the number of remaining nodes. "+
-			"Restore the DC's replicas, or fix the cause and run `nodetool decommission` on the pod", pod.Name)
-		r.Events.Warning(cc, events.EventDecommissionFailed, msg)
+		r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Node %s is in DECOMMISSION_FAILED after a refused or failed decommission, and it's not retried automatically. "+
+			"The node is still in the ring and serving. The most common cause is a keyspace whose replication factor in the DC is not lower than its node count (see the "+
+			"earlier DecommissionFailed event for Cassandra's message). The operator never changes replication factors: lower them yourself, then run "+
+			"`nodetool decommission` on the pod, or restart the pod to clear the state and let the scale-down start again. Raising the DC's replicas does not clear it", pod.Name))
 		return errors.Errorf("node %s is in DECOMMISSION_FAILED; waiting before scaling down", pod.Name)
 	case nodectl.NodeOperationModeJoiningFailed:
-		msg := fmt.Sprintf("Node %s failed to join the ring (JOINING_FAILED), so it can't be decommissioned. Restart the pod to retry the join", pod.Name)
-		r.Events.Warning(cc, events.EventNodeJoiningFailed, msg)
+		r.warnWithEvent(cc, events.EventNodeJoiningFailed, fmt.Sprintf("Node %s failed to join the ring (JOINING_FAILED), so it can't be decommissioned. Restart the pod to retry the join", pod.Name))
 		return errors.Errorf("node %s is in JOINING_FAILED; waiting before scaling down", pod.Name)
 	default: // LEAVING, or a transient mode (STARTING, JOINING, MOVING, DRAINING, DRAINED)
 		r.Log.Infof("node %s/%s is in operation mode %s, waiting before decommissioning it", pod.Namespace, pod.Name, opMode)
@@ -287,6 +286,12 @@ func (r *CassandraClusterReconciler) scaleDownIfDecommissioned(ctx context.Conte
 	return nil
 }
 
+// warnWithEvent logs msg and emits it as a warning event, so it's visible both in the operator logs and in `kubectl describe`.
+func (r *CassandraClusterReconciler) warnWithEvent(cc *dbv1alpha1.CassandraCluster, reason events.EventReason, msg string) {
+	r.Log.Warn(msg)
+	r.Events.Warning(cc, reason, msg)
+}
+
 func (r *CassandraClusterReconciler) startDecommission(cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pod *v1.Pod, broadcastIP string) error {
 	r.Log.Infof("starting decommision of node %s/%s", pod.Namespace, pod.Name)
 	err := r.Jobs.Run("pod-decommission-"+pod.Name, cc, func() error {
@@ -294,7 +299,7 @@ func (r *CassandraClusterReconciler) startDecommission(cc *dbv1alpha1.CassandraC
 		decommissionErr := nctl.Decommission(decommissionCtx, broadcastIP)
 		if decommissionErr != nil {
 			r.Log.Errorf("failed to decommission pod, error: %s", decommissionErr.Error())
-			r.Events.Warning(cc, events.EventDecommissionFailed, fmt.Sprintf("Decommission of node %s failed: %s", pod.Name, decommissionErr.Error()))
+			r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Decommission of node %s failed: %s", pod.Name, decommissionErr.Error()))
 			return decommissionErr
 		}
 
