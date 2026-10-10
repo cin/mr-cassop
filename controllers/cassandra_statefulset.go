@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/compare"
@@ -17,6 +18,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -104,13 +106,10 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 // OrderedReady caps updates to one pod at a time - but it's immutable on an existing statefulset,
 // so switching to it requires deleting the object and recreating it with the same spec except
 // that one field. Deleting a statefulset normally cascades to delete the pods it owns, so this
-// first strips its controller ownerReference from each of them (see orphanStatefulSetPods) -
-// deliberately not `client.PropagationPolicy(metav1.DeletePropagationOrphan)`, since that instead
-// relies on the garbage collector controller to strip those same ownerReferences asynchronously,
-// which envtest doesn't run at all and even a real cluster's GC controller does on its own
-// schedule - either way leaving the statefulset's name stuck "object is being deleted" for a
-// window in which the recreate below would fail. Stripping ownerReferences synchronously here
-// means nothing is left for any deletion to cascade to, so a plain Delete is immediate and safe.
+// first strips its controller ownerReference from each of them (see orphanStatefulSetPods) and
+// then deletes it with orphan propagation (see deleteStatefulSetKeepingPods). Stripping the
+// ownerReferences alone is not enough: a plain Delete replaced every pod of the DC on Kubernetes
+// 1.37 even with the references stripped and the new object created seconds later.
 func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, sts *appsv1.StatefulSet) error {
 	if sts.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 		return nil // already migrated
@@ -134,7 +133,7 @@ func (r *CassandraClusterReconciler) migrateToOrderedReady(ctx context.Context, 
 	recreated.CreationTimestamp = metav1.Time{}
 	recreated.Spec.PodManagementPolicy = appsv1.OrderedReadyPodManagement
 
-	if err := r.Delete(ctx, sts); err != nil {
+	if err := r.deleteStatefulSetKeepingPods(ctx, sts); err != nil {
 		return errors.Wrap(err, "failed to delete statefulset for OrderedReady migration")
 	}
 
@@ -189,6 +188,29 @@ func (r *CassandraClusterReconciler) orphanStatefulSetPods(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// deleteStatefulSetKeepingPods deletes sts with orphan propagation so its pods are left running,
+// then waits for the object to be gone so the caller can recreate it under the same name.
+// The API server holds the object behind an "orphan" finalizer until the garbage collector has
+// detached its dependents. orphanStatefulSetPods already did that, so the finalizer is released
+// here rather than waiting on the garbage collector (which envtest doesn't run at all).
+func (r *CassandraClusterReconciler) deleteStatefulSetKeepingPods(ctx context.Context, sts *appsv1.StatefulSet) error {
+	if err := r.Delete(ctx, sts, client.PropagationPolicy(metav1.DeletePropagationOrphan)); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+
+	key := client.ObjectKeyFromObject(sts)
+	return wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		current := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, key, current); err != nil {
+			return apierrors.IsNotFound(err), client.IgnoreNotFound(err)
+		}
+		if controllerutil.RemoveFinalizer(current, metav1.FinalizerOrphanDependents) {
+			return false, client.IgnoreNotFound(r.Update(ctx, current))
+		}
+		return false, nil
+	})
 }
 
 func cassandraStatefulSet(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, restartChecksum checksumContainer, clientTLSSecret *v1.Secret) *appsv1.StatefulSet {
