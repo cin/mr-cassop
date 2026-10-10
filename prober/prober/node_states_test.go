@@ -428,3 +428,82 @@ func TestUpdateNodeStates(t *testing.T) {
 		asserts.Expect(testProber.state).To(gomega.Equal(testCase.expectedState), cmp.Diff(testCase.expectedState, testProber.state, cmp.Options{cmp.AllowUnexported(state{})}))
 	}
 }
+
+func TestIsNodeReady(t *testing.T) {
+	asserts := gomega.NewWithT(t)
+	const joining, peer = "/10.12.13.44", "/10.12.13.43"
+
+	tests := []struct {
+		name        string
+		joiningNode nodeState
+		ready       bool
+	}{
+		{
+			name: "NORMAL node seen as up by peers",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "NORMAL"},
+			},
+			ready: true,
+		},
+		{
+			name: "joining node is gossip-UP but not NORMAL",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "BOOT"},
+			},
+			ready: false,
+		},
+		{
+			name: "decommissioning node is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "LEAVING"},
+			},
+			ready: false,
+		},
+		{
+			name: "moving node is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "MOVING"},
+			},
+			ready: false,
+		},
+		{
+			name: "node that left the ring is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "LEFT"},
+			},
+			ready: false,
+		},
+		{
+			// what a joining node actually reports on Cassandra 5.0: peers see it UP but its own STATUS is empty
+			name: "joining node with empty own status",
+			joiningNode: nodeState{
+				SimpleStates: map[string]string{joining: "UP", peer: "UP"},
+			},
+			ready: false,
+		},
+		{
+			name:        "node not polled yet has no status",
+			joiningNode: nodeState{},
+			ready:       false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			p := &Prober{log: zap.NewNop().Sugar(), state: state{nodes: map[string]nodeState{
+				peer: {
+					SimpleStates:  map[string]string{peer: "UP", joining: "UP"},
+					EndpointState: jolokia.EndpointState{Status: "NORMAL"},
+				},
+				joining: test.joiningNode,
+			}}}
+			ready, _ := p.isNodeReady(joining)
+			asserts.Expect(ready).To(gomega.Equal(test.ready))
+		})
+	}
+}

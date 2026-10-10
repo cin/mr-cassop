@@ -29,7 +29,8 @@ func (p *Prober) processReadinessProbe(podIP string, broadcastIP string) (bool, 
 	return p.isNodeReady(broadcastIP)
 }
 
-// isNodeReady checks if all nodes (including the one being checked) see the node as ready
+// isNodeReady checks that the node reports itself as NORMAL and that all NORMAL nodes see it as up.
+// A bootstrapping node is gossip-UP long before it finishes streaming, so peers' view alone isn't enough.
 func (p *Prober) isNodeReady(ip string) (bool, map[string]string) {
 	var peersUnreadyView []string // nodes that see the questioned node as not ready
 	var ignoredPeerNodes []string // nodes that are not ready, so we don't take their view into account
@@ -63,6 +64,11 @@ func (p *Prober) isNodeReady(ip string) (bool, map[string]string) {
 
 	if len(peersUnreadyView) > 0 {
 		p.log.Infof("node %s not seen as ready by %v", ip, peersUnreadyView)
+		return false, nodeClusterView
+	}
+
+	if status := p.state.nodes[ip].Status; strings.ToLower(status) != "normal" {
+		p.log.Infof("node %s is not ready: its own status is %q, not NORMAL", ip, status)
 		return false, nodeClusterView
 	}
 
