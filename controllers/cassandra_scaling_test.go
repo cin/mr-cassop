@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,6 +18,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/events"
@@ -83,6 +86,165 @@ func TestHandlePodDecommission_UnscheduledPod(t *testing.T) {
 	updatedSts := &appsv1.StatefulSet{}
 	asserts.Expect(tClient.Get(context.Background(), client.ObjectKeyFromObject(&sts), updatedSts)).To(Succeed())
 	asserts.Expect(*updatedSts.Spec.Replicas).To(BeEquivalentTo(4))
+}
+
+type decommissionModeFixture struct {
+	reconciler *CassandraClusterReconciler
+	client     client.Client
+	recorder   *record.FakeRecorder
+	nctl       *mocks.MockNodectl
+	cc         *v1alpha1.CassandraCluster
+	sts        appsv1.StatefulSet
+	pods       *v1.PodList
+	podName    string
+}
+
+// newDecommissionModeFixture sets up a dc1 scale-down from 3 to 2 nodes, where dc1-2 reports opMode.
+func newDecommissionModeFixture(t *testing.T, opMode nodectl.OperationMode) *decommissionModeFixture {
+	t.Helper()
+	cc := &v1alpha1.CassandraCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: v1alpha1.CassandraClusterSpec{
+			DCs:                 []v1alpha1.DC{{Name: "dc1", Replicas: proto.Int(2)}},
+			AdminRoleSecretName: "admin-secret",
+		},
+	}
+	adminSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "admin-secret", Namespace: "default"},
+		Data:       map[string][]byte{v1alpha1.CassandraOperatorAdminRole: []byte("admin"), v1alpha1.CassandraOperatorAdminPassword: []byte("pass")},
+	}
+	sts := appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-cassandra-dc1",
+			Namespace: "default",
+			Labels:    map[string]string{v1alpha1.CassandraClusterDC: "dc1"},
+		},
+		Spec: appsv1.StatefulSetSpec{Replicas: proto.Int32(3)},
+	}
+	pods := &v1.PodList{}
+	for i, ip := range []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"} {
+		pods.Items = append(pods.Items, v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-cassandra-dc1-" + strconv.Itoa(i),
+				Namespace: "default",
+				Labels:    map[string]string{v1alpha1.CassandraClusterDC: "dc1"},
+			},
+			Status: v1.PodStatus{PodIP: ip},
+		})
+	}
+
+	nctl := mocks.NewMockNodectl(gomock.NewController(t))
+	nctl.EXPECT().OperationMode(gomock.Any(), "10.0.0.3").Return(opMode, nil)
+	tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(&sts, adminSecret).Build()
+	recorder := record.NewFakeRecorder(10)
+
+	return &decommissionModeFixture{
+		reconciler: &CassandraClusterReconciler{
+			Client:        tClient,
+			Scheme:        baseScheme,
+			Log:           zap.NewNop().Sugar(),
+			Jobs:          jobs.NewJobManager(make(chan event.GenericEvent, 10), zap.NewNop().Sugar()),
+			Events:        events.NewEventRecorder(recorder),
+			NodectlClient: func(string, string, string, *zap.SugaredLogger) nodectl.Nodectl { return nctl },
+		},
+		client: tClient, recorder: recorder, nctl: nctl, cc: cc, sts: sts, pods: pods,
+		podName: "test-cluster-cassandra-dc1-2",
+	}
+}
+
+func (f *decommissionModeFixture) handle() error {
+	broadcast := map[string]string{
+		"test-cluster-cassandra-dc1-0": "10.0.0.1",
+		"test-cluster-cassandra-dc1-1": "10.0.0.2",
+		"test-cluster-cassandra-dc1-2": "10.0.0.3",
+	}
+	return f.reconciler.handlePodDecommission(context.Background(), f.cc, f.sts, broadcast, f.podName, f.pods)
+}
+
+func (f *decommissionModeFixture) replicas(asserts *GomegaWithT) int32 {
+	sts := &appsv1.StatefulSet{}
+	asserts.Expect(f.client.Get(context.Background(), client.ObjectKeyFromObject(&f.sts), sts)).To(Succeed())
+	return *sts.Spec.Replicas
+}
+
+// https://github.com/cin/mr-cassop/issues/197: a node in DECOMMISSION_FAILED or JOINING_FAILED used
+// to fail every reconcile with "unknown operation mode", with nothing telling the user why.
+func TestHandlePodDecommission_FailedModesAreReported(t *testing.T) {
+	tests := []struct {
+		mode  nodectl.OperationMode
+		event string
+	}{
+		{nodectl.NodeOperationModeDecommissionFailed, events.EventDecommissionFailed},
+		{nodectl.NodeOperationModeJoiningFailed, events.EventNodeJoiningFailed},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.mode), func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+			f := newDecommissionModeFixture(t, tt.mode)
+
+			err := f.handle() // no Decommission call is expected on the mock
+			asserts.Expect(err).To(MatchError(ContainSubstring(string(tt.mode))))
+			asserts.Expect(err).ToNot(MatchError(ContainSubstring("unknown operation mode")))
+			asserts.Expect(f.recorder.Events).To(Receive(ContainSubstring(tt.event)))
+			asserts.Expect(f.replicas(asserts)).To(BeEquivalentTo(3))
+		})
+	}
+}
+
+// Only a NORMAL node is decommissioned. Any other mode used to fall through to starting a decommission.
+func TestHandlePodDecommission_TransientModesWait(t *testing.T) {
+	for _, mode := range []nodectl.OperationMode{
+		nodectl.NodeOperationModeLeaving, nodectl.NodeOperationModeStarting, nodectl.NodeOperationModeJoining,
+		nodectl.NodeOperationModeMoving, nodectl.NodeOperationModeDraining, nodectl.NodeOperationModeDrained,
+	} {
+		t.Run(string(mode), func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+			f := newDecommissionModeFixture(t, mode)
+
+			asserts.Expect(f.handle()).To(Succeed()) // no Decommission call is expected on the mock
+			asserts.Expect(f.replicas(asserts)).To(BeEquivalentTo(3))
+			asserts.Expect(f.reconciler.Jobs.Exists("pod-decommission-" + f.podName)).To(BeFalse())
+		})
+	}
+}
+
+func TestHandlePodDecommission_NormalNodeStartsDecommission(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+	f := newDecommissionModeFixture(t, nodectl.NodeOperationModeNormal)
+	decommissioned := make(chan struct{})
+	f.nctl.EXPECT().Decommission(gomock.Any(), "10.0.0.3").DoAndReturn(func(context.Context, string) error {
+		close(decommissioned)
+		return nil
+	})
+
+	asserts.Expect(f.handle()).To(Succeed())
+	asserts.Eventually(decommissioned).Should(BeClosed())
+}
+
+func TestHandlePodDecommission_FailedDecommissionJobIsReported(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+	f := newDecommissionModeFixture(t, nodectl.NodeOperationModeNormal)
+	f.nctl.EXPECT().Decommission(gomock.Any(), "10.0.0.3").
+		Return(errors.New("Not enough live nodes to maintain replication factor in keyspace system_auth"))
+
+	asserts.Expect(f.handle()).To(Succeed())
+	asserts.Eventually(f.recorder.Events).Should(Receive(And(
+		ContainSubstring(events.EventDecommissionFailed), ContainSubstring("system_auth"))))
+}
+
+// A node that finished decommissioning but still answers JMX reports DECOMMISSIONED. It used to fall
+// through to starting another decommission; now it's scaled away once peers no longer see it.
+func TestHandlePodDecommission_DecommissionedNodeIsScaledDown(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+	f := newDecommissionModeFixture(t, nodectl.NodeOperationModeDecommissioned)
+	view := nodectl.ClusterView{
+		LiveNodes:        []string{"10.0.0.1", "10.0.0.2"},
+		EndpointToHostId: map[string]string{"10.0.0.1": "host-1", "10.0.0.2": "host-2"},
+	}
+	f.nctl.EXPECT().ClusterView(gomock.Any(), gomock.Any()).Return(view, nil).AnyTimes()
+
+	asserts.Expect(f.handle()).To(Succeed())
+	asserts.Expect(f.replicas(asserts)).To(BeEquivalentTo(2))
 }
 
 // https://github.com/cin/mr-cassop/issues/175: a pod with no IP isn't necessarily one that never

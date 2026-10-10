@@ -20,7 +20,23 @@ const (
 	NodeOperationModeMoving         OperationMode = "MOVING"
 	NodeOperationModeDraining       OperationMode = "DRAINING"
 	NodeOperationModeDrained        OperationMode = "DRAINED"
+	// DECOMMISSION_FAILED and JOINING_FAILED are in Cassandra's StorageService.Mode since 4.1
+	NodeOperationModeDecommissionFailed OperationMode = "DECOMMISSION_FAILED"
+	NodeOperationModeJoiningFailed      OperationMode = "JOINING_FAILED"
 )
+
+var allowedOpModes = map[OperationMode]bool{
+	NodeOperationModeStarting:           true,
+	NodeOperationModeNormal:             true,
+	NodeOperationModeJoining:            true,
+	NodeOperationModeLeaving:            true,
+	NodeOperationModeDecommissioned:     true,
+	NodeOperationModeMoving:             true,
+	NodeOperationModeDraining:           true,
+	NodeOperationModeDrained:            true,
+	NodeOperationModeDecommissionFailed: true,
+	NodeOperationModeJoiningFailed:      true,
+}
 
 func (n *client) OperationMode(ctx context.Context, nodeIP string) (OperationMode, error) {
 	req := jolokia.JMXRequest{
@@ -46,25 +62,7 @@ func (n *client) OperationMode(ctx context.Context, nodeIP string) (OperationMod
 	}
 	opMode := OperationMode(opModeStr)
 
-	allowedOpModes := []OperationMode{
-		NodeOperationModeStarting,
-		NodeOperationModeNormal,
-		NodeOperationModeJoining,
-		NodeOperationModeLeaving,
-		NodeOperationModeDecommissioned,
-		NodeOperationModeMoving,
-		NodeOperationModeDraining,
-		NodeOperationModeDrained,
-	}
-
-	found := false
-	for _, allowedMode := range allowedOpModes {
-		if allowedMode == opMode {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !allowedOpModes[opMode] {
 		return "", errors.Errorf("unknown operation mode %s", opMode)
 	}
 
