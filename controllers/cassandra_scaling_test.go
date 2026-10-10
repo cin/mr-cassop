@@ -22,6 +22,7 @@ import (
 	"github.com/cin/mr-cassop/controllers/jobs"
 	"github.com/cin/mr-cassop/controllers/labels"
 	"github.com/cin/mr-cassop/controllers/mocks"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/nodectl"
 	"github.com/cin/mr-cassop/controllers/util"
 )
@@ -82,6 +83,56 @@ func TestHandlePodDecommission_UnscheduledPod(t *testing.T) {
 	updatedSts := &appsv1.StatefulSet{}
 	asserts.Expect(tClient.Get(context.Background(), client.ObjectKeyFromObject(&sts), updatedSts)).To(Succeed())
 	asserts.Expect(*updatedSts.Spec.Replicas).To(BeEquivalentTo(4))
+}
+
+// https://github.com/cin/mr-cassop/issues/175: a pod with no IP isn't necessarily one that never
+// joined. A pod that went Ready once is recorded in the pod IPs configmap; scaling it away would
+// leave its node in the ring as down.
+func TestHandlePodDecommission_PodWithoutIPThatJoinedEarlier(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+
+	cc := &v1alpha1.CassandraCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec:       v1alpha1.CassandraClusterSpec{DCs: []v1alpha1.DC{{Name: "dc1", Replicas: proto.Int(4)}}},
+	}
+	sts := appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-cassandra-dc1",
+			Namespace: "default",
+			Labels:    map[string]string{v1alpha1.CassandraClusterDC: "dc1"},
+		},
+		Spec: appsv1.StatefulSetSpec{Replicas: proto.Int32(5)},
+	}
+	// Pending: its Kubernetes node died, so it has no IP, but it went Ready before
+	pendingPod := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-cassandra-dc1-4",
+			Namespace: "default",
+			Labels:    map[string]string{v1alpha1.CassandraClusterDC: "dc1"},
+		},
+	}
+	podIPsCM := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: names.PodIPsConfigMap(cc.Name), Namespace: "default"},
+		Data:       map[string]string{pendingPod.Name: "10.0.0.5"},
+	}
+
+	tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(&sts, podIPsCM).Build()
+	recorder := record.NewFakeRecorder(10)
+	reconciler := &CassandraClusterReconciler{
+		Client: tClient,
+		Scheme: baseScheme,
+		Log:    zap.NewNop().Sugar(),
+		Jobs:   jobs.NewJobManager(nil, zap.NewNop().Sugar()),
+		Events: events.NewEventRecorder(recorder),
+	}
+
+	err := reconciler.handlePodDecommission(context.Background(), cc, sts, map[string]string{}, pendingPod.Name, &v1.PodList{Items: []v1.Pod{pendingPod}})
+	asserts.Expect(err).To(HaveOccurred())
+
+	updatedSts := &appsv1.StatefulSet{}
+	asserts.Expect(tClient.Get(context.Background(), client.ObjectKeyFromObject(&sts), updatedSts)).To(Succeed())
+	asserts.Expect(*updatedSts.Spec.Replicas).To(BeEquivalentTo(5), "a pod that joined the ring must not be scaled away undecommissioned")
+	asserts.Expect(recorder.Events).To(Receive(ContainSubstring(events.EventScaleDownWaitingForNode)))
 }
 
 // A node that's down shows up in UnreachableNodes, not LiveNodes. It must not count as
