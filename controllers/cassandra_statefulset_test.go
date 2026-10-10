@@ -1,13 +1,19 @@
 package controllers
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/config"
@@ -58,4 +64,43 @@ func TestCassandraStatefulSet_UpdateStrategyAndPVCRetentionPolicyMatchAPIServerD
 		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
 		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
 	}))
+}
+
+// TestDeleteStatefulSetKeepingPods_DeletesBeforeDetachingPods pins the order of the
+// OrderedReady migration's delete: the statefulset has to be deleted before its pods'
+// ownerReferences are stripped. While it still exists its controller re-adopts a stripped pod, and
+// the garbage collector then deletes that pod as a dependent of the missing owner (#202).
+func TestDeleteStatefulSetKeepingPods_DeletesBeforeDetachingPods(t *testing.T) {
+	g := NewWithT(t)
+	selector := map[string]string{"app": "cassandra"}
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "dc1", Namespace: "default", UID: "sts-uid"},
+		Spec:       appsv1.StatefulSetSpec{Selector: &metav1.LabelSelector{MatchLabels: selector}},
+	}
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "dc1-0", Namespace: "default", Labels: selector,
+		OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "dc1", UID: "sts-uid"}},
+	}}
+
+	var calls []string
+	r := &CassandraClusterReconciler{
+		Log: zap.NewNop().Sugar(),
+		Client: fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(sts, pod).WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				calls = append(calls, "delete "+obj.GetName())
+				return c.Delete(ctx, obj, opts...)
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				calls = append(calls, "patch "+obj.GetName())
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).Build(),
+	}
+
+	g.Expect(r.deleteStatefulSetKeepingPods(context.Background(), sts)).To(Succeed())
+	g.Expect(calls).To(Equal([]string{"delete dc1", "patch dc1-0"}))
+
+	remaining := &v1.Pod{}
+	g.Expect(r.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: "dc1-0"}, remaining)).To(Succeed())
+	g.Expect(remaining.OwnerReferences).To(BeEmpty())
 }
