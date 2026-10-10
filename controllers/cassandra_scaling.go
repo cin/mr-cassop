@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 var errDCDecommissionBlocked = errors.New("DC decommission blocked")
@@ -208,12 +209,7 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 	}
 
 	if len(decommissionPod.Status.PodIP) == 0 {
-		// the pod never got scheduled/joined the ring (e.g. leftover from a scale-up that
-		// exceeded cluster capacity) - there's nothing to decommission, just scale it away.
-		r.Log.Infof("pod %s/%s never joined the cluster (no IP assigned), scaling down the statefulset without decommissioning",
-			decommissionPod.Namespace, decommissionPod.Name)
-		*sts.Spec.Replicas = *sts.Spec.Replicas - 1
-		return r.Update(ctx, &sts)
+		return r.handlePodWithoutIP(ctx, cc, sts, decommissionPod)
 	}
 
 	adminSecret, err := r.adminRoleSecret(ctx, cc)
@@ -232,63 +228,138 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 	opMode, opModeErr := nctl.OperationMode(ctx, broadcastIP)
 	if opModeErr != nil { // the node may be decommissioned
 		r.Log.Warnf("couldn't get operation mode for pod %s, checking if it is decommissioned already.", decommissionPodName)
+		return r.scaleDownIfDecommissioned(ctx, cc, sts, nctl, decommissionPod, podList, broadcastAddresses,
+			errors.Wrapf(opModeErr, "can't reach node %s to check its operation mode", decommissionPodName))
+	}
 
-		decommissioned, err := r.podDecommissioned(ctx, cc, nctl, podList.Items, *decommissionPod, broadcastAddresses)
-		if err != nil {
-			return errors.Wrap(err, "failed to check if the pod is decommissioned")
-		}
-		if decommissioned {
-			// mark before scaling down, so a failure here is retried while the pod still exists
-			if err = r.markPodPVCsDecommissioned(ctx, sts, decommissionPod.Name); err != nil {
-				return err
-			}
-			*sts.Spec.Replicas = *sts.Spec.Replicas - 1
-			r.Log.Infof("node %s/%s is decommissioned, scaling down the statefulset", decommissionPod.Namespace, decommissionPod.Name)
-			updateErr := r.Update(ctx, &sts)
-			if updateErr != nil {
-				return errors.Wrap(updateErr, "couldn't scale down the statefulset to remove the decommissioned node")
-			}
-			err = r.Jobs.RemoveJob(jobName)
-			if err != nil {
-				return errors.Wrap(err, "can't remove job")
-			}
-
-			return nil
-		} else {
-			// Either the decommission hasn't finished propagating, or the node is down (unreachable)
-			// but still owns tokens. Wait rather than scale it away; a down node blocks scale-down
-			// until it's back or removed from the ring by hand (nodetool removenode).
-			return errors.Wrapf(opModeErr, "can't reach node %s to check its operation mode, and peer node(s) still list it in the ring (down, or not yet fully decommissioned); waiting before scaling down",
-				decommissionPodName)
+	if opMode == nodectl.NodeOperationModeNormal {
+		if err = r.checkScaleDownNotBlockedByReplication(cc, sts, roleName, rolePassword); err != nil {
+			return err
 		}
 	}
 
-	if opMode == nodectl.NodeOperationModeLeaving {
-		r.Log.Infof("node %s/%s is being decommissioned. Waiting to finish",
-			decommissionPod.Namespace, decommissionPod.Name)
+	return r.handleDecommissionOpMode(ctx, cc, sts, nctl, decommissionPod, podList, broadcastAddresses, opMode)
+}
+
+// handleDecommissionOpMode decides what to do with the node being scaled away based on its operation mode.
+// Only a NORMAL node can start a decommission. A node that failed to decommission or join is not retried:
+// the cause (e.g. a keyspace's replication factor is higher than the remaining node count) doesn't go away
+// on its own, so the operator reports it and leaves the node alone.
+func (r *CassandraClusterReconciler) handleDecommissionOpMode(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, nctl nodectl.Nodectl, pod *v1.Pod, podList *v1.PodList, broadcastAddresses map[string]string, opMode nodectl.OperationMode) error {
+	switch opMode {
+	case nodectl.NodeOperationModeNormal:
+		return r.startDecommission(cc, nctl, pod, broadcastAddresses[pod.Name])
+	case nodectl.NodeOperationModeDecommissioned:
+		return r.scaleDownIfDecommissioned(ctx, cc, sts, nctl, pod, podList, broadcastAddresses, errors.Errorf("node %s is DECOMMISSIONED", pod.Name))
+	case nodectl.NodeOperationModeDecommissionFailed:
+		r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Node %s is in DECOMMISSION_FAILED after a refused or failed decommission, and it's not retried automatically. "+
+			"The node is still in the ring and serving. The most common cause is a keyspace whose replication factor in the DC is not lower than its node count (see the "+
+			"earlier DecommissionFailed event for Cassandra's message). The operator never changes replication factors: lower them yourself, then run "+
+			"`nodetool decommission` on the pod, or restart the pod to clear the state and let the scale-down start again. Raising the DC's replicas does not clear it", pod.Name))
+		return errors.Errorf("node %s is in DECOMMISSION_FAILED; waiting before scaling down", pod.Name)
+	case nodectl.NodeOperationModeJoiningFailed:
+		r.warnWithEvent(cc, events.EventNodeJoiningFailed, fmt.Sprintf("Node %s failed to join the ring (JOINING_FAILED), so it can't be decommissioned. Restart the pod to retry the join", pod.Name))
+		return errors.Errorf("node %s is in JOINING_FAILED; waiting before scaling down", pod.Name)
+	default: // LEAVING, or a transient mode (STARTING, JOINING, MOVING, DRAINING, DRAINED)
+		r.Log.Infof("node %s/%s is in operation mode %s, waiting before decommissioning it", pod.Namespace, pod.Name, opMode)
 		return nil
 	}
+}
 
-	if err = r.checkScaleDownNotBlockedByReplication(cc, sts, roleName, rolePassword); err != nil {
-		return err
+// scaleDownIfDecommissioned scales the statefulset down once a quorum of peers no longer sees the node in
+// the ring. Otherwise it returns an error built from reason: the decommission hasn't finished propagating,
+// or the node is down but still owns tokens. A down node blocks scale-down until it's back or removed from
+// the ring by hand (nodetool removenode), rather than being scaled away.
+func (r *CassandraClusterReconciler) scaleDownIfDecommissioned(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, nctl nodectl.Nodectl, pod *v1.Pod, podList *v1.PodList, broadcastAddresses map[string]string, reason error) error {
+	decommissioned, err := r.podDecommissioned(ctx, cc, nctl, podList.Items, *pod, broadcastAddresses)
+	if err != nil {
+		return errors.Wrap(err, "failed to check if the pod is decommissioned")
+	}
+	if !decommissioned {
+		return errors.Wrapf(reason, "peer node(s) still list %s in the ring (down, or not yet fully decommissioned); waiting before scaling down", pod.Name)
 	}
 
-	r.Log.Infof("starting decommision of node %s/%s", decommissionPod.Namespace, decommissionPod.Name)
-	err = r.Jobs.Run(jobName, cc, func() error {
+	// mark before scaling down, so a failure here is retried while the pod still exists
+	if err = r.markPodPVCsDecommissioned(ctx, sts, pod.Name); err != nil {
+		return err
+	}
+	*sts.Spec.Replicas = *sts.Spec.Replicas - 1
+	r.Log.Infof("node %s/%s is decommissioned, scaling down the statefulset", pod.Namespace, pod.Name)
+	if err = r.Update(ctx, &sts); err != nil {
+		return errors.Wrap(err, "couldn't scale down the statefulset to remove the decommissioned node")
+	}
+	if err = r.Jobs.RemoveJob("pod-decommission-" + pod.Name); err != nil {
+		return errors.Wrap(err, "can't remove job")
+	}
+
+	return nil
+}
+
+// warnWithEvent logs msg and emits it as a warning event, so it's visible both in the operator logs and in `kubectl describe`.
+func (r *CassandraClusterReconciler) warnWithEvent(cc *dbv1alpha1.CassandraCluster, reason events.EventReason, msg string) {
+	r.Log.Warn(msg)
+	r.Events.Warning(cc, reason, msg)
+}
+
+func (r *CassandraClusterReconciler) startDecommission(cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pod *v1.Pod, broadcastIP string) error {
+	r.Log.Infof("starting decommision of node %s/%s", pod.Namespace, pod.Name)
+	err := r.Jobs.Run("pod-decommission-"+pod.Name, cc, func() error {
 		decommissionCtx := context.Background() //reconcile context may cancel the job sooner that needed
 		decommissionErr := nctl.Decommission(decommissionCtx, broadcastIP)
 		if decommissionErr != nil {
 			r.Log.Errorf("failed to decommission pod, error: %s", decommissionErr.Error())
+			r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Decommission of node %s failed: %s", pod.Name, decommissionErr.Error()))
 			return decommissionErr
 		}
 
 		return nil
 	})
 	if err != nil {
-		return errors.Wrapf(err, "failed to start job to decommission pod %s", decommissionPodName)
+		return errors.Wrapf(err, "failed to start job to decommission pod %s", pod.Name)
 	}
 
 	return nil
+}
+
+// handlePodWithoutIP scales away a pod that has no IP, unless it's recorded in the pod IPs configmap.
+// An unrecorded pod never went Ready, so it never joined the ring (e.g. leftover from a scale-up
+// that exceeded cluster capacity) and there's nothing to decommission. A recorded pod joined and
+// only lost its IP because it can't run right now (e.g. its Kubernetes node died); scaling it away
+// would leave the node in the ring as down, owning tokens, until someone runs nodetool removenode.
+func (r *CassandraClusterReconciler) handlePodWithoutIP(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, pod *v1.Pod) error {
+	joined, err := r.podRecordedAsJoined(ctx, cc, pod.Name)
+	if err != nil {
+		return err
+	}
+
+	if joined {
+		msg := fmt.Sprintf("Pod %s has no IP but was part of the ring before, so it's not scaled away without being decommissioned. "+
+			"Bring the pod back, or remove its node from the ring by hand (nodetool removenode) if it's gone for good", pod.Name)
+		r.Events.Warning(cc, events.EventScaleDownWaitingForNode, msg)
+		return errors.Errorf("pod %s has no IP but joined the ring earlier; waiting before scaling down", pod.Name)
+	}
+
+	r.Log.Infof("pod %s/%s never joined the cluster (no IP assigned), scaling down the statefulset without decommissioning",
+		pod.Namespace, pod.Name)
+	*sts.Spec.Replicas = *sts.Spec.Replicas - 1
+	return r.Update(ctx, &sts)
+}
+
+// podRecordedAsJoined reports whether the pod IPs configmap has an entry for the pod. The operator
+// records a pod's IP the first time it goes Ready, and prober only reports a node Ready once its
+// gossip status is NORMAL, so an entry means the node joined the ring.
+func (r *CassandraClusterReconciler) podRecordedAsJoined(ctx context.Context, cc *dbv1alpha1.CassandraCluster, podName string) (bool, error) {
+	podIPsCM := &v1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: names.PodIPsConfigMap(cc.Name), Namespace: cc.Namespace}, podIPsCM)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "can't get pod IPs configmap")
+	}
+
+	_, recorded := podIPsCM.Data[podName]
+	return recorded, nil
 }
 
 func (r *CassandraClusterReconciler) podDecommissioned(ctx context.Context, cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pods []v1.Pod, decommissionPod v1.Pod, broadcastAddresses map[string]string) (bool, error) {
