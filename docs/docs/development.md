@@ -168,9 +168,9 @@ To run the tests, simply run `make tests` from the command line.
 
 It will run the usual Go unit and integration tests, which utilize [testenv](https://book.kubebuilder.io/reference/envtest.html) to execute the test against on a semi-real k8s cluster. `testenv` requires assets that are installed with `kubebuilder`, so it must installed first.
 
-Integration tests use the Ginkgo framework and are located in `./test/integration`. Ginkgo has its own [options]([Ginkgo flags](https://onsi.github.io/ginkgo/#the-ginkgo-cli)) that can be arguments to `go test`. For example, to run a specific test (`--focus` option):
+Integration tests use the Ginkgo framework and are located in `./tests/integration`. Ginkgo has its own [options](https://onsi.github.io/ginkgo/#the-ginkgo-cli) that can be arguments to `go test`. For example, to run a specific test (`--focus` option):
 
-`go test ./test/integration -ginkgo.focus="regex matcher"` 
+`go test ./tests/integration -ginkgo.focus="regex matcher"` 
 
 For debugging you might want to see operator logs as the tests run. Pass the `-enableOperatorLogs=true` option to your  `go test ...` command to enable it:
 
