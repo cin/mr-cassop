@@ -1,8 +1,8 @@
-# CVE-2026-75595 (CRITICAL): io.netty:netty-handler 4.1.60.Final, bundled inside the
-# prebuilt icarus.jar (instaclustr/icarus release 3.0.0 downloaded in icarus/Dockerfile).
-# icarus-3.0.0 is the latest upstream release as of 2026-09-09 and there is no newer
-# release available with a patched netty-handler (fixed in 4.2.17.Final / 4.1.137.Final).
-# We can't repackage the release jar ourselves, so ignore until instaclustr ships a fix.
-# Re-check https://github.com/instaclustr/icarus/releases and remove this line once
-# ICARUS_VERSION in .github/workflows/pull_request.yml is bumped past the fix.
+# CVE-2026-75595 (CRITICAL): io.netty:netty-handler 4.1.130.Final, shipped in the upstream
+# cassandra base image (FROM cassandra:${CASSANDRA_VERSION} in cassandra/Dockerfile; Cassandra
+# 5.0.9 bundles it in /opt/cassandra/lib). It's fixed in netty 4.1.137.Final / 4.2.17.Final, but
+# we can't swap Cassandra's own netty jar without repackaging it, so ignore until an upstream
+# Cassandra 5.0.x release bundles a patched netty-handler.
+# Re-check by bumping CASSANDRA_VERSION and removing this line once the scan passes without it.
+# (The icarus image no longer needs it: icarus 4.1.14 bundles netty-handler 4.1.138.Final.)
 CVE-2026-75595
