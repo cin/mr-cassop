@@ -147,7 +147,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec := nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -168,7 +168,7 @@ var _ = Describe("network policies", func() {
 						From: []nwv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+									MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 								},
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{v1.LabelMetadataName: cc.Namespace},
@@ -208,7 +208,7 @@ var _ = Describe("network policies", func() {
 						From: []nwv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentProber},
+									MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 								},
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{v1.LabelMetadataName: cc.Namespace},
@@ -231,7 +231,7 @@ var _ = Describe("network policies", func() {
 						From: []nwv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentReaper},
+									MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentReaper),
 								},
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{v1.LabelMetadataName: cc.Namespace},
@@ -250,7 +250,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -285,7 +285,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -320,7 +320,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -350,7 +350,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -404,7 +404,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -436,7 +436,7 @@ var _ = Describe("network policies", func() {
 
 			expectedCasNetPolSpec = nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -470,7 +470,7 @@ var _ = Describe("network policies", func() {
 
 			expectedProberNetPol := nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentProber},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
@@ -483,7 +483,7 @@ var _ = Describe("network policies", func() {
 						From: []nwv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
-									MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+									MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 								},
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{v1.LabelMetadataName: cc.Namespace},
@@ -556,7 +556,7 @@ var _ = Describe("network policies", func() {
 
 			expectedReaperNetPol := nwv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentReaper},
+					MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentReaper),
 				},
 				Ingress: []nwv1.NetworkPolicyIngressRule{
 					{
