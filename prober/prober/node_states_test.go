@@ -455,6 +455,30 @@ func TestIsNodeReady(t *testing.T) {
 			ready: false,
 		},
 		{
+			name: "decommissioning node is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "LEAVING"},
+			},
+			ready: false,
+		},
+		{
+			name: "moving node is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "MOVING"},
+			},
+			ready: false,
+		},
+		{
+			name: "node that left the ring is not ready",
+			joiningNode: nodeState{
+				SimpleStates:  map[string]string{joining: "UP", peer: "UP"},
+				EndpointState: jolokia.EndpointState{Status: "LEFT"},
+			},
+			ready: false,
+		},
+		{
 			// what a joining node actually reports on Cassandra 5.0: peers see it UP but its own STATUS is empty
 			name: "joining node with empty own status",
 			joiningNode: nodeState{
