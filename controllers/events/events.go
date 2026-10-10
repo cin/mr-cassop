@@ -28,6 +28,7 @@ const (
 	EventUIImageMissing                   = "UIImageMissing"
 
 	EventScaleUpWaitingForPVCs = "ScaleUpWaitingForPVCs"
+	EventScaleDownBlocked      = "ScaleDownBlockedByReplication"
 	EventAdminRoleChanged      = "AdminRoleChanged"
 	EventRegionInit            = "RegionInit"
 	EventDCInit                = "DCInit"

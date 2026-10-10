@@ -294,7 +294,7 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 
 	scalingInProgress, err := r.reconcileCassandraScaling(ctx, cc, podList, nodeList, allDCs, baseAdminSecret)
 	if err != nil {
-		if errors.Cause(err) == errDCDecommissionBlocked {
+		if cause := errors.Cause(err); cause == errDCDecommissionBlocked || cause == errScaleDownBlocked {
 			return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 		}
 		return ctrl.Result{}, err
