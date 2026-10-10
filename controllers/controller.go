@@ -301,8 +301,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	}
 
 	if scalingInProgress {
-		r.Log.Info("Scaling in progress, not proceeding")
-		return ctrl.Result{}, nil
+		// Requeue: a decommission finishing doesn't change anything the operator watches (the node's
+		// pod may already be unready since it started leaving), so nothing would wake it up again.
+		r.Log.Infof("Scaling in progress, not proceeding. Trying again in %s...", r.Cfg.RetryDelay)
+		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
 	if err = r.reconcileMaintenance(ctx, cc); err != nil {
