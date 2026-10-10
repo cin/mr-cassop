@@ -3,9 +3,7 @@
 # instaclustr/icarus is read-only to us, so we pin to our fork's own release tag.
 # Building it in-image (rather than depending on a host-local jar) keeps this
 # Dockerfile buildable in CI with no local prerequisites.
-ARG JAVA_VERSION=11
-
-FROM eclipse-temurin:11-jdk-noble AS builder
+FROM eclipse-temurin:17-jdk-noble AS builder
 ARG ICARUS_FORK_REPO=https://github.com/cin/icarus.git
 ARG ICARUS_VERSION=4.1.14
 
@@ -15,7 +13,7 @@ WORKDIR /build
 RUN git clone --branch "icarus-${ICARUS_VERSION}" --depth 1 "${ICARUS_FORK_REPO}" .
 RUN ./mvnw -B -q -DskipTests -Dmaven.javadoc.skip=true clean package
 
-FROM eclipse-temurin:${JAVA_VERSION}-jre-noble
+FROM eclipse-temurin:17-jre-noble
 COPY --from=builder /build/target/icarus.jar .
 
 RUN groupadd --gid 999 cassandra && \
