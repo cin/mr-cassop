@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 
@@ -15,11 +16,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// DefaultTimeout bounds a request that doesn't set JMXRequest.Timeout. Reads and quick operations
+// finish well within it; a node that silently drops packets would otherwise hang the caller until
+// the kernel gives up the TCP connect (minutes).
+const DefaultTimeout = 10 * time.Second
+
 type Client struct {
-	url    string
-	client *http.Client
-	auth   auth
-	log    *zap.SugaredLogger
+	url     string
+	client  *http.Client
+	timeout time.Duration
+	auth    auth
+	log     *zap.SugaredLogger
 }
 
 type JMXRequest struct {
@@ -28,6 +35,8 @@ type JMXRequest struct {
 	Attributes []string `json:"attribute,omitempty"`
 	Operation  string   `json:"operation,omitempty"`
 	Arguments  []string `json:"arguments,omitempty"` //args are identified based on the order they are passed
+	// Timeout caps the whole request. Zero means DefaultTimeout. It isn't sent to Jolokia.
+	Timeout time.Duration `json:"-"`
 }
 
 type JMXResponse struct {
@@ -56,9 +65,9 @@ type Target struct {
 func NewClient(jolokiaURL string, username, password string, logr *zap.SugaredLogger) *Client {
 	return &Client{
 		url: jolokiaURL,
-		client: &http.Client{
-			Timeout: 0,
-		},
+		// requests are bounded per call with a context deadline (see JMXRequest.Timeout), not here
+		client:  &http.Client{},
+		timeout: DefaultTimeout,
 		auth: auth{
 			username: username,
 			password: password,
@@ -68,7 +77,64 @@ func NewClient(jolokiaURL string, username, password string, logr *zap.SugaredLo
 }
 
 func (j *Client) Post(ctx context.Context, jmxReq JMXRequest, ip string) (JMXResponse, error) {
-	req := request{
+	ctx, cancel := context.WithTimeout(ctx, j.requestTimeout(jmxReq))
+	defer cancel()
+
+	body, err := j.do(ctx, jmxReq, ip)
+	if err != nil {
+		return JMXResponse{}, err
+	}
+
+	return j.parseResponse(body)
+}
+
+func (j *Client) requestTimeout(jmxReq JMXRequest) time.Duration {
+	if jmxReq.Timeout > 0 {
+		return jmxReq.Timeout
+	}
+	return j.timeout
+}
+
+// do sends the request through the Jolokia proxy and returns the raw response body.
+func (j *Client) do(ctx context.Context, jmxReq JMXRequest, ip string) ([]byte, error) {
+	httpReq, err := j.newHTTPRequest(ctx, jmxReq, ip)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := j.client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	return readBody(resp)
+}
+
+func (j *Client) newHTTPRequest(ctx context.Context, jmxReq JMXRequest, ip string) (*http.Request, error) {
+	b, err := json.Marshal(j.newRequest(jmxReq, ip))
+	if err != nil {
+		return nil, err
+	}
+
+	return http.NewRequestWithContext(ctx, http.MethodPost, j.url, bytes.NewReader(b))
+}
+
+func readBody(resp *http.Response) ([]byte, error) {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status + ": " + string(responseBody))
+	}
+
+	return responseBody, nil
+}
+
+func (j *Client) newRequest(jmxReq JMXRequest, ip string) request {
+	return request{
 		Target: Target{
 			URL:      jmxUrl(ip, v1alpha1.JmxPort),
 			User:     j.auth.username,
@@ -76,31 +142,9 @@ func (j *Client) Post(ctx context.Context, jmxReq JMXRequest, ip string) (JMXRes
 		},
 		JMXRequest: jmxReq,
 	}
+}
 
-	b, err := json.Marshal(req)
-	if err != nil {
-		return JMXResponse{}, err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, j.url, bytes.NewReader(b))
-	if err != nil {
-		return JMXResponse{}, err
-	}
-	resp, err := j.client.Do(httpReq)
-	if err != nil {
-		return JMXResponse{}, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return JMXResponse{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return JMXResponse{}, errors.New(resp.Status + ": " + string(responseBody))
-	}
-
+func (j *Client) parseResponse(responseBody []byte) (JMXResponse, error) {
 	var response JMXResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
 		return JMXResponse{}, fmt.Errorf("cannot unmarshall response. Error %s. Raw body: %s", err.Error(), string(responseBody))
