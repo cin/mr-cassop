@@ -53,7 +53,7 @@ func (r *CassandraClusterReconciler) reconcileCassandraNetworkPolicies(ctx conte
 		},
 		Spec: nwv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra},
+				MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra),
 			},
 			PolicyTypes: []nwv1.PolicyType{"Ingress"},
 		},
@@ -108,7 +108,7 @@ func (r *CassandraClusterReconciler) reconcileProberNetworkPolicies(ctx context.
 		},
 		Spec: nwv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentProber},
+				MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber),
 			},
 			Ingress: []nwv1.NetworkPolicyIngressRule{
 				// Allow C* pods
@@ -117,7 +117,7 @@ func (r *CassandraClusterReconciler) reconcileProberNetworkPolicies(ctx context.
 						nwPolicyPort(dbv1alpha1.ProberContainerPort),
 					},
 					From: []nwv1.NetworkPolicyPeer{
-						nwPolicyPeer(map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra}, cc.Namespace),
+						nwPolicyPeer(labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra), cc.Namespace),
 					},
 				},
 				// Allow C* operator
@@ -200,7 +200,7 @@ func (r *CassandraClusterReconciler) reconcileReaperNetworkPolicies(ctx context.
 		},
 		Spec: nwv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentReaper},
+				MatchLabels: labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentReaper),
 			},
 			PolicyTypes: []nwv1.PolicyType{"Ingress"},
 			Ingress: []nwv1.NetworkPolicyIngressRule{
@@ -302,7 +302,7 @@ func (r *CassandraClusterReconciler) cassandraClusterPolicy(ctx context.Context,
 				nwPolicyPort(dbv1alpha1.IcarusPort),
 			},
 			From: []nwv1.NetworkPolicyPeer{
-				nwPolicyPeer(map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentCassandra}, cc.Namespace),
+				nwPolicyPeer(labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentCassandra), cc.Namespace),
 			},
 		},
 		// Allow C* operator
@@ -321,7 +321,7 @@ func (r *CassandraClusterReconciler) cassandraClusterPolicy(ctx context.Context,
 				nwPolicyPort(dbv1alpha1.JmxPort),
 			},
 			From: []nwv1.NetworkPolicyPeer{
-				nwPolicyPeer(map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentProber}, cc.Namespace),
+				nwPolicyPeer(labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentProber), cc.Namespace),
 			},
 		},
 		// Allow reaper
@@ -331,7 +331,7 @@ func (r *CassandraClusterReconciler) cassandraClusterPolicy(ctx context.Context,
 				nwPolicyPort(dbv1alpha1.JmxPort),
 			},
 			From: []nwv1.NetworkPolicyPeer{
-				nwPolicyPeer(map[string]string{dbv1alpha1.CassandraClusterComponent: dbv1alpha1.CassandraClusterComponentReaper}, cc.Namespace),
+				nwPolicyPeer(labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentReaper), cc.Namespace),
 			},
 		},
 	}
