@@ -127,7 +127,7 @@ func readBody(resp *http.Response) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(resp.Status + ": " + string(responseBody))
+		return nil, errors.New(resp.Status + ": " + redactRequest(responseBody))
 	}
 
 	return responseBody, nil
@@ -151,11 +151,8 @@ func (j *Client) parseResponse(responseBody []byte) (JMXResponse, error) {
 	}
 
 	if len(response.Error) != 0 {
-		errMsg := fmt.Sprintf("received error JMX response; error: %s", response.Error)
-		if j.log.Desugar().Core().Enabled(zap.DebugLevel) {
-			errMsg += "; raw response: " + string(responseBody)
-		}
-		return JMXResponse{}, errors.New(errMsg)
+		j.log.Debugf("JMX error response: %s", redactRequest(responseBody))
+		return JMXResponse{}, errors.Errorf("received error JMX response; error: %s", response.Error)
 	}
 
 	return response, nil
@@ -163,4 +160,22 @@ func (j *Client) parseResponse(responseBody []byte) (JMXResponse, error) {
 
 func jmxUrl(ip string, port int) string {
 	return fmt.Sprintf("service:jmx:rmi:///jndi/rmi://%s:%d/jmxrmi", ip, port)
+}
+
+// redactRequest returns body without its "request" member. Jolokia echoes the request back in every
+// response, and in proxy mode that includes the JMX target's user and password. Errors built from
+// a response are logged and published as events, so they must not carry it.
+func redactRequest(body []byte) string {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return string(body)
+	}
+	delete(fields, "request")
+
+	redacted, err := json.Marshal(fields)
+	if err != nil {
+		return "response omitted: can't redact"
+	}
+
+	return string(redacted)
 }

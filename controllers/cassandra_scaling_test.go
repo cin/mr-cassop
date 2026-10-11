@@ -233,10 +233,35 @@ func TestHandlePodDecommission_FailedDecommissionJobIsReported(t *testing.T) {
 	f := newDecommissionModeFixture(t, nodectl.NodeOperationModeNormal)
 	f.nctl.EXPECT().Decommission(gomock.Any(), "10.0.0.3").
 		Return(errors.New("Not enough live nodes to maintain replication factor in keyspace system_auth"))
+	// Cassandra refused it, so the node is not leaving the ring
+	f.nctl.EXPECT().OperationMode(gomock.Any(), "10.0.0.3").Return(nodectl.NodeOperationModeDecommissionFailed, nil)
 
 	asserts.Expect(f.handle()).To(Succeed())
 	asserts.Eventually(f.recorder.Events).Should(Receive(And(
 		ContainSubstring(events.EventDecommissionFailed), ContainSubstring("system_auth"))))
+}
+
+// The Jolokia-to-JMX call has its own read timeout (about 30s), far shorter than a real decommission.
+// It returns an error while Cassandra keeps decommissioning, so a node that's LEAVING or already
+// DECOMMISSIONED must not be reported as a failed decommission.
+func TestHandlePodDecommission_TimedOutCallOnLeavingNodeIsNotAFailure(t *testing.T) {
+	for _, mode := range []nodectl.OperationMode{nodectl.NodeOperationModeLeaving, nodectl.NodeOperationModeDecommissioned} {
+		t.Run(string(mode), func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+			f := newDecommissionModeFixture(t, nodectl.NodeOperationModeNormal)
+			modeChecked := make(chan struct{})
+			f.nctl.EXPECT().Decommission(gomock.Any(), "10.0.0.3").
+				Return(errors.New("received error JMX response; error: java.net.SocketTimeoutException: Read timed out"))
+			f.nctl.EXPECT().OperationMode(gomock.Any(), "10.0.0.3").DoAndReturn(func(context.Context, string) (nodectl.OperationMode, error) {
+				close(modeChecked)
+				return mode, nil
+			})
+
+			asserts.Expect(f.handle()).To(Succeed())
+			asserts.Eventually(modeChecked).Should(BeClosed())
+			asserts.Consistently(f.recorder.Events, 300*time.Millisecond).ShouldNot(Receive())
+		})
+	}
 }
 
 // A node that finished decommissioning but still answers JMX reports DECOMMISSIONED. It used to fall

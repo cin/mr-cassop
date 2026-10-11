@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,5 +70,42 @@ func TestPostLongTimeoutDoesNotCutOffSlowResponse(t *testing.T) {
 	}
 	if resp.Status != 200 {
 		t.Errorf("status = %d, want 200", resp.Status)
+	}
+}
+
+// Jolokia echoes the request back in every response, including the JMX target's credentials. The
+// error returned from Post is logged and published as an event, so it must never carry them, not
+// even with debug logging on.
+func TestPostErrorDoesNotLeakCredentials(t *testing.T) {
+	const secret = "s3cr3t-jmx-password"
+	echo := `{"request":{"target":{"user":"admin","password":"` + secret + `"},"type":"exec"},"error":"java.net.SocketTimeoutException: Read timed out","status":500}`
+	tests := []struct {
+		name       string
+		httpStatus int
+		body       string
+	}{
+		{"jmx error in a 200 response", http.StatusOK, echo},
+		{"http error status", http.StatusInternalServerError, echo},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.httpStatus)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+			c := NewClient(srv.URL, "user", "pass", zap.NewExample().Sugar()) // debug level
+
+			_, err := c.Post(context.Background(), JMXRequest{Type: "exec"}, "10.0.0.1")
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("error leaks the JMX password: %v", err)
+			}
+			if !strings.Contains(err.Error(), "Read timed out") {
+				t.Errorf("error lost Jolokia's message: %v", err)
+			}
+		})
 	}
 }
