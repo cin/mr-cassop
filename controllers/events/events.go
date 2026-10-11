@@ -29,6 +29,7 @@ const (
 
 	EventScaleUpWaitingForPVCs   = "ScaleUpWaitingForPVCs"
 	EventScaleDownWaitingForNode = "ScaleDownWaitingForNode"
+	EventScaleDownBlocked        = "ScaleDownBlockedByReplication"
 	EventDecommissionFailed      = "DecommissionFailed"
 	EventNodeJoiningFailed       = "NodeJoiningFailed"
 	EventAdminRoleChanged        = "AdminRoleChanged"

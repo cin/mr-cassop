@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	gocql "github.com/apache/cassandra-gocql-driver/v2"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
@@ -21,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
+	"github.com/cin/mr-cassop/controllers/cql"
 	"github.com/cin/mr-cassop/controllers/events"
 	"github.com/cin/mr-cassop/controllers/jobs"
 	"github.com/cin/mr-cassop/controllers/labels"
@@ -135,6 +137,10 @@ func newDecommissionModeFixture(t *testing.T, opMode nodectl.OperationMode) *dec
 
 	nctl := mocks.NewMockNodectl(gomock.NewController(t))
 	nctl.EXPECT().OperationMode(gomock.Any(), "10.0.0.3").Return(opMode, nil)
+	// no keyspace blocks the scale-down here; that check has its own tests
+	cqlClient := mocks.NewMockCqlClient(gomock.NewController(t))
+	cqlClient.EXPECT().GetKeyspacesInfo().Return(nil, nil).AnyTimes()
+	cqlClient.EXPECT().CloseSession().AnyTimes()
 	tClient := fake.NewClientBuilder().WithScheme(baseScheme).WithObjects(&sts, adminSecret).Build()
 	recorder := record.NewFakeRecorder(10)
 
@@ -146,6 +152,7 @@ func newDecommissionModeFixture(t *testing.T, opMode nodectl.OperationMode) *dec
 			Jobs:          jobs.NewJobManager(make(chan event.GenericEvent, 10), zap.NewNop().Sugar()),
 			Events:        events.NewEventRecorder(recorder),
 			NodectlClient: func(string, string, string, *zap.SugaredLogger) nodectl.Nodectl { return nctl },
+			CqlClient:     func(*gocql.ClusterConfig) (cql.CqlClient, error) { return cqlClient, nil },
 		},
 		client: tClient, recorder: recorder, nctl: nctl, cc: cc, sts: sts, pods: pods,
 		podName: "test-cluster-cassandra-dc1-2",

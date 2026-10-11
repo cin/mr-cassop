@@ -69,6 +69,21 @@ The process is repeated if needed. Only one DC at a time is scaled down.
 
 Only a node in the `NORMAL` operation mode gets a decommission started. A node in a transient mode (`LEAVING`, `JOINING`, `MOVING`, `DRAINING`...) is waited on.
 
+##### Replication factors can block a scale-down
+
+Since Cassandra 4.0 (CASSANDRA-12510), a decommission fails unless the DC has more nodes than the replication factor of every keyspace in it.
+Before starting the decommission, the operator reads the keyspaces over CQL and compares each one's replication factor in the DC (NetworkTopologyStrategy and SimpleStrategy) with the DC's current node count.
+If any keyspace blocks the scale-down, the operator doesn't start the decommission. It emits a `ScaleDownBlockedByReplication` warning event, writes the same message to its log, and checks again every retry delay.
+The message names each blocking keyspace with its replication factor, for example `reaper (RF 3)`.
+
+The operator never changes replication factors itself. To continue:
+
+1. Lower the replication factor in that DC of each named keyspace to the new node count or less: `ALTER KEYSPACE <name> WITH replication = {'class': 'NetworkTopologyStrategy', '<dc>': <rf>}`.
+2. The scale-down continues on its own on the next check. Optionally run `nodetool cleanup` afterwards to remove data the nodes no longer own.
+
+Mind the effect on availability. Lowering `system_auth` means fewer nodes hold the roles used for login.
+With the default settings the system keyspaces (`system_auth`, `system_distributed`, `system_traces`) and `reaper` use replication factor 3, so a scale-down from 3 to 2 nodes always waits until you lower them.
+
 #### A failed decommission
 
 If Cassandra refuses or fails the decommission, the node ends up in `DECOMMISSION_FAILED`. It stays in the ring and keeps serving, and the pod stays Ready.

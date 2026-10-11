@@ -186,6 +186,16 @@ func (r *CassandraClusterReconciler) handleDCsDecommission(ctx context.Context, 
 	return nil
 }
 
+func findPod(podList *v1.PodList, name string) *v1.Pod {
+	for i := range podList.Items {
+		if podList.Items[i].Name == name {
+			return &podList.Items[i]
+		}
+	}
+
+	return nil
+}
+
 func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, broadcastAddresses map[string]string, decommissionPodName string, podList *v1.PodList) error {
 	jobName := "pod-decommission-" + decommissionPodName
 	if r.Jobs.Exists(jobName) && r.Jobs.IsRunning(jobName) {
@@ -193,14 +203,7 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 		return nil
 	}
 
-	var decommissionPod *v1.Pod
-	for i, cassPod := range podList.Items {
-		if cassPod.Name == decommissionPodName {
-			decommissionPod = &podList.Items[i]
-			break
-		}
-	}
-
+	decommissionPod := findPod(podList, decommissionPodName)
 	if decommissionPod == nil {
 		return errors.Errorf("couldn't find pod %q to start the decommission", decommissionPodName)
 	}
@@ -227,6 +230,12 @@ func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, 
 		r.Log.Warnf("couldn't get operation mode for pod %s, checking if it is decommissioned already.", decommissionPodName)
 		return r.scaleDownIfDecommissioned(ctx, cc, sts, nctl, decommissionPod, podList, broadcastAddresses,
 			errors.Wrapf(opModeErr, "can't reach node %s to check its operation mode", decommissionPodName))
+	}
+
+	if opMode == nodectl.NodeOperationModeNormal {
+		if err = r.checkScaleDownNotBlockedByReplication(cc, sts, roleName, rolePassword); err != nil {
+			return err
+		}
 	}
 
 	return r.handleDecommissionOpMode(ctx, cc, sts, nctl, decommissionPod, podList, broadcastAddresses, opMode)
