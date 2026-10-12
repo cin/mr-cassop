@@ -63,13 +63,18 @@ func (r *CassandraClusterReconciler) cleanupUI(ctx context.Context, cc *dbv1alph
 }
 
 func (r *CassandraClusterReconciler) reconcileUIDeployment(ctx context.Context, cc *dbv1alpha1.CassandraCluster) error {
-	desired := desiredUIDeployment(cc)
+	secretUID, err := r.uiCredentialsSecretUID(ctx, cc)
+	if err != nil {
+		return err
+	}
+
+	desired := desiredUIDeployment(cc, secretUID)
 	if err := controllerutil.SetControllerReference(cc, desired, r.Scheme); err != nil {
 		return errors.Wrap(err, "cannot set controller reference")
 	}
 
 	actual := &appsv1.Deployment{}
-	err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, actual)
+	err = r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, actual)
 	if apierrors.IsNotFound(err) {
 		r.Log.Info("Creating ui deployment")
 		return errors.Wrap(r.Create(ctx, desired), "failed to create deployment")
@@ -93,8 +98,29 @@ func (r *CassandraClusterReconciler) updateUIDeployment(ctx context.Context, des
 	return errors.Wrap(r.Update(ctx, actual), "failed to update deployment")
 }
 
+// uiCredentialsSecretAnnotation records the UID of the secret the UI mounted its credentials from. The
+// operator replaces <cluster>-auth-active-admin (it's immutable) instead of updating it, and kubelet
+// never refreshes a volume backed by a replaced secret, so a UI pod that started before the replacement
+// keeps the old credentials forever. A new UID changes the pod template, which rolls the Deployment.
+const uiCredentialsSecretAnnotation = "ui-credentials-secret-uid"
+
+// uiCredentialsSecretUID returns the UID of the secret the UI mounts, or "" if it doesn't exist yet. The
+// pod can't start without the secret, so there's nothing to roll until it's created.
+func (r *CassandraClusterReconciler) uiCredentialsSecretUID(ctx context.Context, cc *dbv1alpha1.CassandraCluster) (types.UID, error) {
+	secret := &v1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: proberAuthSecretName(cc), Namespace: cc.Namespace}, secret)
+	if apierrors.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get the secret the ui mounts its credentials from")
+	}
+
+	return secret.UID, nil
+}
+
 // desiredUIDeployment is a single Kubernetes manifest literal, left unsplit for readability.
-func desiredUIDeployment(cc *dbv1alpha1.CassandraCluster) *appsv1.Deployment {
+func desiredUIDeployment(cc *dbv1alpha1.CassandraCluster, credentialsSecretUID types.UID) *appsv1.Deployment {
 	uiLabels := labels.ComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,7 +133,10 @@ func desiredUIDeployment(cc *dbv1alpha1.CassandraCluster) *appsv1.Deployment {
 			Selector:             &metav1.LabelSelector{MatchLabels: uiLabels},
 			RevisionHistoryLimit: ptr.To[int32](10),
 			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: uiLabels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      uiLabels,
+					Annotations: map[string]string{uiCredentialsSecretAnnotation: string(credentialsSecretUID)},
+				},
 				Spec: v1.PodSpec{
 					Containers:       []v1.Container{uiContainer(cc)},
 					Volumes:          []v1.Volume{uiProberCredentialsVolume(cc)},
@@ -214,10 +243,11 @@ const (
 	uiProberCredentialsDir        = "/etc/prober-credentials"
 )
 
-// uiProberCredentialsVolume mounts the secret prober validates its HTTP Basic Auth against. It's a
-// volume rather than secretKeyRef env vars because the operator rotates this secret's password in
-// place, and kubelet refreshes a secret volume's files (env vars are fixed at container start). The
-// UI re-reads the files on every request, so a rotation reaches it without a pod restart.
+// uiProberCredentialsVolume mounts the secret prober validates its HTTP Basic Auth against. The UI
+// re-reads the files on every request, so an in-place update of a mutable secret (the user's admin
+// secret with local-file JMX auth) reaches it without a pod restart. The operator's own
+// <cluster>-auth-active-admin is immutable and gets replaced instead, which kubelet never picks up;
+// uiCredentialsSecretAnnotation rolls the pod in that case.
 func uiProberCredentialsVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 	return v1.Volume{
 		Name: uiProberCredentialsVolumeName,

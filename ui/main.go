@@ -27,8 +27,10 @@ var staticFiles embed.FS
 // only the proxied API surface (see proxyablePaths) to the browser.
 //
 // When CredentialsDir is set (the operator-managed Deployment mounts prober's
-// auth secret there), credentials are re-read from it on every request, so an
-// admin password rotation reaches the UI without a restart. User/Password are
+// auth secret there), credentials are re-read from it on every request, so a
+// change to the mounted files is picked up without a restart. Kubelet never
+// refreshes a volume backed by an immutable or replaced secret; the operator
+// restarts the pod in that case. User/Password are
 // the fallback for running the UI by hand with env vars.
 type Environment struct {
 	Name           string
