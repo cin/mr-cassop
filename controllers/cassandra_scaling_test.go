@@ -210,7 +210,7 @@ func TestHandlePodDecommission_TransientModesWait(t *testing.T) {
 
 			asserts.Expect(f.handle()).To(Succeed()) // no Decommission call is expected on the mock
 			asserts.Expect(f.replicas(asserts)).To(BeEquivalentTo(3))
-			asserts.Expect(f.reconciler.Jobs.Exists("pod-decommission-" + f.podName)).To(BeFalse())
+			asserts.Expect(f.reconciler.Jobs.IsRunning("pod-decommission-" + f.podName)).To(BeFalse())
 		})
 	}
 }
@@ -226,6 +226,29 @@ func TestHandlePodDecommission_NormalNodeStartsDecommission(t *testing.T) {
 
 	asserts.Expect(f.handle()).To(Succeed())
 	asserts.Eventually(decommissioned).Should(BeClosed())
+}
+
+// https://github.com/cin/mr-cassop/issues/213: jobs were never registered, so a reconcile arriving while a
+// decommission call was still blocked started a second one. The mocks allow one OperationMode and one
+// Decommission call, so the second reconcile must return before reaching either.
+func TestHandlePodDecommission_RunningJobIsNotStartedTwice(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+	f := newDecommissionModeFixture(t, nodectl.NodeOperationModeNormal)
+	started, release := make(chan struct{}), make(chan struct{})
+	f.nctl.EXPECT().Decommission(gomock.Any(), "10.0.0.3").DoAndReturn(func(context.Context, string) error {
+		close(started)
+		<-release
+		return nil
+	})
+
+	asserts.Expect(f.handle()).To(Succeed())
+	asserts.Eventually(started).Should(BeClosed())
+	asserts.Expect(f.reconciler.Jobs.IsRunning("pod-decommission-" + f.podName)).To(BeTrue())
+
+	asserts.Expect(f.handle()).To(Succeed()) // decommission in progress, waits
+
+	close(release)
+	asserts.Eventually(func() bool { return f.reconciler.Jobs.IsRunning("pod-decommission-" + f.podName) }).Should(BeFalse())
 }
 
 func TestHandlePodDecommission_FailedDecommissionJobIsReported(t *testing.T) {

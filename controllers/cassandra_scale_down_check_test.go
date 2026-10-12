@@ -156,7 +156,7 @@ func TestHandlePodDecommission_BlockedByKeyspaceReplication(t *testing.T) {
 		ContainSubstring("system_auth (RF 3)"),
 		ContainSubstring("user_ks (RF 3)"),
 		Not(ContainSubstring("system_traces")))))
-	asserts.Expect(f.reconciler.Jobs.Exists("pod-decommission-test-cluster-cassandra-dc1-2")).To(BeFalse())
+	asserts.Expect(f.reconciler.Jobs.IsRunning("pod-decommission-test-cluster-cassandra-dc1-2")).To(BeFalse())
 }
 
 func TestHandlePodDecommission_StartsOnceReplicationAllows(t *testing.T) {
