@@ -202,7 +202,7 @@ func findPod(podList *v1.PodList, name string) *v1.Pod {
 
 func (r *CassandraClusterReconciler) handlePodDecommission(ctx context.Context, cc *dbv1alpha1.CassandraCluster, sts appsv1.StatefulSet, broadcastAddresses map[string]string, decommissionPodName string, podList *v1.PodList) error {
 	jobName := "pod-decommission-" + decommissionPodName
-	if r.Jobs.Exists(jobName) && r.Jobs.IsRunning(jobName) {
+	if r.Jobs.IsRunning(jobName) {
 		r.Log.Infof("decommission in progress, waiting to finish")
 		return nil
 	}
@@ -291,9 +291,6 @@ func (r *CassandraClusterReconciler) scaleDownIfDecommissioned(ctx context.Conte
 	r.Log.Infof("node %s/%s is decommissioned, scaling down the statefulset", pod.Namespace, pod.Name)
 	if err = r.Update(ctx, &sts); err != nil {
 		return errors.Wrap(err, "couldn't scale down the statefulset to remove the decommissioned node")
-	}
-	if err = r.Jobs.RemoveJob("pod-decommission-" + pod.Name); err != nil {
-		return errors.Wrap(err, "can't remove job")
 	}
 
 	return nil
