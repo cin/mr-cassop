@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,6 +25,9 @@ import (
 )
 
 var errDCDecommissionBlocked = errors.New("DC decommission blocked")
+
+// opModeCheckTimeout bounds the operation mode lookup made after a decommission call returned an error.
+const opModeCheckTimeout = 30 * time.Second
 
 func (r *CassandraClusterReconciler) reconcileCassandraScaling(ctx context.Context, cc *dbv1alpha1.CassandraCluster, podList *v1.PodList, nodesList *v1.NodeList, allDCs []dbv1alpha1.DC, adminRoleSecret *v1.Secret) (bool, error) {
 	broadcastAddresses, err := getBroadcastAddresses(cc, excludePodsPendingRemoval(cc, podList.Items), nodesList.Items)
@@ -304,21 +308,48 @@ func (r *CassandraClusterReconciler) warnWithEvent(cc *dbv1alpha1.CassandraClust
 func (r *CassandraClusterReconciler) startDecommission(cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pod *v1.Pod, broadcastIP string) error {
 	r.Log.Infof("starting decommision of node %s/%s", pod.Namespace, pod.Name)
 	err := r.Jobs.Run("pod-decommission-"+pod.Name, cc, func() error {
-		decommissionCtx := context.Background() //reconcile context may cancel the job sooner that needed
-		decommissionErr := nctl.Decommission(decommissionCtx, broadcastIP)
-		if decommissionErr != nil {
-			r.Log.Errorf("failed to decommission pod, error: %s", decommissionErr.Error())
-			r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Decommission of node %s failed: %s", pod.Name, decommissionErr.Error()))
-			return decommissionErr
-		}
-
-		return nil
+		return r.runDecommission(cc, nctl, pod, broadcastIP)
 	})
 	if err != nil {
 		return errors.Wrapf(err, "failed to start job to decommission pod %s", pod.Name)
 	}
 
 	return nil
+}
+
+// runDecommission blocks until the decommission call returns. The call can return an error while
+// Cassandra keeps decommissioning: the Jolokia-to-JMX connection has its own read timeout (about
+// 30s), far shorter than streaming a node's data out. So an error is only a failed decommission
+// if the node isn't leaving the ring; otherwise the operation mode drives the rest of the scale-down.
+func (r *CassandraClusterReconciler) runDecommission(cc *dbv1alpha1.CassandraCluster, nctl nodectl.Nodectl, pod *v1.Pod, broadcastIP string) error {
+	decommissionCtx := context.Background() //reconcile context may cancel the job sooner that needed
+	decommissionErr := nctl.Decommission(decommissionCtx, broadcastIP)
+	if decommissionErr == nil {
+		return nil
+	}
+
+	if r.nodeIsLeaving(nctl, broadcastIP) {
+		r.Log.Infof("decommission call for node %s/%s returned an error, but the node is leaving the ring: %s", pod.Namespace, pod.Name, decommissionErr.Error())
+		return nil
+	}
+
+	r.Log.Errorf("failed to decommission pod, error: %s", decommissionErr.Error())
+	r.warnWithEvent(cc, events.EventDecommissionFailed, fmt.Sprintf("Decommission of node %s failed: %s", pod.Name, decommissionErr.Error()))
+	return decommissionErr
+}
+
+// nodeIsLeaving reports whether the node is decommissioning or has finished doing so.
+func (r *CassandraClusterReconciler) nodeIsLeaving(nctl nodectl.Nodectl, nodeIP string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), opModeCheckTimeout)
+	defer cancel()
+
+	opMode, err := nctl.OperationMode(ctx, nodeIP)
+	if err != nil {
+		r.Log.Warnf("couldn't get the operation mode of %s after a failed decommission call: %s", nodeIP, err.Error())
+		return false
+	}
+
+	return opMode == nodectl.NodeOperationModeLeaving || opMode == nodectl.NodeOperationModeDecommissioned
 }
 
 // handlePodWithoutIP scales away a pod that has no IP, unless it's recorded in the pod IPs configmap.
