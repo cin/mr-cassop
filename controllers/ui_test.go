@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -92,5 +93,5 @@ func TestUICredentialsSecretUID(t *testing.T) {
 	g.Expect(r.Create(context.Background(), secret)).To(Succeed())
 	uid, err = r.uiCredentialsSecretUID(context.Background(), cc)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(uid).NotTo(BeEmpty())
+	g.Expect(uid).To(Equal(types.UID("uid-1")))
 }
