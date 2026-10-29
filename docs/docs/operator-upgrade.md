@@ -41,3 +41,13 @@ The default [`sysctl`](sysctl.md) values were aligned with the Apache Cassandra 
 - Removed the legacy/no-op defaults `fs.file-max`, `net.ipv4.tcp_ecn`, and `net.ipv4.tcp_window_scaling`.
 
 Any keys you set explicitly in `.spec.cassandra.sysctls` are still applied as-is, including ones that are no longer defaults. If you relied on the old `vm.max_map_count`/`fs.file-max` values, set them explicitly before upgrading.
+
+### Pod disruption budgets (unreleased)
+
+The operator now creates a PodDisruptionBudget per DC (`maxUnavailable: 1`) for every `CassandraCluster` that doesn't set
+`.spec.cassandra.podDisruptionBudget.enabled`. Upgrading therefore adds the budgets to existing clusters on the next
+reconcile; no pod is restarted. A node drain is then held back while a Cassandra pod of the same DC is down. See
+[Node drains and upgrades](cassandracluster-lifecycle.md#node-drains-and-upgrades). The operator's ClusterRole gains the
+`policy` `poddisruptionbudgets` permissions, which the chart upgrade applies.
+
+To keep the previous behavior, set `podDisruptionBudget.defaultEnabled: false` in the Helm values, or `enabled: false` on a cluster.

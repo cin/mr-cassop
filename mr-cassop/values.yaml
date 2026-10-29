@@ -24,6 +24,10 @@ cassandraImage: ""
 reaperImage: thelastpickle/cassandra-reaper:5.0.1
 icarusImage: ""
 uiImage: ""
+# Whether a CassandraCluster that doesn't set spec.cassandra.podDisruptionBudget.enabled gets a
+# PodDisruptionBudget per DC. Turn off for dev and local installs, where a drain should never be held up.
+podDisruptionBudget:
+  defaultEnabled: true
 clusterDashboards:
   enabled: []
   namespace: ""

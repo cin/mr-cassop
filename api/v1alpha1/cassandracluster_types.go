@@ -288,11 +288,24 @@ type Cassandra struct {
 	Sysctls                       map[string]string `json:"sysctls,omitempty"`
 	Monitoring                    Monitoring        `json:"monitoring,omitempty"`
 	ConfigOverrides               string            `json:"configOverrides,omitempty"`
+	// Limits voluntary disruptions of the Cassandra pods, such as a node drain, with one
+	// PodDisruptionBudget per DC.
+	PodDisruptionBudget PodDisruptionBudget `json:"podDisruptionBudget,omitempty"`
 	// Annotations to add to the ServiceAccount used by the cassandra pod (shared with its icarus
 	// sidecar). Primarily for cloud workload-identity federation (e.g. AWS IRSA's
 	// "eks.amazonaws.com/role-arn", GCP Workload Identity's "iam.gke.io/gcp-service-account"),
 	// so backup/restore can authenticate to cloud storage without any static credentials.
 	ServiceAccountAnnotations map[string]string `json:"serviceAccountAnnotations,omitempty"`
+}
+
+type PodDisruptionBudget struct {
+	// Creates a PodDisruptionBudget for each DC. When unset, the operator-wide default applies (the
+	// Helm value podDisruptionBudget.defaultEnabled).
+	Enabled *bool `json:"enabled,omitempty"`
+	// Number of Cassandra pods per DC that can be unavailable because of a voluntary disruption.
+	// Defaults to 1.
+	// +kubebuilder:validation:Minimum:=1
+	MaxUnavailable *int32 `json:"maxUnavailable,omitempty"`
 }
 
 type Persistence struct {

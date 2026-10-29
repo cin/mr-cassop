@@ -37,5 +37,9 @@ func (r *CassandraClusterReconciler) reconcileCassandra(ctx context.Context, cc 
 		return errors.Wrap(err, "Failed to reconcile cassandra pods labels")
 	}
 
+	if err := r.reconcilePodDisruptionBudgets(ctx, cc); err != nil {
+		return errors.Wrap(err, "Failed to reconcile pod disruption budgets")
+	}
+
 	return nil
 }

@@ -69,6 +69,8 @@ spec:
               value: {{ .Values.icarusImage | default (printf "%s/icarus:%s" $imageRepo $imageTag) | quote }}
             - name: DEFAULT_UI_IMAGE
               value: {{ .Values.uiImage | default (printf "%s/ui:%s" $imageRepo $imageTag) | quote }}
+            - name: DEFAULT_POD_DISRUPTION_BUDGET_ENABLED
+              value: {{ .Values.podDisruptionBudget.defaultEnabled | quote }}
             - name: WEBHOOKS_ENABLED
               value: {{ .Values.admissionWebhooks.enabled | quote }}
           volumeMounts:

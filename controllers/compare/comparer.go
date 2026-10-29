@@ -6,6 +6,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	nwv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -45,6 +46,8 @@ var (
 	ingressOpts = []cmp.Option{cmpopts.IgnoreFields(nwv1.Ingress{}, sharedIgnoreMetadata...), cmpopts.IgnoreFields(nwv1.Ingress{}, sharedIgnoreStatus...)}
 
 	nwPolicyOpts = []cmp.Option{cmpopts.IgnoreFields(nwv1.NetworkPolicy{}, sharedIgnoreMetadata...)}
+
+	pdbOpts = []cmp.Option{cmpopts.IgnoreFields(policyv1.PodDisruptionBudget{}, sharedIgnoreMetadata...), cmpopts.IgnoreFields(policyv1.PodDisruptionBudget{}, sharedIgnoreStatus...)}
 )
 
 // EqualStatefulSet compares 2 statefulsets for equality
@@ -153,4 +156,14 @@ func EqualNetworkPolicy(actual, desired *nwv1.NetworkPolicy) bool {
 
 func DiffNetworkPolicy(actual, desired *nwv1.NetworkPolicy) string {
 	return cmp.Diff(actual, desired, nwPolicyOpts...)
+}
+
+// EqualPodDisruptionBudget compares 2 pod disruption budgets for equality
+func EqualPodDisruptionBudget(actual, desired *policyv1.PodDisruptionBudget) bool {
+	return cmp.Equal(actual, desired, pdbOpts...)
+}
+
+// DiffPodDisruptionBudget generates a patch diff between 2 pod disruption budgets
+func DiffPodDisruptionBudget(actual, desired *policyv1.PodDisruptionBudget) string {
+	return cmp.Diff(actual, desired, pdbOpts...)
 }
