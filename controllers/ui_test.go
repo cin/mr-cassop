@@ -8,9 +8,11 @@ import (
 	"github.com/cin/mr-cassop/controllers/compare"
 	"github.com/cin/mr-cassop/controllers/names"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -94,4 +96,25 @@ func TestUICredentialsSecretUID(t *testing.T) {
 	uid, err = r.uiCredentialsSecretUID(context.Background(), cc)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(uid).To(Equal(types.UID("uid-1")))
+}
+
+// https://github.com/cin/mr-cassop/issues/218: the API server defaults these Deployment fields when they're
+// left unset, so a desired object that doesn't set them differs from the persisted one on every reconcile and
+// the operator issues a no-op Update each time. Checked against envtest on Kubernetes 1.32, 1.35 and 1.37.
+func TestUIDeploymentSetsAPIServerDefaults(t *testing.T) {
+	g := NewGomegaWithT(t)
+	cc := &dbv1alpha1.CassandraCluster{ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"}}
+
+	deploy := desiredUIDeployment(cc, "")
+	percent25 := intstr.FromString("25%")
+	g.Expect(deploy.Spec.Strategy).To(Equal(appsv1.DeploymentStrategy{
+		Type:          appsv1.RollingUpdateDeploymentStrategyType,
+		RollingUpdate: &appsv1.RollingUpdateDeployment{MaxUnavailable: &percent25, MaxSurge: &percent25},
+	}))
+	g.Expect(deploy.Spec.ProgressDeadlineSeconds).To(HaveValue(BeEquivalentTo(600)))
+	g.Expect(deploy.Spec.Template.Spec.TerminationGracePeriodSeconds).To(HaveValue(BeEquivalentTo(30)))
+
+	container := deploy.Spec.Template.Spec.Containers[0]
+	g.Expect(container.TerminationMessagePath).To(Equal("/dev/termination-log"))
+	g.Expect(container.TerminationMessagePolicy).To(Equal(v1.TerminationMessageReadFile))
 }
