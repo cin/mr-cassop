@@ -34,8 +34,9 @@ spec:
 The operator creates a Deployment and a ClusterIP Service (`<cluster>-nodetool-ui`), pointed at the
 cluster's own in-cluster Prober service. It mounts the same admin credentials secret Prober itself
 validates against at `/etc/prober-credentials` (`PROBER_CREDENTIALS_DIR`) and re-reads it on every
-request, so there's nothing to look up or paste in by hand, and an admin password rotation reaches the UI
-without restarting it. It's ClusterIP-only by design: this tool has real (if gated) destructive operations, so it isn't
+request, so there's nothing to look up or paste in by hand. When the operator replaces that secret (it's
+immutable, so a changed admin password or the switch from the bootstrap login to the admin credentials
+creates a new one), it restarts the UI pod so it mounts the new secret. It's ClusterIP-only by design: this tool has real (if gated) destructive operations, so it isn't
 exposed publicly. Reach it the same way you'd reach Prober or Reaper:
 
 ```bash
