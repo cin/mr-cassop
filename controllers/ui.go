@@ -129,26 +129,47 @@ func desiredUIDeployment(cc *dbv1alpha1.CassandraCluster, credentialsSecretUID t
 			Labels:    labels.CombinedComponentLabels(cc, dbv1alpha1.CassandraClusterComponentUI),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas:             ptr.To[int32](1),
-			Selector:             &metav1.LabelSelector{MatchLabels: uiLabels},
-			RevisionHistoryLimit: ptr.To[int32](10),
+			Replicas:                ptr.To[int32](1),
+			Selector:                &metav1.LabelSelector{MatchLabels: uiLabels},
+			Strategy:                uiDeploymentStrategy(),
+			RevisionHistoryLimit:    ptr.To[int32](10),
+			ProgressDeadlineSeconds: ptr.To[int32](uiProgressDeadlineSeconds),
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      uiLabels,
 					Annotations: map[string]string{uiCredentialsSecretAnnotation: string(credentialsSecretUID)},
 				},
 				Spec: v1.PodSpec{
-					Containers:       []v1.Container{uiContainer(cc)},
-					Volumes:          []v1.Volume{uiProberCredentialsVolume(cc)},
-					RestartPolicy:    v1.RestartPolicyAlways,
-					DNSPolicy:        v1.DNSClusterFirst,
-					SecurityContext:  uiPodSecurityContext(),
-					ImagePullSecrets: imagePullSecrets(cc),
-					Tolerations:      cc.Spec.UI.Tolerations,
-					NodeSelector:     cc.Spec.UI.NodeSelector,
+					Containers:                    []v1.Container{uiContainer(cc)},
+					Volumes:                       []v1.Volume{uiProberCredentialsVolume(cc)},
+					RestartPolicy:                 v1.RestartPolicyAlways,
+					DNSPolicy:                     v1.DNSClusterFirst,
+					TerminationGracePeriodSeconds: ptr.To[int64](uiTerminationGracePeriodSeconds),
+					SecurityContext:               uiPodSecurityContext(),
+					ImagePullSecrets:              imagePullSecrets(cc),
+					Tolerations:                   cc.Spec.UI.Tolerations,
+					NodeSelector:                  cc.Spec.UI.NodeSelector,
 				},
 			},
 		},
+	}
+}
+
+// The API server fills in these Deployment fields (and the strategy and container termination message
+// fields) when they're left unset. The desired object sets the same values, so a reconcile of an unchanged
+// cluster finds no diff and issues no Update (#218).
+const (
+	uiTerminationGracePeriodSeconds = 30
+	uiProgressDeadlineSeconds       = 600
+)
+
+// uiDeploymentStrategy is the API server's default rolling update. For the single replica a 25% maxUnavailable
+// rounds down to 0, so the new pod is ready before the old one stops.
+func uiDeploymentStrategy() appsv1.DeploymentStrategy {
+	percent25 := intstr.FromString("25%")
+	return appsv1.DeploymentStrategy{
+		Type:          appsv1.RollingUpdateDeploymentStrategyType,
+		RollingUpdate: &appsv1.RollingUpdateDeployment{MaxUnavailable: &percent25, MaxSurge: &percent25},
 	}
 }
 
@@ -277,7 +298,9 @@ func uiContainer(cc *dbv1alpha1.CassandraCluster) v1.Container {
 			{Name: "PROBER_CREDENTIALS_DIR", Value: uiProberCredentialsDir},
 			{Name: "LISTEN_ADDR", Value: fmt.Sprintf(":%d", dbv1alpha1.UIContainerPort)},
 		},
-		SecurityContext: uiContainerSecurityContext(),
+		SecurityContext:          uiContainerSecurityContext(),
+		TerminationMessagePath:   "/dev/termination-log",
+		TerminationMessagePolicy: v1.TerminationMessageReadFile,
 		VolumeMounts: []v1.VolumeMount{
 			{Name: uiProberCredentialsVolumeName, MountPath: uiProberCredentialsDir, ReadOnly: true},
 		},
