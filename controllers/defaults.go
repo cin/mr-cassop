@@ -10,6 +10,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+const defaultPodDisruptionBudgetMaxUnavailable = 1
+
 var (
 	defaultCipherSuites = []string{
 		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
@@ -216,6 +218,8 @@ func (r *CassandraClusterReconciler) defaultCassandra(cc *dbv1alpha1.CassandraCl
 		cc.Spec.Cassandra.LogLevel = "info"
 	}
 
+	r.defaultPodDisruptionBudget(cc)
+
 	if cc.Spec.Cassandra.TerminationGracePeriodSeconds == nil {
 		cc.Spec.Cassandra.TerminationGracePeriodSeconds = ptr.To[int64](300)
 	}
@@ -380,5 +384,16 @@ func (r *CassandraClusterReconciler) defaultSysctls(cc *dbv1alpha1.CassandraClus
 		if _, exists := cc.Spec.Cassandra.Sysctls[key]; !exists {
 			cc.Spec.Cassandra.Sysctls[key] = value
 		}
+	}
+}
+
+func (r *CassandraClusterReconciler) defaultPodDisruptionBudget(cc *dbv1alpha1.CassandraCluster) {
+	pdb := &cc.Spec.Cassandra.PodDisruptionBudget
+	if pdb.Enabled == nil {
+		pdb.Enabled = ptr.To(r.Cfg.DefaultPodDisruptionBudgetEnabled)
+	}
+
+	if pdb.MaxUnavailable == nil {
+		pdb.MaxUnavailable = ptr.To[int32](defaultPodDisruptionBudgetMaxUnavailable)
 	}
 }

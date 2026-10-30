@@ -38,6 +38,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbac "k8s.io/api/rbac/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -111,6 +112,7 @@ type CassandraClusterReconciler struct {
 // +kubebuilder:rbac:groups="",resources=endpoints,verbs=list;watch
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;patch;delete
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups="batch",resources=jobs,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;roles;rolebindings,verbs=list;watch;get;create;update;delete
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;create;update;delete
@@ -426,6 +428,7 @@ func SetupCassandraReconciler(r reconcile.Reconciler, mgr manager.Manager, logr 
 		Owns(&appsv1.Deployment{}).
 		Owns(&v1.Service{}).
 		Owns(&appsv1.StatefulSet{}).
+		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&v1.Secret{}).
 		Owns(&v1.ConfigMap{}).
 		Owns(&rbac.Role{}).

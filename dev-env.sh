@@ -31,6 +31,8 @@ export DEFAULT_ICARUS_IMAGE="ghcr.io/cin/mr-cassop/icarus:0.6.5"
 # `make docker-build-ui` and it'll pick up this :dev tag. Only used when a
 # CassandraCluster opts into spec.ui.enabled.
 export DEFAULT_UI_IMAGE="ghcr.io/cin/mr-cassop/ui:dev"
+# The operator creates a PodDisruptionBudget per DC unless told otherwise; a local run shouldn't.
+export DEFAULT_POD_DISRUPTION_BUDGET_ENABLED="false"
 
 echo "✅ Environment variables set for local development"
 echo "📋 Key settings:"

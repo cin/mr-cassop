@@ -43,6 +43,7 @@ import (
 	"github.com/cin/mr-cassop/controllers/webhooks"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	nwv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	gocql "github.com/apache/cassandra-gocql-driver/v2"
@@ -487,6 +488,7 @@ func CleanUpCreatedResources(ccName, ccNamespace string) {
 	// add DC specific resources
 	for _, dc := range cc.Spec.DCs {
 		resourcesToDelete = append(resourcesToDelete, resourceToDelete{name: names.DC(cc.Name, dc.Name), objType: &apps.StatefulSet{}})
+		resourcesToDelete = append(resourcesToDelete, resourceToDelete{name: names.DC(cc.Name, dc.Name), objType: &policyv1.PodDisruptionBudget{}})
 		resourcesToDelete = append(resourcesToDelete, resourceToDelete{name: names.DCService(cc.Name, dc.Name), objType: &v1.Service{}})
 		resourcesToDelete = append(resourcesToDelete, resourceToDelete{name: names.ReaperDeployment(cc.Name, dc.Name), objType: &apps.Deployment{}})
 		resourcesToDelete = append(resourcesToDelete, resourceToDelete{name: names.ConfigMap(cc.Name), objType: &v1.ConfigMap{}})

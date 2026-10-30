@@ -503,6 +503,24 @@ spec:
                           type: string
                         type: object
                     type: object
+                  podDisruptionBudget:
+                    description: |-
+                      Limits voluntary disruptions of the Cassandra pods, such as a node drain, with one
+                      PodDisruptionBudget per DC.
+                    properties:
+                      enabled:
+                        description: |-
+                          Creates a PodDisruptionBudget for each DC. When unset, the operator-wide default applies (the
+                          Helm value podDisruptionBudget.defaultEnabled).
+                        type: boolean
+                      maxUnavailable:
+                        description: |-
+                          Number of Cassandra pods per DC that can be unavailable because of a voluntary disruption.
+                          Defaults to 1.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                    type: object
                   purgeGossip:
                     type: boolean
                   resources:

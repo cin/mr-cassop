@@ -101,6 +101,36 @@ Raising the DC's replicas back doesn't clear the state. A node in `JOINING_FAILE
 DC removal follows the same decommission process as above except it's for all nodes. 
 After all cassandra nodes are removed, the operator remove the statefulset, service and Reaper that managed that DC.
 
+## Node drains and upgrades
+
+The operator rolls its own changes one pod at a time, but a `kubectl drain`, a Kubernetes node upgrade or a cluster
+autoscaler scale-down evicts pods on its own schedule. With RF=3, losing two replicas of a range at once breaks
+`LOCAL_QUORUM` reads and writes for that range.
+
+To prevent that, the operator creates one PodDisruptionBudget per DC, named `<cluster>-cassandra-<dc>`. It selects only that DC's
+Cassandra pods and allows `maxUnavailable` of them (default `1`) to be evicted at a time. Configure it with
+`spec.cassandra.podDisruptionBudget`:
+
+```yaml
+spec:
+  cassandra:
+    podDisruptionBudget:
+      enabled: true
+      maxUnavailable: 1
+```
+
+Whether it is on when `enabled` is not set depends on the operator install: the Helm value
+`podDisruptionBudget.defaultEnabled` is `true` by default, and `local-values.yaml` turns it off for local installs. Set
+`enabled` on the cluster to override either way. Disabling it, or removing a DC, deletes the budget.
+
+:::note
+
+A budget with `maxUnavailable: 1` also blocks a drain while a pod of the same DC is already down, such as one that is still
+starting. That is the protection working, so in a node-upgrade runbook wait for the DC's pods to be Ready before draining the next node.
+A DC with a single replica gets no protection, since losing that one pod is within the budget.
+
+:::
+
 ## Deleting CassandraClusters
 
 The cluster can be removed simply by removing the CassandraCluster resource. It will remove all pods and configs created by the operator.

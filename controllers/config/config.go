@@ -34,6 +34,9 @@ type Config struct {
 	// Not `required`: only used when a CassandraCluster opts into spec.ui.enabled, unlike the
 	// other components above which are always deployed.
 	DefaultUIImage string `env:"DEFAULT_UI_IMAGE"`
+	// Whether a CassandraCluster that doesn't set spec.cassandra.podDisruptionBudget.enabled gets a
+	// PodDisruptionBudget per DC. On unless a dev or local install turns it off.
+	DefaultPodDisruptionBudgetEnabled bool `env:"DEFAULT_POD_DISRUPTION_BUDGET_ENABLED" envDefault:"true"`
 }
 
 func LoadConfig() (*Config, error) {
