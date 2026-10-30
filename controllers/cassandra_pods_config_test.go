@@ -16,6 +16,7 @@ import (
 
 	"github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/mocks"
+	"github.com/cin/mr-cassop/controllers/names"
 	"github.com/cin/mr-cassop/controllers/prober"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/gomega"
@@ -1338,6 +1339,50 @@ export PAUSE_REASON="pod is not paused"
 `,
 			},
 			expectedError: nil,
+		},
+		{
+			// https://github.com/cin/mr-cassop/issues/160: a container restarted in place keeps the pod IP
+			// recorded in the pod IPs configmap, and replace_address of its own live IP crash-loops it.
+			name: "previous IP is only passed when the pod's address changed",
+			cc: &v1alpha1.CassandraCluster{
+				ObjectMeta: ccObjMeta,
+				Spec: v1alpha1.CassandraClusterSpec{
+					DCs: []v1alpha1.DC{{Name: "dc1", Replicas: proto.Int(2)}},
+				},
+			},
+			podList: &v1.PodList{
+				Items: []v1.Pod{
+					createTestPod("test-cluster-cassandra-dc1-0", ccNamespace, "uid1", "10.1.1.3", "node1", false, cLabels(ccName, "dc1", true)),
+					createTestPod("test-cluster-cassandra-dc1-1", ccNamespace, "uid2", "10.1.1.4", "node2", false, cLabels(ccName, "dc1", true)),
+				},
+			},
+			nodeList: &v1.NodeList{},
+			k8sObjects: []client.Object{
+				&appsv1.StatefulSet{ObjectMeta: stsObjectMeta, Spec: appsv1.StatefulSetSpec{Replicas: proto.Int32(2)}},
+				&v1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Name: names.PodIPsConfigMap(ccName), Namespace: ccNamespace},
+					Data: map[string]string{
+						"test-cluster-cassandra-dc1-0": "10.1.1.3", // restarted in place, same address
+						"test-cluster-cassandra-dc1-1": "10.1.1.9", // recreated on a new address
+					},
+				},
+			},
+			expectedCMData: map[string]string{
+				"test-cluster-cassandra-dc1-0_uid1.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.3
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.3
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+				"test-cluster-cassandra-dc1-1_uid2.sh": `export CASSANDRA_BROADCAST_ADDRESS=10.1.1.4
+export CASSANDRA_BROADCAST_RPC_ADDRESS=10.1.1.4
+export CASSANDRA_SEEDS=test-cluster-cassandra-dc1-0.test-cluster-cassandra-dc1.default.svc.cluster.local
+export CASSANDRA_NODE_PREVIOUS_IP=10.1.1.9
+export PAUSE_INIT=false
+export PAUSE_REASON="pod is not paused"
+`,
+			},
 		},
 	}
 
