@@ -107,11 +107,10 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"replace_address=\"\"\n" +
 						"old_ip=$CASSANDRA_NODE_PREVIOUS_IP\n" +
 						"if [[ \"${old_ip}\" != \"\" ]]; then\n" +
-						"  # replace_address_first_boot is a no-op once the node has already completed\n" +
-						"  # bootstrap (see CASSANDRA-7356), so it's safe to always pass it when the\n" +
-						"  # pod's IP changed - including on a restart with existing persisted data,\n" +
-						"  # which is the common case in Kubernetes and where gossip peers actually\n" +
-						"  # need to be told this node's identity moved to a new address.\n" +
+						"  # replace_address_first_boot only takes effect when the node has no completed\n" +
+						"  # bootstrap (e.g. an empty data volume), where it replaces the old node at\n" +
+						"  # old_ip. With existing data it's ignored (CASSANDRA-7356), and Cassandra\n" +
+						"  # handles the IP change itself via the node's host ID.\n" +
 						"  replace_address=\"-Dcassandra.replace_address_first_boot=${old_ip}\"\n" +
 						"  echo replacing old Cassandra node - adding arg $replace_address\n" +
 						"else\n" +
