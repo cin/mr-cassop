@@ -107,7 +107,7 @@ func (r *CassandraClusterReconciler) podsConfigMapData(ctx context.Context, cc *
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_BROADCAST_ADDRESS=" + broadcastAddress)
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_BROADCAST_RPC_ADDRESS=" + pod.Status.PodIP)
 		cmData[entryName] += fmt.Sprintln("export CASSANDRA_SEEDS=" + strings.Join(seedsList, ","))
-		cmData[entryName] += fmt.Sprintln("export CASSANDRA_NODE_PREVIOUS_IP=" + originalPodIPs[pod.Name])
+		cmData[entryName] += fmt.Sprintln("export CASSANDRA_NODE_PREVIOUS_IP=" + replacedIP(originalPodIPs[pod.Name], broadcastAddress))
 
 		pauseInit, pauseReason := pausePodInit(pod, nextDCToInit, currentRegionPaused, seedNodesReady, nextNonSeedPodName)
 		cmData[entryName] += fmt.Sprintln("export PAUSE_INIT=" + fmt.Sprint(pauseInit))
@@ -115,6 +115,17 @@ func (r *CassandraClusterReconciler) podsConfigMapData(ctx context.Context, cc *
 	}
 
 	return cmData, nil
+}
+
+// replacedIP returns the recorded address the pod should replace, or "" when the pod is still on it.
+// A container restarted in place keeps its recorded address, and Cassandra refuses to replace its own
+// live address ("Cannot replace_address ... because it doesn't exist in gossip"), so passing it would
+// crash-loop the pod until someone edits the pod IPs configmap (#160).
+func replacedIP(recorded, current string) string {
+	if recorded == current {
+		return ""
+	}
+	return recorded
 }
 
 func dcSeedPodsReady(pods []v1.Pod, dc string) bool {
