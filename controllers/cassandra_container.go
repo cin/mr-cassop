@@ -192,6 +192,32 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 	return containerPorts
 }
 
+// replaceAddressScript sets replace_address for the Cassandra command when the pod has a previous IP
+// and its data volume holds no completed bootstrap. replace_address_first_boot is only meaningful then:
+// with a completed bootstrap Cassandra ignores it (CASSANDRA-7356) and handles an IP change itself via
+// the node's host ID, and a node asked to replace its own live address can crash-loop (#160).
+// system.local sstables exist before a bootstrap completes, so the check reads the recorded state.
+// A failing sstabledump counts as not bootstrapped, which keeps the replace.
+const replaceAddressScript = `bootstrap_completed() {
+  local sstable dump
+  for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do
+    [[ -e "${sstable}" ]] || continue
+    dump=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null)
+    [[ "${dump}" == *'"name" : "bootstrapped", "value" : "COMPLETED"'* ]] && return 0
+  done
+  return 1
+}
+replace_address=""
+old_ip=$CASSANDRA_NODE_PREVIOUS_IP
+if [[ "${old_ip}" == "" ]]; then
+  echo not using replace address since the node IP hasn\'t changed
+elif bootstrap_completed; then
+  echo node already bootstrapped - not adding replace address
+else
+  replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
+  echo replacing old Cassandra node - adding arg $replace_address
+fi`
+
 func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1.Secret) string {
 	var args []string
 	if cc.Spec.Cassandra.PurgeGossip != nil && *cc.Spec.Cassandra.PurgeGossip {
@@ -203,18 +229,7 @@ func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1
 		"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/",
 		"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options",
 		"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh",
-		`replace_address=""
-old_ip=$CASSANDRA_NODE_PREVIOUS_IP
-if [[ "${old_ip}" != "" ]]; then
-  # replace_address_first_boot only takes effect when the node has no completed
-  # bootstrap (e.g. an empty data volume), where it replaces the old node at
-  # old_ip. With existing data it's ignored (CASSANDRA-7356), and Cassandra
-  # handles the IP change itself via the node's host ID.
-  replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
-  echo replacing old Cassandra node - adding arg $replace_address
-else
-  echo not using replace address since the node IP hasn\'t changed
-fi`,
+		replaceAddressScript,
 	)
 
 	if cc.Spec.Encryption.Client.Enabled {

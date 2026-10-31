@@ -104,17 +104,24 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/\n" +
 						"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options\n" +
 						"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh\n" +
+						"bootstrap_completed() {\n" +
+						"  local sstable dump\n" +
+						"  for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do\n" +
+						"    [[ -e \"${sstable}\" ]] || continue\n" +
+						"    dump=$(\"${CASSANDRA_HOME}/tools/bin/sstabledump\" \"${sstable}\" 2>/dev/null)\n" +
+						"    [[ \"${dump}\" == *'\"name\" : \"bootstrapped\", \"value\" : \"COMPLETED\"'* ]] && return 0\n" +
+						"  done\n" +
+						"  return 1\n" +
+						"}\n" +
 						"replace_address=\"\"\n" +
 						"old_ip=$CASSANDRA_NODE_PREVIOUS_IP\n" +
-						"if [[ \"${old_ip}\" != \"\" ]]; then\n" +
-						"  # replace_address_first_boot only takes effect when the node has no completed\n" +
-						"  # bootstrap (e.g. an empty data volume), where it replaces the old node at\n" +
-						"  # old_ip. With existing data it's ignored (CASSANDRA-7356), and Cassandra\n" +
-						"  # handles the IP change itself via the node's host ID.\n" +
+						"if [[ \"${old_ip}\" == \"\" ]]; then\n" +
+						"  echo not using replace address since the node IP hasn\\'t changed\n" +
+						"elif bootstrap_completed; then\n" +
+						"  echo node already bootstrapped - not adding replace address\n" +
+						"else\n" +
 						"  replace_address=\"-Dcassandra.replace_address_first_boot=${old_ip}\"\n" +
 						"  echo replacing old Cassandra node - adding arg $replace_address\n" +
-						"else\n" +
-						"  echo not using replace address since the node IP hasn\\'t changed\n" +
 						"fi\n" +
 						"/usr/local/bin/docker-entrypoint.sh -f -R " +
 						"-Dcassandra.jmx.remote.port=7199 " +
