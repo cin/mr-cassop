@@ -385,3 +385,26 @@ func TestUpdateStatefulSetPausesRepairsForARoll(t *testing.T) {
 		})
 	}
 }
+
+func TestResumeRepairsCountsWhatItResumed(t *testing.T) {
+	asserts := NewWithT(t)
+	_, _, mocked := createMockedReconciler(t)
+	recorded := pausedRepairs([]string{"run-a", "run-deleted", "run-resumed-already"}, []string{"sched-1", "sched-deleted"})
+	mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return([]reaper.RepairRun{
+		{ID: "run-a", State: reaper.RepairStatePaused},
+		{ID: "run-resumed-already", State: reaper.RepairStateRunning},
+		{ID: "run-user", State: reaper.RepairStatePaused},
+	}, nil)
+	mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return([]reaper.RepairSchedule{
+		{ID: "sched-1", State: reaper.RepairScheduleStatePaused},
+		{ID: "sched-user", State: reaper.RepairScheduleStatePaused},
+	}, nil)
+	mocked.reaper.EXPECT().ResumeRepairRun(gomock.Any(), "run-a").Return(nil)
+	mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", true).Return(nil)
+
+	runs, schedules, err := resumeRepairs(context.Background(), mocked.reaper, recorded)
+
+	asserts.Expect(err).NotTo(HaveOccurred())
+	asserts.Expect(runs).To(Equal(1))
+	asserts.Expect(schedules).To(Equal(1))
+}

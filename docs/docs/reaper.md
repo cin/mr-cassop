@@ -55,7 +55,7 @@ A repair needs every replica of a range. A repair that is running while the oper
 When the operator is about to change the pod template of a Cassandra statefulset, which is what a config change or an operator upgrade does, it:
 
 1. pauses every repair run that is `RUNNING` and every repair schedule that is `ACTIVE` in Reaper, whoever created it, and records their IDs in `status.pausedRepairs` first, so a crash can't leave repairs paused with no record of them;
-2. lets the statefulset roll, and does not start repairs of its own meanwhile;
+2. lets the statefulset roll, and meanwhile neither starts repairs of its own nor touches Reaper's cluster registration;
 3. once every Cassandra statefulset has finished rolling and is ready, resumes exactly the runs and schedules it recorded, and clears the record.
 
 The operator reports `RepairsPaused` and `RepairsResumed` events. Things to know:
@@ -64,6 +64,7 @@ The operator reports `RepairsPaused` and `RepairsResumed` events. Things to know
 * Pausing a run stops new segments from starting. Segments that are already running finish.
 * A run or schedule you paused yourself is never resumed by the operator. One that is no longer paused when the roll ends, because you resumed or deleted it, is left alone.
 * If Reaper can't be reached or a repair can't be paused, the operator reports a `RepairsPauseFailed` event and carries on with the roll.
+* If Reaper loses its repair runs and schedules by other means before the roll is over, for example when the operator re-initializes Reaper after losing contact with the nodes, there is nothing left to resume: the operator clears its record and reports in the `RepairsResumed` event how many it could resume.
 * The repairs stay paused for as long as the roll takes. Turning the option off during a roll does not strand them: they are still resumed afterwards.
 
 ### Monitoring

@@ -108,8 +108,10 @@ var _ = Describe("repairs during a rolling update", func() {
 				ScheduleIDs: []string{"schedule-1"},
 			}))
 
-			By("keeping them paused while the statefulset is still rolling")
+			By("keeping them paused, and leaving reaper's cluster registration alone, while the statefulset is still rolling")
+			checksBeforeWaiting := mockReaperClient.clusterChecks
 			Consistently(runState("run-1"), shortTimeout, mediumRetry).Should(Equal(reaper.RepairStatePaused))
+			Expect(mockReaperClient.clusterChecks).To(Equal(checksBeforeWaiting))
 
 			By("resuming only what the operator paused once the statefulset has rolled")
 			markStatefulSetRolled(cc)
@@ -117,6 +119,8 @@ var _ = Describe("repairs during a rolling update", func() {
 			Eventually(scheduleState("schedule-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairScheduleStateActive))
 			Eventually(pausedInStatus(cc), longTimeout, mediumRetry).Should(Equal(v1alpha1.PausedRepairs{}))
 			Expect(runState("run-paused-by-user")()).To(Equal(reaper.RepairStatePaused))
+			Eventually(func() int { return mockReaperClient.clusterChecks }, longTimeout, mediumRetry).Should(BeNumerically(">", checksBeforeWaiting),
+				"the reaper initialization carries on once the roll is over")
 		})
 	})
 

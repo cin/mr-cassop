@@ -169,49 +169,59 @@ func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(ctx context.Context,
 		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
-	if err = resumeRepairs(ctx, reaperClient, paused); err != nil {
+	runsResumed, schedulesResumed, err := resumeRepairs(ctx, reaperClient, paused)
+	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "can't resume the repairs paused for the rolling update")
 	}
 	if err = r.recordPausedRepairs(ctx, cc, dbv1alpha1.PausedRepairs{}); err != nil {
 		return ctrl.Result{}, err
 	}
-	r.Events.Normal(cc, events.EventRepairsResumed, "Resumed the repairs paused for the rolling update")
+	r.Events.Normal(cc, events.EventRepairsResumed, fmt.Sprintf(
+		"Resumed %d of %d repair run(s) and %d of %d repair schedule(s) paused for the rolling update; the others were resumed or deleted since",
+		runsResumed, len(paused.RunIDs), schedulesResumed, len(paused.ScheduleIDs)))
 
 	return ctrl.Result{}, nil
 }
 
-// resumeRepairs resumes the recorded runs and schedules that are still paused. One that is gone, or
-// that is in another state now, was dealt with by someone else and is left alone.
-func resumeRepairs(ctx context.Context, reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs) error {
+// resumeRepairs resumes the recorded runs and schedules that are still paused and returns how many of
+// each it resumed. One that is gone, or that is in another state now, was dealt with by someone else
+// (or by a Reaper re-initialization) and is left alone.
+func resumeRepairs(ctx context.Context, reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs) (int, int, error) {
 	runs, err := reaperClient.RepairRuns(ctx)
 	if err != nil {
-		return errors.Wrap(err, "can't list repair runs")
+		return 0, 0, errors.Wrap(err, "can't list repair runs")
 	}
+	runsResumed := 0
 	for _, run := range runs {
 		if run.State == reaper.RepairStatePaused && slices.Contains(paused.RunIDs, run.ID) {
 			if err = reaperClient.ResumeRepairRun(ctx, run.ID); err != nil {
-				return errors.Wrapf(err, "can't resume repair run %s", run.ID)
+				return runsResumed, 0, errors.Wrapf(err, "can't resume repair run %s", run.ID)
 			}
+			runsResumed++
 		}
 	}
 
-	return resumeSchedules(ctx, reaperClient, paused.ScheduleIDs)
+	schedulesResumed, err := resumeSchedules(ctx, reaperClient, paused.ScheduleIDs)
+
+	return runsResumed, schedulesResumed, err
 }
 
-func resumeSchedules(ctx context.Context, reaperClient reaper.ReaperClient, scheduleIDs []string) error {
+func resumeSchedules(ctx context.Context, reaperClient reaper.ReaperClient, scheduleIDs []string) (int, error) {
 	schedules, err := reaperClient.RepairSchedules(ctx)
 	if err != nil {
-		return errors.Wrap(err, "can't list repair schedules")
+		return 0, errors.Wrap(err, "can't list repair schedules")
 	}
+	resumed := 0
 	for _, schedule := range schedules {
 		if schedule.State == reaper.RepairScheduleStatePaused && slices.Contains(scheduleIDs, schedule.ID) {
 			if err = reaperClient.SetRepairScheduleState(ctx, schedule.ID, true); err != nil {
-				return errors.Wrapf(err, "can't resume repair schedule %s", schedule.ID)
+				return resumed, errors.Wrapf(err, "can't resume repair schedule %s", schedule.ID)
 			}
+			resumed++
 		}
 	}
 
-	return nil
+	return resumed, nil
 }
 
 func (r *CassandraClusterReconciler) statefulSetsRolled(ctx context.Context, cc *dbv1alpha1.CassandraCluster) (bool, error) {

@@ -391,16 +391,17 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
+	// before the Reaper initialization: while repairs are paused for a roll, don't touch Reaper's cluster registration
+	if res, err := r.resumeRepairsAfterRoll(ctx, cc, reaperClient); needsRequeue(res, err) {
+		return res, err
+	}
+
 	if err = r.reaperInitialization(ctx, cc, reaperClient); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "Failed to initialize reaper")
 	}
 
 	if err = proberClient.UpdateReaperStatus(ctx, true); err != nil {
 		return ctrl.Result{}, err
-	}
-
-	if res, err := r.resumeRepairsAfterRoll(ctx, cc, reaperClient); needsRequeue(res, err) {
-		return res, err
 	}
 
 	if err = r.reconcileRepairSchedules(ctx, cc, reaperClient); err != nil {

@@ -45,6 +45,7 @@ type nodetoolMock struct {
 type reaperMock struct {
 	repairSchedules []reaper.RepairSchedule
 	repairRuns      []reaper.RepairRun
+	clusterChecks   int // how many times the operator asked whether the cluster exists
 	isRunning       bool
 	clusters        []string
 	clusterName     string
@@ -286,6 +287,7 @@ func (r *reaperMock) IsRunning(ctx context.Context) (bool, error) {
 	return r.isRunning, r.err
 }
 func (r *reaperMock) ClusterExists(ctx context.Context) (bool, error) {
+	r.clusterChecks++
 	for _, addedCluster := range r.clusters {
 		if addedCluster == r.clusterName {
 			return true, nil
