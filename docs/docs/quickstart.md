@@ -122,7 +122,7 @@ EOF
 
 **Note: you must define at least one DC.**
 
-The resource values above are intended for a small demo cluster. Cassandra can start with less, but under constrained CPU it may fail liveness checks during bootstrap. Use persistent storage and size the pods for your workload before using this outside a demo environment.
+The resource values above are intended for a small demo cluster. Cassandra can start with less, but under constrained CPU it may be slow to open the CQL port during bootstrap and fail its [startup probe](cassandracluster-lifecycle.md#node-startup-probes) after an hour. Use persistent storage and size the pods for your workload before using this outside a demo environment.
 
 Check the deployment progress:
 

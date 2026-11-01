@@ -8,16 +8,20 @@ import (
 	"strings"
 	"testing"
 
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 )
 
 const (
-	testPreviousIP  = "10.9.9.9"
-	replaceArgFound = "replace_address=[-Dcassandra.replace_address_first_boot=" + testPreviousIP + "]"
-	replaceArgEmpty = "replace_address=[]"
-	fakeSSTableDump = `#!/bin/bash
+	testPreviousIP       = "10.9.9.9"
+	replaceArgFound      = "replace_address=[-Dcassandra.replace_address_first_boot=" + testPreviousIP + "]"
+	replaceArgEmpty      = "replace_address=[]"
+	fakeSSTableDumpError = "sstabledump: cannot read the sstable"
+	fakeSSTableDump      = `#!/bin/bash
 fixture="${1%-Data.db}.json"
-[[ -f "${fixture}" ]] || exit 1
+[[ -f "${fixture}" ]] || { echo "` + fakeSSTableDumpError + `" >&2; exit 1; }
 cat "${fixture}"
 `
 )
@@ -83,6 +87,7 @@ func TestReplaceAddressScript(t *testing.T) {
 		previousIP string
 		sstables   []testSSTable
 		wantArg    string
+		wantLog    string // expected somewhere in the script's output, e.g. an sstabledump error
 	}{
 		{
 			name:       "no previous IP",
@@ -157,6 +162,7 @@ func TestReplaceAddressScript(t *testing.T) {
 			previousIP: testPreviousIP,
 			sstables:   []testSSTable{{fails: true}},
 			wantArg:    replaceArgFound,
+			wantLog:    fakeSSTableDumpError, // not hidden, so the pod log shows why
 		},
 		{
 			name:       "sstabledump fails on one sstable, the other is COMPLETED",
@@ -166,6 +172,7 @@ func TestReplaceAddressScript(t *testing.T) {
 				{state: "COMPLETED", ts: "2026-10-31T20:58:11.008001Z"},
 			},
 			wantArg: replaceArgEmpty,
+			wantLog: fakeSSTableDumpError,
 		},
 	}
 
@@ -174,6 +181,51 @@ func TestReplaceAddressScript(t *testing.T) {
 			asserts := NewGomegaWithT(t)
 			out := runReplaceAddressScript(t, c.previousIP, c.sstables)
 			asserts.Expect(out).To(ContainSubstring(c.wantArg))
+			asserts.Expect(out).To(ContainSubstring(c.wantLog))
 		})
 	}
+}
+
+// A node that is joining the ring does not open CQL for minutes, so the liveness probe on the CQL port
+// must not start until a startup probe on the same port has succeeded (#229).
+func TestCassandraContainerStartupProbe(t *testing.T) {
+	cases := []struct {
+		name              string
+		timeoutSeconds    *int32
+		wantFailureCounts int32
+	}{
+		{name: "default is one hour", timeoutSeconds: nil, wantFailureCounts: 360},
+		{name: "custom timeout", timeoutSeconds: ptr.To[int32](7200), wantFailureCounts: 720},
+		{name: "minimum timeout", timeoutSeconds: ptr.To[int32](60), wantFailureCounts: 6},
+		{name: "rounds up to a whole probe period", timeoutSeconds: ptr.To[int32](95), wantFailureCounts: 10},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+
+			cc := baseCC.DeepCopy()
+			initializeReconciler(cc) // applies the CR defaults
+			if c.timeoutSeconds != nil {
+				cc.Spec.Cassandra.StartupTimeoutSeconds = c.timeoutSeconds
+			}
+			container := cassandraContainer(cc, cc.Spec.DCs[0], checksumContainer{}, &v1.Secret{})
+
+			startup := container.StartupProbe
+			asserts.Expect(startup).NotTo(BeNil())
+			asserts.Expect(startup.TCPSocket).NotTo(BeNil())
+			asserts.Expect(startup.TCPSocket.Port.String()).To(Equal("cql"))
+			asserts.Expect(startup.SuccessThreshold).To(BeEquivalentTo(1))
+			asserts.Expect(startup.FailureThreshold).To(Equal(c.wantFailureCounts))
+			asserts.Expect(container.LivenessProbe.TCPSocket.Port).To(Equal(startup.TCPSocket.Port))
+		})
+	}
+}
+
+// A container built before the CR was defaulted must not panic and gets the default timeout.
+func TestCassandraStartupProbeWithoutDefaulting(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+
+	cc := &dbv1alpha1.CassandraCluster{Spec: dbv1alpha1.CassandraClusterSpec{Cassandra: &dbv1alpha1.Cassandra{}}}
+	asserts.Expect(cassandraStartupProbe(cc).FailureThreshold).To(BeEquivalentTo(defaultStartupTimeoutSeconds / startupProbePeriodSeconds))
 }

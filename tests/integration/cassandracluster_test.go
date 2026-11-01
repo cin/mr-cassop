@@ -108,7 +108,7 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"  local sstable cell value ts nanos newest_nanos=0 newest_value=\"\"\n" +
 						"  for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do\n" +
 						"    [[ -e \"${sstable}\" ]] || continue\n" +
-						"    cell=$(\"${CASSANDRA_HOME}/tools/bin/sstabledump\" \"${sstable}\" 2>/dev/null | grep '\"name\" : \"bootstrapped\"')\n" +
+						"    cell=$(\"${CASSANDRA_HOME}/tools/bin/sstabledump\" \"${sstable}\" | grep '\"name\" : \"bootstrapped\"')\n" +
 						"    value=$(sed -n 's/.*\"value\" : \"\\([A-Z_]*\\)\".*/\\1/p' <<< \"${cell}\")\n" +
 						"    ts=$(sed -n 's/.*\"tstamp\" : \"\\([^\"]*\\)\".*/\\1/p' <<< \"${cell}\")\n" +
 						"    [[ -n \"${ts}\" ]] || continue\n" +

@@ -9,6 +9,7 @@ import (
 	"github.com/cin/mr-cassop/controllers/util"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, restartChecksum checksumContainer, clientTLSSecret *v1.Secret) v1.Container {
@@ -61,7 +62,8 @@ func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, resta
 			"-c",
 			getCassandraRunCommand(cc, clientTLSSecret),
 		},
-		Resources: cc.Spec.Cassandra.Resources,
+		Resources:    cc.Spec.Cassandra.Resources,
+		StartupProbe: cassandraStartupProbe(cc),
 		LivenessProbe: &v1.Probe{
 			ProbeHandler: v1.ProbeHandler{
 				TCPSocket: &v1.TCPSocketAction{
@@ -144,6 +146,36 @@ func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, resta
 	return container
 }
 
+const (
+	// A node that is replacing another one or bootstrapping does not open CQL until it has joined the
+	// ring, which takes minutes plus the time to stream its data. Kubernetes holds the liveness and
+	// readiness probes until the startup probe succeeds, so the node isn't killed while it joins (#229).
+	// spec.cassandra.startupTimeoutSeconds is the longest a node may take to open CQL.
+	startupProbePeriodSeconds  = 10
+	startupProbeTimeoutSeconds = 5
+)
+
+func cassandraStartupProbe(cc *dbv1alpha1.CassandraCluster) *v1.Probe {
+	timeoutSeconds := ptr.Deref(cc.Spec.Cassandra.StartupTimeoutSeconds, defaultStartupTimeoutSeconds)
+
+	return &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			TCPSocket: &v1.TCPSocketAction{
+				Port: intstr.FromString("cql"),
+			},
+		},
+		PeriodSeconds:    startupProbePeriodSeconds,
+		TimeoutSeconds:   startupProbeTimeoutSeconds,
+		SuccessThreshold: 1,
+		FailureThreshold: startupProbeFailureThreshold(timeoutSeconds),
+	}
+}
+
+// startupProbeFailureThreshold returns the number of failed probes that add up to at least timeoutSeconds.
+func startupProbeFailureThreshold(timeoutSeconds int32) int32 {
+	return (timeoutSeconds + startupProbePeriodSeconds - 1) / startupProbePeriodSeconds
+}
+
 func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort {
 	containerPorts := []v1.ContainerPort{
 		{
@@ -199,12 +231,13 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 // system.local sstables exist before a bootstrap completes, so the check reads the recorded state: the
 // bootstrapped cell with the newest timestamp across all of them, since an older sstable can still hold
 // COMPLETED after the state changed (e.g. DECOMMISSIONED) until compaction merges them.
-// A failing sstabledump counts as not bootstrapped, which keeps the replace.
+// A failing sstabledump counts as not bootstrapped, which keeps the replace; its stderr is left
+// unredirected so the reason shows up in the pod log.
 const replaceAddressScript = `bootstrap_completed() {
   local sstable cell value ts nanos newest_nanos=0 newest_value=""
   for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do
     [[ -e "${sstable}" ]] || continue
-    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null | grep '"name" : "bootstrapped"')
+    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" | grep '"name" : "bootstrapped"')
     value=$(sed -n 's/.*"value" : "\([A-Z_]*\)".*/\1/p' <<< "${cell}")
     ts=$(sed -n 's/.*"tstamp" : "\([^"]*\)".*/\1/p' <<< "${cell}")
     [[ -n "${ts}" ]] || continue

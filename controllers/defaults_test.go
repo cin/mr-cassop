@@ -34,6 +34,8 @@ func TestDefaultingFunction(t *testing.T) {
 	g.Expect(cc.Spec.Cassandra.NumSeeds).To(Equal(int32(2)))
 	g.Expect(cc.Spec.Cassandra.PurgeGossip).ToNot(BeNil())
 	g.Expect(*cc.Spec.Cassandra.PurgeGossip).To(Equal(true))
+	g.Expect(cc.Spec.Cassandra.StartupTimeoutSeconds).ToNot(BeNil())
+	g.Expect(*cc.Spec.Cassandra.StartupTimeoutSeconds).To(Equal(int32(3600)))
 	g.Expect(cc.Spec.Prober.Image).To(Equal("prober/image"))
 	g.Expect(cc.Spec.Prober.ImagePullPolicy).To(Equal(v1.PullIfNotPresent))
 	g.Expect(cc.Spec.Prober.Jolokia.Image).To(Equal("jolokia/image"))
