@@ -55,6 +55,16 @@ func EqualStatefulSet(actual, desired *appsv1.StatefulSet) bool {
 	return cmp.Equal(actual, desired, stsOpts...)
 }
 
+// EqualStatefulSetPodTemplate compares only the pod templates of 2 statefulsets, ignoring the same
+// fields as EqualStatefulSet. A difference means an update restarts the pods.
+func EqualStatefulSetPodTemplate(actual, desired *appsv1.StatefulSet) bool {
+	return cmp.Equal(onlyPodTemplate(actual), onlyPodTemplate(desired), stsOpts...)
+}
+
+func onlyPodTemplate(sts *appsv1.StatefulSet) *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{Spec: appsv1.StatefulSetSpec{Template: sts.Spec.Template}}
+}
+
 // DiffStatefulSet generates a patch diff between 2 statefulsets
 func DiffStatefulSet(actual, desired *appsv1.StatefulSet) string {
 	return cmp.Diff(actual, desired, stsOpts...)

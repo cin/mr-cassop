@@ -157,6 +157,9 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	// cc.Status.RecreatedFromExistingPVCs, applyTemporaryAuthRelaxation clears it once ready), so
 	// its final value is read here rather than snapshotted up front alongside clusterReady.
 	defer func() {
+		// the paused repairs list is written during the reconcile, which also changes the resource version
+		ccStatus.Status.PausedRepairs = cc.Status.PausedRepairs
+		ccStatus.ResourceVersion = cc.ResourceVersion
 		if ccStatus.Status.Ready != clusterReady || ccStatus.Status.RecreatedFromExistingPVCs != cc.Status.RecreatedFromExistingPVCs {
 			ccStatus.Status.Ready = clusterReady
 			ccStatus.Status.RecreatedFromExistingPVCs = cc.Status.RecreatedFromExistingPVCs
@@ -282,6 +285,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		if errors.Cause(err) == errTLSSecretNotFound || errors.Cause(err) == errTLSSecretInvalid {
 			return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 		}
+		if errors.Cause(err) == errRollStarted {
+			r.Log.Infof("Rolling update started and repairs were paused. Trying again in %s...", r.Cfg.RetryDelay)
+			return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
+		}
 		return ctrl.Result{}, errors.Wrap(err, "Error reconciling statefulsets")
 	}
 
@@ -390,6 +397,10 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 
 	if err = proberClient.UpdateReaperStatus(ctx, true); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	if res, err := r.resumeRepairsAfterRoll(ctx, cc, reaperClient); needsRequeue(res, err) {
+		return res, err
 	}
 
 	if err = r.reconcileRepairSchedules(ctx, cc, reaperClient); err != nil {

@@ -42,6 +42,21 @@ func (r *reaperClient) RunRepair(ctx context.Context, keyspace, cause string) er
 	return r.setRepairState(ctx, repairRun.ID, RepairStateRunning)
 }
 
+// RepairRuns returns all the repair runs of the cluster, in any state
+func (r *reaperClient) RepairRuns(ctx context.Context) ([]RepairRun, error) {
+	return r.getRepairRuns(ctx, "")
+}
+
+// PauseRepairRun pauses a running repair run. Segments that are already running finish; no new ones start.
+func (r *reaperClient) PauseRepairRun(ctx context.Context, repairRunID string) error {
+	return r.setRepairState(ctx, repairRunID, RepairStatePaused)
+}
+
+// ResumeRepairRun resumes a paused repair run
+func (r *reaperClient) ResumeRepairRun(ctx context.Context, repairRunID string) error {
+	return r.setRepairState(ctx, repairRunID, RepairStateRunning)
+}
+
 func (r *reaperClient) createRepairRun(ctx context.Context, keyspace, cause string) (RepairRun, error) {
 	route := r.url("/repair_run")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, route, nil)

@@ -44,6 +44,7 @@ type nodetoolMock struct {
 
 type reaperMock struct {
 	repairSchedules []reaper.RepairSchedule
+	repairRuns      []reaper.RepairRun
 	isRunning       bool
 	clusters        []string
 	clusterName     string
@@ -368,6 +369,29 @@ func (r *reaperMock) SetRepairScheduleState(ctx context.Context, repairScheduleI
 
 func (r *reaperMock) RunRepair(ctx context.Context, keyspace, cause string) error {
 	return r.err
+}
+
+func (r *reaperMock) RepairRuns(ctx context.Context) ([]reaper.RepairRun, error) {
+	return r.repairRuns, r.err
+}
+
+func (r *reaperMock) PauseRepairRun(ctx context.Context, repairRunID string) error {
+	return r.setRepairRunState(repairRunID, reaper.RepairStatePaused)
+}
+
+func (r *reaperMock) ResumeRepairRun(ctx context.Context, repairRunID string) error {
+	return r.setRepairRunState(repairRunID, reaper.RepairStateRunning)
+}
+
+func (r *reaperMock) setRepairRunState(repairRunID, state string) error {
+	for i, run := range r.repairRuns {
+		if run.ID == repairRunID {
+			r.repairRuns[i].State = state
+			return nil
+		}
+	}
+
+	return errors.New("unable to update repair run state: not found")
 }
 
 type mockNode struct {

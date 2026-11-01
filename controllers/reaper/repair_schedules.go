@@ -121,9 +121,9 @@ func (r *reaperClient) SetRepairScheduleState(ctx context.Context, repairSchedul
 		return err
 	}
 
-	state := "ACTIVE"
+	state := RepairScheduleStateActive
 	if !active {
-		state = "PAUSED"
+		state = RepairScheduleStatePaused
 	}
 
 	req.Header.Set("Accept", "application/json")

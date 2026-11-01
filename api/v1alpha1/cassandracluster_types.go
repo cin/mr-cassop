@@ -152,6 +152,10 @@ type Reaper struct {
 	SegmentCountPerNode int32 `json:"segmentCountPerNode,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	MaxParallelRepairs int32 `json:"maxParallelRepairs,omitempty"`
+	// Pause the running Reaper repair runs and the active repair schedules before the operator starts
+	// a rolling update of the Cassandra statefulsets (a pod template change), and resume exactly those
+	// once every statefulset has finished rolling. Repairs paused by hand are left alone.
+	PauseRepairsDuringRoll bool `json:"pauseRepairsDuringRoll,omitempty"`
 }
 
 type HostPort struct {
@@ -406,6 +410,14 @@ type CassandraClusterStatus struct {
 	// bootstrapping against storage left over from a previous cluster instance rather than
 	// starting fresh). It is automatically cleared once all DCs report ready.
 	RecreatedFromExistingPVCs bool `json:"recreatedFromExistingPVCs,omitempty"`
+	// PausedRepairs records the Reaper repair runs and schedules the operator paused for a rolling
+	// update, so it resumes only those and nothing a user paused by hand.
+	PausedRepairs PausedRepairs `json:"pausedRepairs,omitempty"`
+}
+
+type PausedRepairs struct {
+	RunIDs      []string `json:"runIDs,omitempty"`
+	ScheduleIDs []string `json:"scheduleIDs,omitempty"`
 }
 
 // +kubebuilder:object:root=true

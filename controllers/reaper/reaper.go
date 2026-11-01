@@ -17,6 +17,9 @@ const (
 	RepairStateRunning = "RUNNING"
 	RepairStatePaused  = "PAUSED"
 
+	RepairScheduleStateActive = "ACTIVE"
+	RepairScheduleStatePaused = "PAUSED"
+
 	OwnerCassandraOperator = "mr-cassop"
 )
 
@@ -38,6 +41,9 @@ type ReaperClient interface {
 	DeleteRepairSchedule(ctx context.Context, repairScheduleID string) error
 	SetRepairScheduleState(ctx context.Context, repairScheduleID string, active bool) error
 	RunRepair(ctx context.Context, keyspace, cause string) error
+	RepairRuns(ctx context.Context) ([]RepairRun, error)
+	PauseRepairRun(ctx context.Context, repairRunID string) error
+	ResumeRepairRun(ctx context.Context, repairRunID string) error
 }
 
 var (

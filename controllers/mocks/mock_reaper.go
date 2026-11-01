@@ -143,6 +143,35 @@ func (mr *MockReaperClientMockRecorder) IsRunning(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsRunning", reflect.TypeOf((*MockReaperClient)(nil).IsRunning), ctx)
 }
 
+// PauseRepairRun mocks base method.
+func (m *MockReaperClient) PauseRepairRun(ctx context.Context, repairRunID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PauseRepairRun", ctx, repairRunID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PauseRepairRun indicates an expected call of PauseRepairRun.
+func (mr *MockReaperClientMockRecorder) PauseRepairRun(ctx, repairRunID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseRepairRun", reflect.TypeOf((*MockReaperClient)(nil).PauseRepairRun), ctx, repairRunID)
+}
+
+// RepairRuns mocks base method.
+func (m *MockReaperClient) RepairRuns(ctx context.Context) ([]reaper.RepairRun, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RepairRuns", ctx)
+	ret0, _ := ret[0].([]reaper.RepairRun)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RepairRuns indicates an expected call of RepairRuns.
+func (mr *MockReaperClientMockRecorder) RepairRuns(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RepairRuns", reflect.TypeOf((*MockReaperClient)(nil).RepairRuns), ctx)
+}
+
 // RepairSchedules mocks base method.
 func (m *MockReaperClient) RepairSchedules(ctx context.Context) ([]reaper.RepairSchedule, error) {
 	m.ctrl.T.Helper()
@@ -156,6 +185,20 @@ func (m *MockReaperClient) RepairSchedules(ctx context.Context) ([]reaper.Repair
 func (mr *MockReaperClientMockRecorder) RepairSchedules(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RepairSchedules", reflect.TypeOf((*MockReaperClient)(nil).RepairSchedules), ctx)
+}
+
+// ResumeRepairRun mocks base method.
+func (m *MockReaperClient) ResumeRepairRun(ctx context.Context, repairRunID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResumeRepairRun", ctx, repairRunID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResumeRepairRun indicates an expected call of ResumeRepairRun.
+func (mr *MockReaperClientMockRecorder) ResumeRepairRun(ctx, repairRunID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeRepairRun", reflect.TypeOf((*MockReaperClient)(nil).ResumeRepairRun), ctx, repairRunID)
 }
 
 // RunRepair mocks base method.
