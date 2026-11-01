@@ -192,6 +192,41 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 	return containerPorts
 }
 
+// replaceAddressScript sets replace_address for the Cassandra command when the pod has a previous IP
+// and its data volume holds no completed bootstrap. replace_address_first_boot is only meaningful then:
+// with a completed bootstrap Cassandra ignores it (CASSANDRA-7356) and handles an IP change itself via
+// the node's host ID, and a node asked to replace its own live address can crash-loop (#160).
+// system.local sstables exist before a bootstrap completes, so the check reads the recorded state: the
+// bootstrapped cell with the newest timestamp across all of them, since an older sstable can still hold
+// COMPLETED after the state changed (e.g. DECOMMISSIONED) until compaction merges them.
+// A failing sstabledump counts as not bootstrapped, which keeps the replace.
+const replaceAddressScript = `bootstrap_completed() {
+  local sstable cell value ts nanos newest_nanos=0 newest_value=""
+  for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do
+    [[ -e "${sstable}" ]] || continue
+    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null | grep '"name" : "bootstrapped"')
+    value=$(sed -n 's/.*"value" : "\([A-Z_]*\)".*/\1/p' <<< "${cell}")
+    ts=$(sed -n 's/.*"tstamp" : "\([^"]*\)".*/\1/p' <<< "${cell}")
+    [[ -n "${ts}" ]] || continue
+    nanos=$(date -u -d "${ts}" +%s%N 2>/dev/null) || continue
+    if (( nanos > newest_nanos )); then
+      newest_nanos=${nanos}
+      newest_value=${value}
+    fi
+  done
+  [[ "${newest_value}" == "COMPLETED" ]]
+}
+replace_address=""
+old_ip=$CASSANDRA_NODE_PREVIOUS_IP
+if [[ "${old_ip}" == "" ]]; then
+  echo not using replace address since the node IP hasn\'t changed
+elif bootstrap_completed; then
+  echo node already bootstrapped - not adding replace address
+else
+  replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
+  echo replacing old Cassandra node - adding arg $replace_address
+fi`
+
 func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1.Secret) string {
 	var args []string
 	if cc.Spec.Cassandra.PurgeGossip != nil && *cc.Spec.Cassandra.PurgeGossip {
@@ -203,19 +238,7 @@ func getCassandraRunCommand(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1
 		"cp /etc/cassandra-configmaps/* $CASSANDRA_CONF/",
 		"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options",
 		"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh",
-		`replace_address=""
-old_ip=$CASSANDRA_NODE_PREVIOUS_IP
-if [[ "${old_ip}" != "" ]]; then
-  # replace_address_first_boot is a no-op once the node has already completed
-  # bootstrap (see CASSANDRA-7356), so it's safe to always pass it when the
-  # pod's IP changed - including on a restart with existing persisted data,
-  # which is the common case in Kubernetes and where gossip peers actually
-  # need to be told this node's identity moved to a new address.
-  replace_address="-Dcassandra.replace_address_first_boot=${old_ip}"
-  echo replacing old Cassandra node - adding arg $replace_address
-else
-  echo not using replace address since the node IP hasn\'t changed
-fi`,
+		replaceAddressScript,
 	)
 
 	if cc.Spec.Encryption.Client.Enabled {
