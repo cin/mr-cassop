@@ -37,7 +37,12 @@ A rolling upgrade always replaces one node at a time, waiting for it to be fully
 
 ### Node startup probes
 
-A node that is bootstrapping or replacing another node does not open the CQL port until it has joined the ring, which takes minutes plus the time to stream its data. The Cassandra container has a startup probe on the CQL port that allows up to an hour (checked every 10 seconds, 360 failures) for that. Kubernetes does not run the liveness and readiness probes until the startup probe succeeds, so a joining node is not restarted by the liveness probe in the middle of the join. A container that has not opened CQL within the hour is restarted.
+A node that is bootstrapping or replacing another node does not open the CQL port until it has joined the ring, which takes minutes plus the time to stream its data. The Cassandra container has a startup probe on the CQL port, checked every 10 seconds, that allows `.spec.cassandra.startupTimeoutSeconds` (default 3600, an hour; minimum 60) for that. Kubernetes does not run the liveness and readiness probes until the startup probe succeeds, so a joining node is not restarted by the liveness probe in the middle of the join. A container that has not opened CQL within that time is restarted. Keep these limits in mind:
+
+* The time covers everything up to CQL opening, not only streaming: a replace also spends a couple of minutes in fixed waits before it streams. A bootstrap or replace that keeps CQL closed for longer than the timeout, for example a very large node, is restarted when it is up even if the join was still making progress, so raise `startupTimeoutSeconds` for such nodes.
+* The probe cannot tell a slow join from a stuck one. A JVM that hangs before opening CQL is restarted only after the timeout, and because the statefulset updates one pod at a time (`OrderedReady`), a rolling update waits on that pod for that long. A larger timeout makes this wait longer.
+* The readiness probe is held back the same way, so the pod is not Ready before CQL is open.
+* Changing `startupTimeoutSeconds` changes the pod template, so it causes a rolling update.
 
 ## Scaling CassandraClusters
 

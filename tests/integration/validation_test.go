@@ -238,6 +238,25 @@ var _ = Describe("cassandracluster validation", func() {
 			expectToBeInvalidError(err)
 		})
 	})
+	Context(".spec.cassandra.startupTimeoutSeconds", func() {
+		It("can't be less than 60", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				StartupTimeoutSeconds: proto.Int32(59),
+			}
+			err := k8sClient.Create(ctx, cc)
+			expectToBeInvalidError(err)
+		})
+		It("can be 60", func() {
+			cc := validCluster.DeepCopy()
+			cc.Spec.Cassandra = &v1alpha1.Cassandra{
+				StartupTimeoutSeconds: proto.Int32(60),
+			}
+			createAdminSecret(cc)
+			markMocksAsReady(cc)
+			Expect(k8sClient.Create(ctx, cc)).To(Succeed())
+		})
+	})
 	Context(".spec.cassandra.imagePullPolicy", func() {
 		It("can only be one of (Always;Never;IfNotPresent)", func() {
 			cc := validCluster.DeepCopy()

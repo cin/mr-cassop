@@ -11,6 +11,7 @@ import (
 )
 
 const defaultPodDisruptionBudgetMaxUnavailable = 1
+const defaultStartupTimeoutSeconds = 3600
 
 var (
 	defaultCipherSuites = []string{
@@ -222,6 +223,10 @@ func (r *CassandraClusterReconciler) defaultCassandra(cc *dbv1alpha1.CassandraCl
 
 	if cc.Spec.Cassandra.TerminationGracePeriodSeconds == nil {
 		cc.Spec.Cassandra.TerminationGracePeriodSeconds = ptr.To[int64](300)
+	}
+
+	if cc.Spec.Cassandra.StartupTimeoutSeconds == nil {
+		cc.Spec.Cassandra.StartupTimeoutSeconds = ptr.To[int32](defaultStartupTimeoutSeconds)
 	}
 
 	if cc.Spec.Cassandra.Persistence.DataVolumeClaimSpec.VolumeMode == nil {

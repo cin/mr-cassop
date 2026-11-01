@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
+	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -183,22 +184,43 @@ func TestReplaceAddressScript(t *testing.T) {
 // A node that is joining the ring does not open CQL for minutes, so the liveness probe on the CQL port
 // must not start until a startup probe on the same port has succeeded (#229).
 func TestCassandraContainerStartupProbe(t *testing.T) {
+	cases := []struct {
+		name              string
+		timeoutSeconds    *int32
+		wantFailureCounts int32
+	}{
+		{name: "default is one hour", timeoutSeconds: nil, wantFailureCounts: 360},
+		{name: "custom timeout", timeoutSeconds: ptr.To[int32](7200), wantFailureCounts: 720},
+		{name: "minimum timeout", timeoutSeconds: ptr.To[int32](60), wantFailureCounts: 6},
+		{name: "rounds up to a whole probe period", timeoutSeconds: ptr.To[int32](95), wantFailureCounts: 10},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			asserts := NewGomegaWithT(t)
+
+			cc := baseCC.DeepCopy()
+			initializeReconciler(cc) // applies the CR defaults
+			if c.timeoutSeconds != nil {
+				cc.Spec.Cassandra.StartupTimeoutSeconds = c.timeoutSeconds
+			}
+			container := cassandraContainer(cc, cc.Spec.DCs[0], checksumContainer{}, &v1.Secret{})
+
+			startup := container.StartupProbe
+			asserts.Expect(startup).NotTo(BeNil())
+			asserts.Expect(startup.TCPSocket).NotTo(BeNil())
+			asserts.Expect(startup.TCPSocket.Port.String()).To(Equal("cql"))
+			asserts.Expect(startup.SuccessThreshold).To(BeEquivalentTo(1))
+			asserts.Expect(startup.FailureThreshold).To(Equal(c.wantFailureCounts))
+			asserts.Expect(container.LivenessProbe.TCPSocket.Port).To(Equal(startup.TCPSocket.Port))
+		})
+	}
+}
+
+// A container built before the CR was defaulted must not panic and gets the default timeout.
+func TestCassandraStartupProbeWithoutDefaulting(t *testing.T) {
 	asserts := NewGomegaWithT(t)
 
-	cc := baseCC.DeepCopy()
-	initializeReconciler(cc) // applies the CR defaults
-	container := cassandraContainer(cc, cc.Spec.DCs[0], checksumContainer{}, &v1.Secret{})
-
-	startup := container.StartupProbe
-	asserts.Expect(startup).NotTo(BeNil())
-	asserts.Expect(startup.TCPSocket).NotTo(BeNil())
-	asserts.Expect(startup.TCPSocket.Port.String()).To(Equal("cql"))
-	asserts.Expect(startup.SuccessThreshold).To(BeEquivalentTo(1))
-
-	liveness := container.LivenessProbe
-	asserts.Expect(liveness.TCPSocket.Port).To(Equal(startup.TCPSocket.Port))
-
-	livenessWindow := time.Duration(liveness.InitialDelaySeconds+liveness.PeriodSeconds*liveness.FailureThreshold) * time.Second
-	startupBudget := time.Duration(startup.PeriodSeconds*startup.FailureThreshold) * time.Second
-	asserts.Expect(startupBudget).To(BeNumerically(">=", 10*livenessWindow))
+	cc := &dbv1alpha1.CassandraCluster{Spec: dbv1alpha1.CassandraClusterSpec{Cassandra: &dbv1alpha1.Cassandra{}}}
+	asserts.Expect(cassandraStartupProbe(cc).FailureThreshold).To(BeEquivalentTo(defaultStartupTimeoutSeconds / startupProbePeriodSeconds))
 }

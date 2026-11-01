@@ -296,6 +296,11 @@ type Cassandra struct {
 	// "eks.amazonaws.com/role-arn", GCP Workload Identity's "iam.gke.io/gcp-service-account"),
 	// so backup/restore can authenticate to cloud storage without any static credentials.
 	ServiceAccountAnnotations map[string]string `json:"serviceAccountAnnotations,omitempty"`
+	// How long a Cassandra container has to open its CQL port after it starts before Kubernetes
+	// restarts it. A node that is bootstrapping or replacing another node does not open CQL until it
+	// has joined the ring, so raise this for nodes that stream a lot of data. Defaults to 3600.
+	// +kubebuilder:validation:Minimum:=60
+	StartupTimeoutSeconds *int32 `json:"startupTimeoutSeconds,omitempty"`
 }
 
 type PodDisruptionBudget struct {
