@@ -29,38 +29,43 @@ var errRollStarted = errors.New("rolling update started and repairs were paused"
 // before an update of the Cassandra statefulset restarts the pods (#227). It records what it pauses
 // in the CR status first, so a crash in between can't leave repairs paused with no record of them.
 // It is best effort: a Reaper problem is reported as an event and never blocks the roll. It reports
-// whether it paused anything.
+// whether repairs are recorded as paused, which includes ones an earlier attempt paused: the caller
+// must then not let this reconcile pass go on to resume them.
 func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
 ) bool {
+	r.pauseRunningRepairs(ctx, cc)
+
+	return !cc.Status.PausedRepairs.IsEmpty()
+}
+
+func (r *CassandraClusterReconciler) pauseRunningRepairs(ctx context.Context, cc *dbv1alpha1.CassandraCluster) {
 	reaperClient, err := r.reaperClientForCluster(ctx, cc)
 	if err != nil {
 		r.Log.Warnf("Can't pause repairs before the rolling update: %s", err)
-		return false
+		return
 	}
 
 	toPause, err := listRepairsToPause(ctx, reaperClient)
 	if err != nil {
 		r.Events.Warning(cc, events.EventRepairsPauseFailed,
 			fmt.Sprintf("Can't list the repairs to pause before the rolling update: %s", err))
-		return false
+		return
 	}
-	if toPause.IsEmpty() {
-		return false
+	if !toPause.IsEmpty() {
+		r.recordAndPauseRepairs(ctx, cc, reaperClient, toPause)
 	}
-
-	return r.recordAndPauseRepairs(ctx, cc, reaperClient, toPause)
 }
 
 func (r *CassandraClusterReconciler) recordAndPauseRepairs(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
 	reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs,
-) bool {
+) {
 	existing := cc.Status.PausedRepairs
 	if err := r.recordPausedRepairs(ctx, cc, mergePausedRepairs(existing, toPause)); err != nil {
 		r.Events.Warning(cc, events.EventRepairsPauseFailed,
 			fmt.Sprintf("Can't record the repairs to pause, leaving them running: %s", err))
-		return false
+		return
 	}
 
 	paused, err := pauseRepairs(ctx, reaperClient, toPause)
@@ -72,8 +77,6 @@ func (r *CassandraClusterReconciler) recordAndPauseRepairs(
 			"Paused %d repair run(s) and %d repair schedule(s) for the rolling update",
 			len(paused.RunIDs), len(paused.ScheduleIDs)))
 	}
-
-	return !cc.Status.PausedRepairs.IsEmpty()
 }
 
 // trimPausedRepairs reports that some repairs could not be paused and cuts the record down to what is paused, so
@@ -189,7 +192,8 @@ func (r *CassandraClusterReconciler) recordPausedRepairs(
 
 // resumeRepairsAfterRoll resumes what pauseRepairsBeforeRoll paused once every statefulset has
 // finished rolling. While a roll is still in progress it asks for a requeue, which also keeps the
-// reconcile from starting new repairs in the gap between two pods.
+// reconcile from starting new repairs in the gap between two pods. A resume that fails does not
+// fail the reconcile.
 func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient,
 ) (ctrl.Result, error) {
@@ -207,7 +211,12 @@ func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(
 		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
-	return ctrl.Result{}, r.resumeAndForget(ctx, cc, reaperClient, paused)
+	// Best effort, like the pause: the record stays, an event says what failed, and the next reconcile tries again.
+	if err = r.resumeAndForget(ctx, cc, reaperClient, paused); err != nil {
+		r.Log.Warnf("%s. Trying again on the next reconcile", err)
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // resumeAndForget resumes the recorded repairs, then clears the record. The record stays if resuming fails.

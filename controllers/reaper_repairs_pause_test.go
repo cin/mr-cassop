@@ -240,6 +240,30 @@ func TestPauseRepairsBeforeRoll(t *testing.T) {
 		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(dbv1alpha1.PausedRepairs{}))
 	})
 
+	t.Run("still reports repairs as paused when an earlier attempt recorded them and nothing is new", func(t *testing.T) {
+		asserts := NewWithT(t)
+		cc := pauseTestCluster()
+		cc.Status.PausedRepairs = pausedRepairs([]string{"run-earlier"}, nil)
+		reconciler, mocked := newPauseTestReconciler(t, cc)
+		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return([]reaper.RepairRun{
+			{ID: "run-earlier", State: reaper.RepairStatePaused},
+		}, nil)
+		mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(nil, nil)
+
+		asserts.Expect(reconciler.pauseRepairsBeforeRoll(context.Background(), cc)).To(BeTrue(),
+			"the reconcile must stop after the statefulset update or it could resume them at once")
+	})
+
+	t.Run("reports repairs as paused when reaper can't be listed but a record exists", func(t *testing.T) {
+		asserts := NewWithT(t)
+		cc := pauseTestCluster()
+		cc.Status.PausedRepairs = pausedRepairs([]string{"run-earlier"}, nil)
+		reconciler, mocked := newPauseTestReconciler(t, cc)
+		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(nil, errors.New("reaper is down"))
+
+		asserts.Expect(reconciler.pauseRepairsBeforeRoll(context.Background(), cc)).To(BeTrue())
+	})
+
 	t.Run("does not block the roll when reaper can't be listed", func(t *testing.T) {
 		asserts := NewWithT(t)
 		cc := pauseTestCluster()
@@ -346,7 +370,7 @@ func TestResumeRepairsAfterRoll(t *testing.T) {
 		asserts.Expect(result.RequeueAfter).To(BeZero())
 	})
 
-	t.Run("keeps the record when resuming fails, to try again, and still resumes the schedule", func(t *testing.T) {
+	t.Run("keeps the record but not fail the reconcile when resuming fails, and resumes the schedule", func(t *testing.T) {
 		asserts := NewWithT(t)
 		reconciler, mocked, cc := newReconciler(t, true)
 		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(runs, nil)
@@ -356,7 +380,7 @@ func TestResumeRepairsAfterRoll(t *testing.T) {
 
 		_, err := reconciler.resumeRepairsAfterRoll(context.Background(), cc, mocked.reaper)
 
-		asserts.Expect(err).To(HaveOccurred())
+		asserts.Expect(err).NotTo(HaveOccurred(), "a failed resume is reported, not returned")
 		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(recorded))
 	})
 

@@ -65,9 +65,10 @@ The operator reports `RepairsPaused` and `RepairsResumed` events, and `RepairsPa
 * A run or schedule that was already paused before the roll started is never recorded, so the operator never resumes it. One that someone resumes or deletes during the roll is left alone when the roll ends. One that someone pauses again by hand during the roll is resumed with the others, because the operator can't tell the difference.
 * While repairs are paused and a statefulset is still rolling, the reconcile does not go past the point where it would initialize Reaper: the repair schedules, keyspaces and CQL ConfigMaps wait for the roll to finish too. The operator starts no repairs of its own meanwhile, with one exception: the `system_auth` repair it starts after changing the replication of that keyspace for a new DC or region in a multi-region setup is not held back.
 * If Reaper can't be reached or a repair can't be paused, the operator reports a `RepairsPauseFailed` event and carries on with the roll. A repair that could not be paused keeps running and is not recorded, so it is not resumed or waited for.
-* If a resume fails, the operator keeps the record, reports a `RepairsResumeFailed` event and tries again on the next reconcile. The other runs and schedules are still resumed.
+* If a resume fails, the operator keeps the record, reports a `RepairsResumeFailed` event and tries again on the next reconcile, which carries on meanwhile. The other runs and schedules are still resumed.
 * If Reaper loses its repair runs and schedules by other means before the roll is over, for example when the operator re-initializes Reaper after losing contact with the nodes, there is nothing left to resume: the operator clears its record and reports in the `RepairsResumed` event how many it could resume.
 * The repairs are resumed when every pod of every Cassandra statefulset is `Ready` on the new revision. If a pod never becomes `Ready`, they stay paused.
+* The repairs are paused before the statefulset is updated. If that update keeps failing, for example because a webhook rejects it, they stay paused until the update succeeds or the change is reverted.
 * The repairs stay paused for as long as the roll takes. Turning the option off during a roll does not strand them: they are still resumed afterwards.
 
 ### Monitoring
