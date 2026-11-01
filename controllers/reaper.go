@@ -368,7 +368,7 @@ func (r *CassandraClusterReconciler) reaperInitialization(ctx context.Context, c
 			r.Log.Infof("Timeout occured while checking if cluster exists")
 			reInitErr := r.reInitReaperIfNeeded(ctx, cc, reaperClient, seed)
 			if reInitErr != nil {
-				return errors.Wrapf(err, "failed to re-init reaper")
+				return errors.Wrapf(reInitErr, "failed to re-init reaper after cluster check timed out")
 			}
 
 			return nil

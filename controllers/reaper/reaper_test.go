@@ -277,3 +277,56 @@ func handleResponseError(err error, code int) http.HandlerFunc {
 		http.Error(w, err.Error(), code)
 	}
 }
+
+func TestDeleteClusterPausesSchedulesBeforeDeleting(t *testing.T) {
+	asserts := NewWithT(t)
+
+	state := "ACTIVE"
+	clusterDeleted := false
+	var calls []string
+	rc := newTestReaperClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_run":
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_schedule":
+			_, _ = w.Write([]byte(`[{"id":"s1","owner":"mr-cassop","state":"` + state + `","keyspace_name":"ks"}]`))
+		case r.Method == http.MethodPut && r.URL.Path == "/repair_schedule/s1":
+			state = r.URL.Query().Get("state")
+		case r.Method == http.MethodDelete && r.URL.Path == "/repair_schedule/s1":
+			// Reaper rejects deleting an ACTIVE schedule.
+			if state == "ACTIVE" {
+				w.WriteHeader(http.StatusConflict)
+			}
+		case r.Method == http.MethodDelete && r.URL.Path == "/cluster/test-cluster":
+			clusterDeleted = true
+		}
+	})
+
+	asserts.Expect(rc.DeleteCluster(context.Background())).To(Succeed())
+	asserts.Expect(clusterDeleted).To(BeTrue())
+	asserts.Expect(calls).To(ContainElements("PUT /repair_schedule/s1", "DELETE /repair_schedule/s1"))
+}
+
+func TestDeleteClusterLeavesSchedulesOwnedByOthers(t *testing.T) {
+	asserts := NewWithT(t)
+
+	var calls []string
+	rc := newTestReaperClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_run":
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_schedule":
+			_, _ = w.Write([]byte(`[{"id":"ours","owner":"mr-cassop","state":"ACTIVE"},{"id":"theirs","owner":"alice","state":"ACTIVE"}]`))
+		}
+	})
+
+	err := rc.DeleteCluster(context.Background())
+
+	asserts.Expect(err).To(HaveOccurred())
+	asserts.Expect(err.Error()).To(ContainSubstring(`theirs (owner "alice")`))
+	asserts.Expect(calls).To(ContainElements("PUT /repair_schedule/ours", "DELETE /repair_schedule/ours"))
+	asserts.Expect(calls).NotTo(ContainElement(ContainSubstring("/repair_schedule/theirs")))
+	asserts.Expect(calls).NotTo(ContainElement("DELETE /cluster/test-cluster"))
+}
