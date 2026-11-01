@@ -420,6 +420,11 @@ type PausedRepairs struct {
 	ScheduleIDs []string `json:"scheduleIDs,omitempty"`
 }
 
+// IsEmpty reports whether nothing is recorded as paused
+func (p PausedRepairs) IsEmpty() bool {
+	return len(p.RunIDs) == 0 && len(p.ScheduleIDs) == 0
+}
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 

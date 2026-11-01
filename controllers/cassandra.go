@@ -43,7 +43,9 @@ func (r *CassandraClusterReconciler) reconcileCassandra(ctx context.Context, cc 
 
 // reconcileDCs reconciles the service and the statefulset of every DC, in one pass whether or not repairs were
 // paused for a roll. It reports whether the update of any statefulset paused repairs.
-func (r *CassandraClusterReconciler) reconcileDCs(ctx context.Context, cc *dbv1alpha1.CassandraCluster, restartChecksum checksumContainer) (bool, error) {
+func (r *CassandraClusterReconciler) reconcileDCs(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, restartChecksum checksumContainer,
+) (bool, error) {
 	rollStarted := false
 	for _, dc := range cc.Spec.DCs {
 		if err := r.reconcileDCService(ctx, cc, dc); err != nil {
@@ -51,7 +53,7 @@ func (r *CassandraClusterReconciler) reconcileDCs(ctx context.Context, cc *dbv1a
 		}
 
 		err := r.reconcileDCStatefulSet(ctx, cc, dc, restartChecksum)
-		if err == errRollStarted {
+		if errors.Cause(err) == errRollStarted {
 			rollStarted = true
 		} else if err != nil {
 			return false, errors.Wrapf(err, "failed to reconcile dc %q", dc.Name)

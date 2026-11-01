@@ -45,7 +45,7 @@ func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(
 			fmt.Sprintf("Can't list the repairs to pause before the rolling update: %s", err))
 		return false
 	}
-	if len(toPause.RunIDs) == 0 && len(toPause.ScheduleIDs) == 0 {
+	if toPause.IsEmpty() {
 		return false
 	}
 
@@ -56,8 +56,8 @@ func (r *CassandraClusterReconciler) recordAndPauseRepairs(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
 	reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs,
 ) bool {
-	record := mergePausedRepairs(cc.Status.PausedRepairs, toPause)
-	if err := r.recordPausedRepairs(ctx, cc, record); err != nil {
+	existing := cc.Status.PausedRepairs
+	if err := r.recordPausedRepairs(ctx, cc, mergePausedRepairs(existing, toPause)); err != nil {
 		r.Events.Warning(cc, events.EventRepairsPauseFailed,
 			fmt.Sprintf("Can't record the repairs to pause, leaving them running: %s", err))
 		return false
@@ -65,16 +65,27 @@ func (r *CassandraClusterReconciler) recordAndPauseRepairs(
 
 	paused, err := pauseRepairs(ctx, reaperClient, toPause)
 	if err != nil {
-		r.Events.Warning(cc, events.EventRepairsPauseFailed,
-			fmt.Sprintf("Some repairs could not be paused before the rolling update: %s", err))
+		r.trimPausedRepairs(ctx, cc, existing, paused, err)
 	}
-	if len(paused.RunIDs) > 0 || len(paused.ScheduleIDs) > 0 {
+	if !paused.IsEmpty() {
 		r.Events.Normal(cc, events.EventRepairsPaused, fmt.Sprintf(
 			"Paused %d repair run(s) and %d repair schedule(s) for the rolling update",
 			len(paused.RunIDs), len(paused.ScheduleIDs)))
 	}
 
-	return true
+	return !cc.Status.PausedRepairs.IsEmpty()
+}
+
+// trimPausedRepairs reports that some repairs could not be paused and cuts the record down to what is paused, so
+// the resume neither waits for nor reports on the repairs that kept running.
+func (r *CassandraClusterReconciler) trimPausedRepairs(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, existing, paused dbv1alpha1.PausedRepairs, pauseErr error,
+) {
+	r.Events.Warning(cc, events.EventRepairsPauseFailed,
+		fmt.Sprintf("Some repairs could not be paused before the rolling update: %s", pauseErr))
+	if err := r.recordPausedRepairs(ctx, cc, mergePausedRepairs(existing, paused)); err != nil {
+		r.Log.Warnf("Can't cut the paused repairs record down to what is paused: %s", err)
+	}
 }
 
 func listRepairsToPause(ctx context.Context, reaperClient reaper.ReaperClient) (dbv1alpha1.PausedRepairs, error) {
@@ -183,7 +194,7 @@ func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient,
 ) (ctrl.Result, error) {
 	paused := cc.Status.PausedRepairs
-	if len(paused.RunIDs) == 0 && len(paused.ScheduleIDs) == 0 {
+	if paused.IsEmpty() {
 		return ctrl.Result{}, nil
 	}
 
@@ -206,6 +217,8 @@ func (r *CassandraClusterReconciler) resumeAndForget(
 ) error {
 	runsResumed, schedulesResumed, err := resumeRepairs(ctx, reaperClient, paused)
 	if err != nil {
+		r.Events.Warning(cc, events.EventRepairsResumeFailed,
+			fmt.Sprintf("Can't resume the repairs paused for the rolling update, will try again: %s", err))
 		return errors.Wrap(err, "can't resume the repairs paused for the rolling update")
 	}
 	if err = r.recordPausedRepairs(ctx, cc, dbv1alpha1.PausedRepairs{}); err != nil {

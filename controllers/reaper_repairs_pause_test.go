@@ -186,7 +186,7 @@ func TestPauseRepairsBeforeRoll(t *testing.T) {
 		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(pausedRepairs([]string{"run-earlier", "run-a"}, nil)))
 	})
 
-	t.Run("still reports the roll as paused when a pause call fails", func(t *testing.T) {
+	t.Run("records only what it paused when a pause call fails", func(t *testing.T) {
 		asserts := NewWithT(t)
 		cc := pauseTestCluster()
 		reconciler, mocked := newPauseTestReconciler(t, cc)
@@ -196,7 +196,37 @@ func TestPauseRepairsBeforeRoll(t *testing.T) {
 		mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", false).Return(nil)
 
 		asserts.Expect(reconciler.pauseRepairsBeforeRoll(context.Background(), cc)).To(BeTrue())
-		asserts.Expect(storedPausedRepairs(t, reconciler, cc).RunIDs).To(Equal([]string{"run-a"}))
+
+		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(pausedRepairs(nil, []string{"sched-1"})),
+			"the run that kept running is not recorded, so the resume does not wait for it")
+		asserts.Expect(cc.Status.PausedRepairs).To(Equal(pausedRepairs(nil, []string{"sched-1"})))
+	})
+
+	t.Run("keeps what an earlier roll paused when every pause call fails", func(t *testing.T) {
+		asserts := NewWithT(t)
+		cc := pauseTestCluster()
+		cc.Status.PausedRepairs = pausedRepairs([]string{"run-earlier"}, nil)
+		reconciler, mocked := newPauseTestReconciler(t, cc)
+		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(runs, nil)
+		mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(schedules, nil)
+		mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-a").Return(errors.New("reaper is down"))
+		mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", false).Return(errors.New("reaper is down"))
+
+		asserts.Expect(reconciler.pauseRepairsBeforeRoll(context.Background(), cc)).To(BeTrue())
+		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(pausedRepairs([]string{"run-earlier"}, nil)))
+	})
+
+	t.Run("asks for no stop when every pause call fails and nothing is recorded", func(t *testing.T) {
+		asserts := NewWithT(t)
+		cc := pauseTestCluster()
+		reconciler, mocked := newPauseTestReconciler(t, cc)
+		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(runs, nil)
+		mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(schedules, nil)
+		mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-a").Return(errors.New("reaper is down"))
+		mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", false).Return(errors.New("reaper is down"))
+
+		asserts.Expect(reconciler.pauseRepairsBeforeRoll(context.Background(), cc)).To(BeFalse())
+		asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(dbv1alpha1.PausedRepairs{}))
 	})
 
 	t.Run("does nothing when nothing is running", func(t *testing.T) {

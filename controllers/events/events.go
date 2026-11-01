@@ -29,6 +29,7 @@ const (
 	EventRepairsPaused                    = "RepairsPaused"
 	EventRepairsPauseFailed               = "RepairsPauseFailed"
 	EventRepairsResumed                   = "RepairsResumed"
+	EventRepairsResumeFailed              = "RepairsResumeFailed"
 
 	EventScaleUpWaitingForPVCs   = "ScaleUpWaitingForPVCs"
 	EventScaleDownWaitingForNode = "ScaleDownWaitingForNode"
