@@ -74,13 +74,11 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 		// podManagementPolicy is immutable once the statefulset exists - migrateToOrderedReady
 		// (below) is the only thing allowed to change it, via a delete+recreate, never a plain Update.
 		desiredSts.Spec.PodManagementPolicy = actualSts.Spec.PodManagementPolicy
+		rollStarted := false
 		if !compare.EqualStatefulSet(desiredSts, actualSts) {
-			r.Log.Info("Updating cassandra statefulset")
-			r.Log.Debug(compare.DiffStatefulSet(actualSts, desiredSts))
-			actualSts.Spec = desiredSts.Spec
-			actualSts.Labels = desiredSts.Labels
-			if err = r.Update(ctx, actualSts); err != nil {
-				return errors.Wrap(err, "failed to update statefulset")
+			rollStarted, err = r.updateStatefulSet(ctx, cc, actualSts, desiredSts)
+			if err != nil {
+				return err
 			}
 		} else {
 			r.Log.Debugf("No updates to cassandra statefulset")
@@ -89,9 +87,35 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 		if err = r.migrateToOrderedReady(ctx, cc, dc, actualSts); err != nil {
 			return err
 		}
+
+		if rollStarted {
+			return errRollStarted
+		}
 	}
 
 	return nil
+}
+
+// updateStatefulSet applies the desired statefulset. When the update restarts the pods and the CR
+// asks for it, the running repairs are paused first. It reports whether it paused any.
+func (r *CassandraClusterReconciler) updateStatefulSet(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, actualSts, desiredSts *appsv1.StatefulSet,
+) (bool, error) {
+	r.Log.Info("Updating cassandra statefulset")
+	r.Log.Debug(compare.DiffStatefulSet(actualSts, desiredSts))
+
+	repairsPaused := false
+	if cc.Spec.Reaper.PauseRepairsDuringRoll && !compare.EqualStatefulSetPodTemplate(actualSts, desiredSts) {
+		repairsPaused = r.pauseRepairsBeforeRoll(ctx, cc)
+	}
+
+	actualSts.Spec = desiredSts.Spec
+	actualSts.Labels = desiredSts.Labels
+	if err := r.Update(ctx, actualSts); err != nil {
+		return false, errors.Wrap(err, "failed to update statefulset")
+	}
+
+	return repairsPaused, nil
 }
 
 // migrateToOrderedReady flips a DC's statefulset from the fast-bootstrap ParallelPodManagement

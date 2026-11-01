@@ -26,6 +26,10 @@ const (
 	EventStorageCredentialsSecretNotFound = "StorageCredentialsSecretNotFound"
 	EventStorageCredentialsSecretInvalid  = "StorageCredentialsSecretInvalid"
 	EventUIImageMissing                   = "UIImageMissing"
+	EventRepairsPaused                    = "RepairsPaused"
+	EventRepairsPauseFailed               = "RepairsPauseFailed"
+	EventRepairsResumed                   = "RepairsResumed"
+	EventRepairsResumeFailed              = "RepairsResumeFailed"
 
 	EventScaleUpWaitingForPVCs   = "ScaleUpWaitingForPVCs"
 	EventScaleDownWaitingForNode = "ScaleDownWaitingForNode"

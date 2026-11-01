@@ -156,16 +156,7 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	// cc is mutated by pointer throughout this reconcile (e.g. createClusterAdminSecrets sets
 	// cc.Status.RecreatedFromExistingPVCs, applyTemporaryAuthRelaxation clears it once ready), so
 	// its final value is read here rather than snapshotted up front alongside clusterReady.
-	defer func() {
-		if ccStatus.Status.Ready != clusterReady || ccStatus.Status.RecreatedFromExistingPVCs != cc.Status.RecreatedFromExistingPVCs {
-			ccStatus.Status.Ready = clusterReady
-			ccStatus.Status.RecreatedFromExistingPVCs = cc.Status.RecreatedFromExistingPVCs
-			statusErr := r.Status().Update(ctx, ccStatus)
-			if statusErr != nil {
-				r.Log.Errorf("Failed to update cluster readiness state: %#v", statusErr)
-			}
-		}
-	}()
+	defer func() { r.updateClusterStatus(ctx, ccStatus, cc, clusterReady) }()
 	err = r.reconcileCassandraRBAC(ctx, cc)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -279,7 +270,7 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	}
 
 	if err = r.reconcileCassandra(ctx, cc, restartChecksum); err != nil {
-		if errors.Cause(err) == errTLSSecretNotFound || errors.Cause(err) == errTLSSecretInvalid {
+		if retryAfterCassandraError(err) {
 			return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 		}
 		return ctrl.Result{}, errors.Wrap(err, "Error reconciling statefulsets")
@@ -384,8 +375,8 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
-	if err = r.reaperInitialization(ctx, cc, reaperClient); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "Failed to initialize reaper")
+	if res, err := r.initializeReaper(ctx, cc, reaperClient); needsRequeue(res, err) {
+		return res, err
 	}
 
 	if err = proberClient.UpdateReaperStatus(ctx, true); err != nil {
@@ -415,6 +406,29 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	}
 
 	return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
+}
+
+// updateClusterStatus writes the readiness of the cluster to the status of the CR. snapshot is the copy of the CR
+// taken at the start of the reconcile and cc the object mutated during it.
+func (r *CassandraClusterReconciler) updateClusterStatus(
+	ctx context.Context, snapshot, cc *v1alpha1.CassandraCluster, clusterReady bool,
+) {
+	// The reconcile may have written the paused repairs record, which changes the resource version of the CR and
+	// what its status holds. Carry both over, so this update neither conflicts with that write nor reverts it. A
+	// write made some other way (the maintenance state) still makes the update fail with a conflict, as it should:
+	// the snapshot would overwrite it.
+	snapshot.Status.PausedRepairs = cc.Status.PausedRepairs
+	snapshot.ResourceVersion = cc.ResourceVersion
+	recreated := cc.Status.RecreatedFromExistingPVCs
+	if snapshot.Status.Ready == clusterReady && snapshot.Status.RecreatedFromExistingPVCs == recreated {
+		return
+	}
+
+	snapshot.Status.Ready = clusterReady
+	snapshot.Status.RecreatedFromExistingPVCs = recreated
+	if statusErr := r.Status().Update(ctx, snapshot); statusErr != nil {
+		r.Log.Errorf("Failed to update cluster readiness state: %#v", statusErr)
+	}
 }
 
 func needsRequeue(result ctrl.Result, err error) bool {

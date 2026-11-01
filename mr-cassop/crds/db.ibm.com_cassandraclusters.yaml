@@ -3407,6 +3407,12 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  pauseRepairsDuringRoll:
+                    description: |-
+                      Pause the running Reaper repair runs and the active repair schedules before the operator starts
+                      a rolling update of the Cassandra statefulsets (a pod template change), and resume exactly those
+                      once every statefulset has finished rolling. Repairs paused by hand are left alone.
+                    type: boolean
                   repairIntensity:
                     type: string
                   repairManagerSchedulingIntervalSeconds:
@@ -3783,6 +3789,20 @@ spec:
                   - dc
                   type: object
                 type: array
+              pausedRepairs:
+                description: |-
+                  PausedRepairs records the Reaper repair runs and schedules the operator paused for a rolling
+                  update, so it resumes only those and nothing a user paused by hand.
+                properties:
+                  runIDs:
+                    items:
+                      type: string
+                    type: array
+                  scheduleIDs:
+                    items:
+                      type: string
+                    type: array
+                type: object
               ready:
                 type: boolean
               recreatedFromExistingPVCs:
