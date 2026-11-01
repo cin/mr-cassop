@@ -105,13 +105,20 @@ var _ = Describe("prober, statefulsets and reaper", func() {
 						"cat /etc/cassandra-configmaps/jvm.options >> $CASSANDRA_CONF/jvm-server.options\n" +
 						"source /etc/pods-config/${POD_NAME}_${POD_UID}.sh\n" +
 						"bootstrap_completed() {\n" +
-						"  local sstable dump\n" +
+						"  local sstable cell value ts nanos newest_nanos=0 newest_value=\"\"\n" +
 						"  for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do\n" +
 						"    [[ -e \"${sstable}\" ]] || continue\n" +
-						"    dump=$(\"${CASSANDRA_HOME}/tools/bin/sstabledump\" \"${sstable}\" 2>/dev/null)\n" +
-						"    [[ \"${dump}\" == *'\"name\" : \"bootstrapped\", \"value\" : \"COMPLETED\"'* ]] && return 0\n" +
+						"    cell=$(\"${CASSANDRA_HOME}/tools/bin/sstabledump\" \"${sstable}\" 2>/dev/null | grep '\"name\" : \"bootstrapped\"')\n" +
+						"    value=$(sed -n 's/.*\"value\" : \"\\([A-Z_]*\\)\".*/\\1/p' <<< \"${cell}\")\n" +
+						"    ts=$(sed -n 's/.*\"tstamp\" : \"\\([^\"]*\\)\".*/\\1/p' <<< \"${cell}\")\n" +
+						"    [[ -n \"${ts}\" ]] || continue\n" +
+						"    nanos=$(date -u -d \"${ts}\" +%%s%%N 2>/dev/null) || continue\n" +
+						"    if (( nanos > newest_nanos )); then\n" +
+						"      newest_nanos=${nanos}\n" +
+						"      newest_value=${value}\n" +
+						"    fi\n" +
 						"  done\n" +
-						"  return 1\n" +
+						"  [[ \"${newest_value}\" == \"COMPLETED\" ]]\n" +
 						"}\n" +
 						"replace_address=\"\"\n" +
 						"old_ip=$CASSANDRA_NODE_PREVIOUS_IP\n" +

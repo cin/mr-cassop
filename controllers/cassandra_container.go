@@ -196,16 +196,25 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 // and its data volume holds no completed bootstrap. replace_address_first_boot is only meaningful then:
 // with a completed bootstrap Cassandra ignores it (CASSANDRA-7356) and handles an IP change itself via
 // the node's host ID, and a node asked to replace its own live address can crash-loop (#160).
-// system.local sstables exist before a bootstrap completes, so the check reads the recorded state.
+// system.local sstables exist before a bootstrap completes, so the check reads the recorded state: the
+// bootstrapped cell with the newest timestamp across all of them, since an older sstable can still hold
+// COMPLETED after the state changed (e.g. DECOMMISSIONED) until compaction merges them.
 // A failing sstabledump counts as not bootstrapped, which keeps the replace.
 const replaceAddressScript = `bootstrap_completed() {
-  local sstable dump
+  local sstable cell value ts nanos newest_nanos=0 newest_value=""
   for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do
     [[ -e "${sstable}" ]] || continue
-    dump=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null)
-    [[ "${dump}" == *'"name" : "bootstrapped", "value" : "COMPLETED"'* ]] && return 0
+    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null | grep '"name" : "bootstrapped"')
+    value=$(sed -n 's/.*"value" : "\([A-Z_]*\)".*/\1/p' <<< "${cell}")
+    ts=$(sed -n 's/.*"tstamp" : "\([^"]*\)".*/\1/p' <<< "${cell}")
+    [[ -n "${ts}" ]] || continue
+    nanos=$(date -u -d "${ts}" +%s%N 2>/dev/null) || continue
+    if (( nanos > newest_nanos )); then
+      newest_nanos=${nanos}
+      newest_value=${value}
+    fi
   done
-  return 1
+  [[ "${newest_value}" == "COMPLETED" ]]
 }
 replace_address=""
 old_ip=$CASSANDRA_NODE_PREVIOUS_IP
