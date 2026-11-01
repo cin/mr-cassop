@@ -104,6 +104,10 @@ func (r *CassandraClusterReconciler) defaultReaper(cc *dbv1alpha1.CassandraClust
 		cc.Spec.Reaper.RepairThreadCount = 1
 	}
 
+	if cc.Spec.Reaper.PauseOtherSchedulesDuringRoll == nil {
+		cc.Spec.Reaper.PauseOtherSchedulesDuringRoll = ptr.To(true)
+	}
+
 	if len(cc.Spec.Reaper.RepairSchedules.Repairs) != 0 {
 		for i, repair := range cc.Spec.Reaper.RepairSchedules.Repairs {
 			if repair.RepairParallelism == "" {

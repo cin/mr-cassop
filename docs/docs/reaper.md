@@ -52,9 +52,11 @@ reaper:
 
 A repair needs every replica of a range. A repair that is running while the operator restarts the Cassandra pods one after another stalls, postpones its segments and adds load to the nodes that are still up. Set `reaper.pauseRepairsDuringRoll: true` to have the operator pause repairs around such a rolling update. It is off by default.
 
+By default the operator pauses the active schedules of everyone, including ones created by hand in Reaper or by another tool, because a schedule that fires during the roll stalls like any other repair. Set `reaper.pauseOtherSchedulesDuringRoll: false` to pause only the schedules the operator created from `spec.reaper.repairSchedules` and leave the others running. The option applies to schedules only: a repair run that is `RUNNING` is always paused, whoever started it.
+
 When the operator is about to change the pod template of a Cassandra statefulset, which is what a config change or an operator upgrade does, it:
 
-1. pauses every repair run that is `RUNNING` and every repair schedule that is `ACTIVE` in Reaper, whoever created it, and records their IDs in `status.pausedRepairs` first, so a crash can't leave repairs paused with no record of them;
+1. pauses every repair run that is `RUNNING` and every repair schedule that is `ACTIVE` in Reaper, and records their IDs in `status.pausedRepairs` first, so a crash can't leave repairs paused with no record of them;
 2. lets the statefulset roll, and meanwhile neither starts repairs of its own nor touches Reaper's cluster registration;
 3. once every Cassandra statefulset has finished rolling and is ready, resumes exactly the runs and schedules it recorded, and clears the record.
 

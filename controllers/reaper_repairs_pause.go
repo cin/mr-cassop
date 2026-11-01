@@ -46,7 +46,7 @@ func (r *CassandraClusterReconciler) pauseRunningRepairs(ctx context.Context, cc
 		return
 	}
 
-	toPause, err := listRepairsToPause(ctx, reaperClient)
+	toPause, err := listRepairsToPause(ctx, reaperClient, pauseOtherSchedules(cc))
 	if err != nil {
 		r.Events.Warning(cc, events.EventRepairsPauseFailed,
 			fmt.Sprintf("Can't list the repairs to pause before the rolling update: %s", err))
@@ -91,7 +91,7 @@ func (r *CassandraClusterReconciler) trimPausedRepairs(
 	}
 }
 
-func listRepairsToPause(ctx context.Context, reaperClient reaper.ReaperClient) (dbv1alpha1.PausedRepairs, error) {
+func listRepairsToPause(ctx context.Context, reaperClient reaper.ReaperClient, includeOtherSchedules bool) (dbv1alpha1.PausedRepairs, error) {
 	runs, err := reaperClient.RepairRuns(ctx)
 	if err != nil {
 		return dbv1alpha1.PausedRepairs{}, errors.Wrap(err, "can't list repair runs")
@@ -101,12 +101,15 @@ func listRepairsToPause(ctx context.Context, reaperClient reaper.ReaperClient) (
 		return dbv1alpha1.PausedRepairs{}, errors.Wrap(err, "can't list repair schedules")
 	}
 
-	return selectRepairsToPause(runs, schedules), nil
+	return selectRepairsToPause(runs, schedules, includeOtherSchedules), nil
 }
 
 // selectRepairsToPause picks what is running or active. Runs and schedules a user already paused are
-// not picked, so they are never resumed by the operator.
-func selectRepairsToPause(runs []reaper.RepairRun, schedules []reaper.RepairSchedule) dbv1alpha1.PausedRepairs {
+// not picked, so they are never resumed by the operator. Schedules owned by someone else are picked only
+// when includeOtherSchedules is set.
+func selectRepairsToPause(
+	runs []reaper.RepairRun, schedules []reaper.RepairSchedule, includeOtherSchedules bool,
+) dbv1alpha1.PausedRepairs {
 	toPause := dbv1alpha1.PausedRepairs{}
 	for _, run := range runs {
 		if run.State == reaper.RepairStateRunning {
@@ -114,7 +117,8 @@ func selectRepairsToPause(runs []reaper.RepairRun, schedules []reaper.RepairSche
 		}
 	}
 	for _, schedule := range schedules {
-		if schedule.State == reaper.RepairScheduleStateActive {
+		ours := schedule.Owner == reaper.OwnerCassandraOperator
+		if schedule.State == reaper.RepairScheduleStateActive && (ours || includeOtherSchedules) {
 			toPause.ScheduleIDs = append(toPause.ScheduleIDs, schedule.ID)
 		}
 	}
@@ -326,4 +330,10 @@ func statefulSetRolled(sts *appsv1.StatefulSet) bool {
 		sts.Status.CurrentRevision == sts.Status.UpdateRevision &&
 		sts.Status.UpdatedReplicas == replicas &&
 		sts.Status.ReadyReplicas == replicas
+}
+
+// pauseOtherSchedules reports whether schedules not owned by the operator are paused too. It is on unless
+// the user turned it off.
+func pauseOtherSchedules(cc *dbv1alpha1.CassandraCluster) bool {
+	return cc.Spec.Reaper.PauseOtherSchedulesDuringRoll == nil || *cc.Spec.Reaper.PauseOtherSchedulesDuringRoll
 }

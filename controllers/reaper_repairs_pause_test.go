@@ -87,8 +87,47 @@ func TestSelectRepairsToPause(t *testing.T) {
 	}
 
 	expected := pausedRepairs([]string{"running", "also-running"}, []string{"active"})
-	asserts.Expect(selectRepairsToPause(runs, schedules)).To(Equal(expected))
-	asserts.Expect(selectRepairsToPause(nil, nil)).To(Equal(dbv1alpha1.PausedRepairs{}))
+	asserts.Expect(selectRepairsToPause(runs, schedules, true)).To(Equal(expected))
+	asserts.Expect(selectRepairsToPause(nil, nil, true)).To(Equal(dbv1alpha1.PausedRepairs{}))
+}
+
+func TestSelectRepairsToPauseOtherSchedules(t *testing.T) {
+	schedules := []reaper.RepairSchedule{
+		{ID: "ours", Owner: reaper.OwnerCassandraOperator, State: reaper.RepairScheduleStateActive},
+		{ID: "theirs", Owner: "alice", State: reaper.RepairScheduleStateActive},
+		{ID: "theirs-paused", Owner: "alice", State: reaper.RepairScheduleStatePaused},
+	}
+
+	tests := []struct {
+		name            string
+		includeOthers   bool
+		expectedPausing []string
+	}{
+		{name: "pauses everyone's schedules", includeOthers: true, expectedPausing: []string{"ours", "theirs"}},
+		{name: "pauses only the operator's schedules", includeOthers: false, expectedPausing: []string{"ours"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := selectRepairsToPause(nil, schedules, tc.includeOthers)
+
+			NewWithT(t).Expect(got.ScheduleIDs).To(Equal(tc.expectedPausing))
+		})
+	}
+}
+
+func TestPauseOtherSchedules(t *testing.T) {
+	asserts := NewWithT(t)
+	cc := pauseTestCluster()
+
+	asserts.Expect(cc.Spec.Reaper.PauseOtherSchedulesDuringRoll).To(HaveValue(BeTrue()), "defaults to on")
+	asserts.Expect(pauseOtherSchedules(cc)).To(BeTrue())
+
+	cc.Spec.Reaper.PauseOtherSchedulesDuringRoll = ptr.To(false)
+	asserts.Expect(pauseOtherSchedules(cc)).To(BeFalse())
+
+	cc.Spec.Reaper.PauseOtherSchedulesDuringRoll = nil
+	asserts.Expect(pauseOtherSchedules(cc)).To(BeTrue(), "unset means on")
 }
 
 func TestMergePausedRepairs(t *testing.T) {
