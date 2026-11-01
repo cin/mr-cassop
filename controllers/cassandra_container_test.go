@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -176,4 +178,27 @@ func TestReplaceAddressScript(t *testing.T) {
 			asserts.Expect(out).To(ContainSubstring(c.wantArg))
 		})
 	}
+}
+
+// A node that is joining the ring does not open CQL for minutes, so the liveness probe on the CQL port
+// must not start until a startup probe on the same port has succeeded (#229).
+func TestCassandraContainerStartupProbe(t *testing.T) {
+	asserts := NewGomegaWithT(t)
+
+	cc := baseCC.DeepCopy()
+	initializeReconciler(cc) // applies the CR defaults
+	container := cassandraContainer(cc, cc.Spec.DCs[0], checksumContainer{}, &v1.Secret{})
+
+	startup := container.StartupProbe
+	asserts.Expect(startup).NotTo(BeNil())
+	asserts.Expect(startup.TCPSocket).NotTo(BeNil())
+	asserts.Expect(startup.TCPSocket.Port.String()).To(Equal("cql"))
+	asserts.Expect(startup.SuccessThreshold).To(BeEquivalentTo(1))
+
+	liveness := container.LivenessProbe
+	asserts.Expect(liveness.TCPSocket.Port).To(Equal(startup.TCPSocket.Port))
+
+	livenessWindow := time.Duration(liveness.InitialDelaySeconds+liveness.PeriodSeconds*liveness.FailureThreshold) * time.Second
+	startupBudget := time.Duration(startup.PeriodSeconds*startup.FailureThreshold) * time.Second
+	asserts.Expect(startupBudget).To(BeNumerically(">=", 10*livenessWindow))
 }

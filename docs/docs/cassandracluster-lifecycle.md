@@ -35,6 +35,10 @@ Depending on the changed config one of the following scenarios will occur:
 
 A rolling upgrade always replaces one node at a time, waiting for it to be fully ready before moving to the next. Once a DC has gone ready for the first time, the operator switches its statefulset from the fast, parallel pod management used during the initial bootstrap (step 2 above) to Kubernetes' `OrderedReady` policy, which is what actually enforces this one-at-a-time cap for every later update - without it, a single config change could otherwise restart every node at once and risk `system_auth` losing quorum.
 
+### Node startup probes
+
+A node that is bootstrapping or replacing another node does not open the CQL port until it has joined the ring, which takes minutes plus the time to stream its data. The Cassandra container has a startup probe on the CQL port that allows up to an hour (checked every 10 seconds, 360 failures) for that. Kubernetes does not run the liveness and readiness probes until the startup probe succeeds, so a joining node is not restarted by the liveness probe in the middle of the join. A container that has not opened CQL within the hour is restarted.
+
 ## Scaling CassandraClusters
 
 ### Scaling Up

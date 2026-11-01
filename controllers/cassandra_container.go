@@ -61,7 +61,8 @@ func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, resta
 			"-c",
 			getCassandraRunCommand(cc, clientTLSSecret),
 		},
-		Resources: cc.Spec.Cassandra.Resources,
+		Resources:    cc.Spec.Cassandra.Resources,
+		StartupProbe: cassandraStartupProbe(),
 		LivenessProbe: &v1.Probe{
 			ProbeHandler: v1.ProbeHandler{
 				TCPSocket: &v1.TCPSocketAction{
@@ -142,6 +143,30 @@ func cassandraContainer(cc *dbv1alpha1.CassandraCluster, dc dbv1alpha1.DC, resta
 	})
 
 	return container
+}
+
+const (
+	// A node that is replacing another one or bootstrapping does not open CQL until it has joined the
+	// ring, which takes minutes plus the time to stream its data. Kubernetes holds the liveness and
+	// readiness probes until the startup probe succeeds, so the node isn't killed while it joins (#229).
+	// The budget (period * failure threshold) is the longest a node may take to open CQL.
+	startupProbePeriodSeconds    = 10
+	startupProbeTimeoutSeconds   = 5
+	startupProbeFailureThreshold = 360
+)
+
+func cassandraStartupProbe() *v1.Probe {
+	return &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			TCPSocket: &v1.TCPSocketAction{
+				Port: intstr.FromString("cql"),
+			},
+		},
+		PeriodSeconds:    startupProbePeriodSeconds,
+		TimeoutSeconds:   startupProbeTimeoutSeconds,
+		SuccessThreshold: 1,
+		FailureThreshold: startupProbeFailureThreshold,
+	}
 }
 
 func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort {
