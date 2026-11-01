@@ -409,8 +409,9 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 }
 
 // updateClusterStatus writes the readiness of the cluster to the status of the CR. snapshot is the copy of the CR
-// taken at the start of the reconcile and cc the object mutated during it. Only the fields that changed are
-// patched: the rest of the status, such as the paused repairs record written meanwhile, is left as it is.
+// taken at the start of the reconcile and cc the object mutated during it. The update carries the snapshot's
+// resource version, so if the CR changed meanwhile (the maintenance state, the paused repairs record) it fails with
+// a conflict instead of overwriting the newer status with the snapshot's.
 func (r *CassandraClusterReconciler) updateClusterStatus(
 	ctx context.Context, snapshot, cc *v1alpha1.CassandraCluster, clusterReady bool,
 ) {
@@ -419,10 +420,9 @@ func (r *CassandraClusterReconciler) updateClusterStatus(
 		return
 	}
 
-	updated := snapshot.DeepCopy()
-	updated.Status.Ready = clusterReady
-	updated.Status.RecreatedFromExistingPVCs = recreated
-	if statusErr := r.Status().Patch(ctx, updated, client.MergeFrom(snapshot)); statusErr != nil {
+	snapshot.Status.Ready = clusterReady
+	snapshot.Status.RecreatedFromExistingPVCs = recreated
+	if statusErr := r.Status().Update(ctx, snapshot); statusErr != nil {
 		r.Log.Errorf("Failed to update cluster readiness state: %#v", statusErr)
 	}
 }
