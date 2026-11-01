@@ -42,7 +42,7 @@ The default [`sysctl`](sysctl.md) values were aligned with the Apache Cassandra 
 
 Any keys you set explicitly in `.spec.cassandra.sysctls` are still applied as-is, including ones that are no longer defaults. If you relied on the old `vm.max_map_count`/`fs.file-max` values, set them explicitly before upgrading.
 
-### Pod disruption budgets (unreleased)
+### Pod disruption budgets (`0.8.0`)
 
 The operator now creates a PodDisruptionBudget per DC (`maxUnavailable: 1`) for every `CassandraCluster` that doesn't set
 `.spec.cassandra.podDisruptionBudget.enabled`. Upgrading therefore adds the budgets to existing clusters on the next
