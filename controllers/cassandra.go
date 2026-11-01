@@ -43,3 +43,14 @@ func (r *CassandraClusterReconciler) reconcileCassandra(ctx context.Context, cc 
 
 	return nil
 }
+
+// retryAfterCassandraError reports whether an error from reconcileCassandra only means "try again after the
+// retry delay" (a missing TLS secret, a roll that just started) and should not fail the reconcile.
+func retryAfterCassandraError(err error) bool {
+	switch errors.Cause(err) {
+	case errTLSSecretNotFound, errTLSSecretInvalid, errRollStarted:
+		return true
+	}
+
+	return false
+}

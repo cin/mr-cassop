@@ -30,7 +30,9 @@ var errRollStarted = errors.New("rolling update started and repairs were paused"
 // in the CR status first, so a crash in between can't leave repairs paused with no record of them.
 // It is best effort: a Reaper problem is reported as an event and never blocks the roll. It reports
 // whether it paused anything.
-func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(ctx context.Context, cc *dbv1alpha1.CassandraCluster) bool {
+func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
+) bool {
 	reaperClient, err := r.reaperClientForCluster(ctx, cc)
 	if err != nil {
 		r.Log.Warnf("Can't pause repairs before the rolling update: %s", err)
@@ -39,7 +41,8 @@ func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(ctx context.Context,
 
 	toPause, err := listRepairsToPause(ctx, reaperClient)
 	if err != nil {
-		r.Events.Warning(cc, events.EventRepairsPauseFailed, fmt.Sprintf("Can't list the repairs to pause before the rolling update: %s", err))
+		r.Events.Warning(cc, events.EventRepairsPauseFailed,
+			fmt.Sprintf("Can't list the repairs to pause before the rolling update: %s", err))
 		return false
 	}
 	if len(toPause.RunIDs) == 0 && len(toPause.ScheduleIDs) == 0 {
@@ -49,16 +52,24 @@ func (r *CassandraClusterReconciler) pauseRepairsBeforeRoll(ctx context.Context,
 	return r.recordAndPauseRepairs(ctx, cc, reaperClient, toPause)
 }
 
-func (r *CassandraClusterReconciler) recordAndPauseRepairs(ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs) bool {
-	if err := r.recordPausedRepairs(ctx, cc, mergePausedRepairs(cc.Status.PausedRepairs, toPause)); err != nil {
-		r.Events.Warning(cc, events.EventRepairsPauseFailed, fmt.Sprintf("Can't record the repairs to pause, leaving them running: %s", err))
+func (r *CassandraClusterReconciler) recordAndPauseRepairs(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
+	reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs,
+) bool {
+	record := mergePausedRepairs(cc.Status.PausedRepairs, toPause)
+	if err := r.recordPausedRepairs(ctx, cc, record); err != nil {
+		r.Events.Warning(cc, events.EventRepairsPauseFailed,
+			fmt.Sprintf("Can't record the repairs to pause, leaving them running: %s", err))
 		return false
 	}
 
 	if err := pauseRepairs(ctx, reaperClient, toPause); err != nil {
-		r.Events.Warning(cc, events.EventRepairsPauseFailed, fmt.Sprintf("Some repairs could not be paused before the rolling update: %s", err))
+		r.Events.Warning(cc, events.EventRepairsPauseFailed,
+			fmt.Sprintf("Some repairs could not be paused before the rolling update: %s", err))
 	}
-	r.Events.Normal(cc, events.EventRepairsPaused, fmt.Sprintf("Paused %d repair run(s) and %d repair schedule(s) for the rolling update", len(toPause.RunIDs), len(toPause.ScheduleIDs)))
+	r.Events.Normal(cc, events.EventRepairsPaused, fmt.Sprintf(
+		"Paused %d repair run(s) and %d repair schedule(s) for the rolling update",
+		len(toPause.RunIDs), len(toPause.ScheduleIDs)))
 
 	return true
 }
@@ -113,7 +124,9 @@ func appendMissing(existing, added []string) []string {
 }
 
 // pauseRepairs pauses everything it can and returns the first error
-func pauseRepairs(ctx context.Context, reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs) error {
+func pauseRepairs(
+	ctx context.Context, reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs,
+) error {
 	var firstErr error
 	for _, runID := range toPause.RunIDs {
 		if err := reaperClient.PauseRepairRun(ctx, runID); err != nil && firstErr == nil {
@@ -132,7 +145,9 @@ func pauseRepairs(ctx context.Context, reaperClient reaper.ReaperClient, toPause
 // recordPausedRepairs stores what the operator paused in the CR status and updates cc to match. It
 // updates the latest version of the CR, retrying on conflict, because cc is a snapshot from the
 // start of the reconcile.
-func (r *CassandraClusterReconciler) recordPausedRepairs(ctx context.Context, cc *dbv1alpha1.CassandraCluster, paused dbv1alpha1.PausedRepairs) error {
+func (r *CassandraClusterReconciler) recordPausedRepairs(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, paused dbv1alpha1.PausedRepairs,
+) error {
 	latest := &dbv1alpha1.CassandraCluster{}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, types.NamespacedName{Name: cc.Name, Namespace: cc.Namespace}, latest); err != nil {
@@ -154,7 +169,9 @@ func (r *CassandraClusterReconciler) recordPausedRepairs(ctx context.Context, cc
 // resumeRepairsAfterRoll resumes what pauseRepairsBeforeRoll paused once every statefulset has
 // finished rolling. While a roll is still in progress it asks for a requeue, which also keeps the
 // reconcile from starting new repairs in the gap between two pods.
-func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient) (ctrl.Result, error) {
+func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient,
+) (ctrl.Result, error) {
 	paused := cc.Status.PausedRepairs
 	if len(paused.RunIDs) == 0 && len(paused.ScheduleIDs) == 0 {
 		return ctrl.Result{}, nil
@@ -169,24 +186,35 @@ func (r *CassandraClusterReconciler) resumeRepairsAfterRoll(ctx context.Context,
 		return ctrl.Result{RequeueAfter: r.Cfg.RetryDelay}, nil
 	}
 
+	return ctrl.Result{}, r.resumeAndForget(ctx, cc, reaperClient, paused)
+}
+
+// resumeAndForget resumes the recorded repairs, then clears the record. The record stays if resuming fails.
+func (r *CassandraClusterReconciler) resumeAndForget(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
+	reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs,
+) error {
 	runsResumed, schedulesResumed, err := resumeRepairs(ctx, reaperClient, paused)
 	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "can't resume the repairs paused for the rolling update")
+		return errors.Wrap(err, "can't resume the repairs paused for the rolling update")
 	}
 	if err = r.recordPausedRepairs(ctx, cc, dbv1alpha1.PausedRepairs{}); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	r.Events.Normal(cc, events.EventRepairsResumed, fmt.Sprintf(
-		"Resumed %d of %d repair run(s) and %d of %d repair schedule(s) paused for the rolling update; the others were resumed or deleted since",
+		"Resumed %d of %d repair run(s) and %d of %d repair schedule(s) paused for the rolling update; "+
+			"the others were resumed or deleted since",
 		runsResumed, len(paused.RunIDs), schedulesResumed, len(paused.ScheduleIDs)))
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // resumeRepairs resumes the recorded runs and schedules that are still paused and returns how many of
 // each it resumed. One that is gone, or that is in another state now, was dealt with by someone else
 // (or by a Reaper re-initialization) and is left alone.
-func resumeRepairs(ctx context.Context, reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs) (int, int, error) {
+func resumeRepairs(
+	ctx context.Context, reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs,
+) (int, int, error) {
 	runs, err := reaperClient.RepairRuns(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "can't list repair runs")
@@ -224,10 +252,13 @@ func resumeSchedules(ctx context.Context, reaperClient reaper.ReaperClient, sche
 	return resumed, nil
 }
 
-func (r *CassandraClusterReconciler) statefulSetsRolled(ctx context.Context, cc *dbv1alpha1.CassandraCluster) (bool, error) {
+func (r *CassandraClusterReconciler) statefulSetsRolled(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster,
+) (bool, error) {
 	for _, dc := range cc.Spec.DCs {
 		sts := &appsv1.StatefulSet{}
-		err := r.Get(ctx, types.NamespacedName{Name: names.DC(cc.Name, dc.Name), Namespace: cc.Namespace}, sts)
+		key := types.NamespacedName{Name: names.DC(cc.Name, dc.Name), Namespace: cc.Namespace}
+		err := r.Get(ctx, key, sts)
 		if apierrors.IsNotFound(err) {
 			continue
 		}

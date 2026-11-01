@@ -98,7 +98,9 @@ func (r *CassandraClusterReconciler) reconcileDCStatefulSet(ctx context.Context,
 
 // updateStatefulSet applies the desired statefulset. When the update restarts the pods and the CR
 // asks for it, the running repairs are paused first. It reports whether it paused any.
-func (r *CassandraClusterReconciler) updateStatefulSet(ctx context.Context, cc *dbv1alpha1.CassandraCluster, actualSts, desiredSts *appsv1.StatefulSet) (bool, error) {
+func (r *CassandraClusterReconciler) updateStatefulSet(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, actualSts, desiredSts *appsv1.StatefulSet,
+) (bool, error) {
 	r.Log.Info("Updating cassandra statefulset")
 	r.Log.Debug(compare.DiffStatefulSet(actualSts, desiredSts))
 

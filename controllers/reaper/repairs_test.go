@@ -28,7 +28,9 @@ func TestRepairRuns(t *testing.T) {
 	var requested *http.Request
 	rc := newTestReaperClient(t, func(w http.ResponseWriter, r *http.Request) {
 		requested = r
-		_, _ = w.Write([]byte(`[{"id":"run-1","state":"RUNNING","keyspace_name":"ks1","owner":"mr-cassop"},{"id":"run-2","state":"PAUSED","keyspace_name":"ks2","owner":"someone"}]`))
+		_, _ = w.Write([]byte(`[
+			{"id":"run-1","state":"RUNNING","keyspace_name":"ks1","owner":"mr-cassop"},
+			{"id":"run-2","state":"PAUSED","keyspace_name":"ks2","owner":"someone"}]`))
 	})
 
 	runs, err := rc.RepairRuns(context.Background())
@@ -50,7 +52,8 @@ func TestRepairRunsFailure(t *testing.T) {
 	})
 
 	_, err := rc.RepairRuns(context.Background())
-	asserts.Expect(err).To(BeEquivalentTo(&requestFailedWithStatus{code: http.StatusInternalServerError, message: "boom\n"}))
+	asserts.Expect(err).To(BeEquivalentTo(
+		&requestFailedWithStatus{code: http.StatusInternalServerError, message: "boom\n"}))
 }
 
 func TestPauseAndResumeRepairRun(t *testing.T) {

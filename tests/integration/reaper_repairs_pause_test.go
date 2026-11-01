@@ -60,7 +60,8 @@ var _ = Describe("repairs during a rolling update", func() {
 	markStatefulSetRolled := func(cc *v1alpha1.CassandraCluster) {
 		Eventually(func() error { // eventually so we handle conflict errors
 			sts := &appsv1.StatefulSet{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{Name: names.DC(cc.Name, "dc1"), Namespace: cc.Namespace}, sts); err != nil {
+			key := types.NamespacedName{Name: names.DC(cc.Name, "dc1"), Namespace: cc.Namespace}
+			if err := k8sClient.Get(ctx, key, sts); err != nil {
 				return err
 			}
 			sts.Status.ObservedGeneration = sts.Generation
@@ -119,8 +120,8 @@ var _ = Describe("repairs during a rolling update", func() {
 			Eventually(scheduleState("schedule-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairScheduleStateActive))
 			Eventually(pausedInStatus(cc), longTimeout, mediumRetry).Should(Equal(v1alpha1.PausedRepairs{}))
 			Expect(runState("run-paused-by-user")()).To(Equal(reaper.RepairStatePaused))
-			Eventually(func() int { return mockReaperClient.clusterChecks }, longTimeout, mediumRetry).Should(BeNumerically(">", checksBeforeWaiting),
-				"the reaper initialization carries on once the roll is over")
+			Eventually(func() int { return mockReaperClient.clusterChecks }, longTimeout, mediumRetry).Should(
+				BeNumerically(">", checksBeforeWaiting), "the reaper initialization carries on once the roll is over")
 		})
 	})
 
@@ -134,7 +135,8 @@ var _ = Describe("repairs during a rolling update", func() {
 
 			Eventually(func() int {
 				sts := &appsv1.StatefulSet{}
-				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: names.DC(cc.Name, "dc1"), Namespace: cc.Namespace}, sts)).To(Succeed())
+				key := types.NamespacedName{Name: names.DC(cc.Name, "dc1"), Namespace: cc.Namespace}
+				Expect(k8sClient.Get(ctx, key, sts)).To(Succeed())
 				return len(sts.Spec.Template.Spec.Containers)
 			}, longTimeout, mediumRetry).Should(BeNumerically(">", 0))
 			Consistently(runState("run-1"), shortTimeout, mediumRetry).Should(Equal(reaper.RepairStateRunning))

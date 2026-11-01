@@ -345,6 +345,21 @@ func reaperVolumes(cc *dbv1alpha1.CassandraCluster) []v1.Volume {
 	return volume
 }
 
+// initializeReaper makes sure Reaper knows the cluster. Repairs paused for a rolling update are resumed first, or
+// the reconcile waits for the roll to finish: re-initializing Reaper while the nodes restart can delete them.
+func (r *CassandraClusterReconciler) initializeReaper(
+	ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient,
+) (ctrl.Result, error) {
+	if res, err := r.resumeRepairsAfterRoll(ctx, cc, reaperClient); needsRequeue(res, err) {
+		return res, err
+	}
+	if err := r.reaperInitialization(ctx, cc, reaperClient); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "Failed to initialize reaper")
+	}
+
+	return ctrl.Result{}, nil
+}
+
 func (r *CassandraClusterReconciler) reaperInitialization(ctx context.Context, cc *dbv1alpha1.CassandraCluster, reaperClient reaper.ReaperClient) error {
 	seed := getSeedHostname(cc, cc.Spec.DCs[0].Name, 0, true)
 	clusterExists, err := reaperClient.ClusterExists(ctx)

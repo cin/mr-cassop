@@ -29,7 +29,9 @@ func pausedRepairs(runIDs, scheduleIDs []string) dbv1alpha1.PausedRepairs {
 
 // newPauseTestReconciler returns a reconciler with a fake client holding cc, the Reaper credentials and
 // any other objects, and the mocked Reaper client every reconcile helper talks to.
-func newPauseTestReconciler(t *testing.T, cc *dbv1alpha1.CassandraCluster, objects ...client.Object) (*CassandraClusterReconciler, mockedClients) {
+func newPauseTestReconciler(
+	t *testing.T, cc *dbv1alpha1.CassandraCluster, objects ...client.Object,
+) (*CassandraClusterReconciler, mockedClients) {
 	t.Helper()
 
 	reconciler, _, mocked := createMockedReconciler(t)
@@ -50,7 +52,9 @@ func newPauseTestReconciler(t *testing.T, cc *dbv1alpha1.CassandraCluster, objec
 	return reconciler, mocked
 }
 
-func storedPausedRepairs(t *testing.T, reconciler *CassandraClusterReconciler, cc *dbv1alpha1.CassandraCluster) dbv1alpha1.PausedRepairs {
+func storedPausedRepairs(
+	t *testing.T, reconciler *CassandraClusterReconciler, cc *dbv1alpha1.CassandraCluster,
+) dbv1alpha1.PausedRepairs {
 	t.Helper()
 	stored := &dbv1alpha1.CassandraCluster{}
 	err := reconciler.Get(context.Background(), types.NamespacedName{Name: cc.Name, Namespace: cc.Namespace}, stored)
@@ -82,14 +86,17 @@ func TestSelectRepairsToPause(t *testing.T) {
 		{ID: "paused-by-user", State: reaper.RepairScheduleStatePaused},
 	}
 
-	asserts.Expect(selectRepairsToPause(runs, schedules)).To(Equal(pausedRepairs([]string{"running", "also-running"}, []string{"active"})))
+	expected := pausedRepairs([]string{"running", "also-running"}, []string{"active"})
+	asserts.Expect(selectRepairsToPause(runs, schedules)).To(Equal(expected))
 	asserts.Expect(selectRepairsToPause(nil, nil)).To(Equal(dbv1alpha1.PausedRepairs{}))
 }
 
 func TestMergePausedRepairs(t *testing.T) {
 	asserts := NewWithT(t)
 
-	merged := mergePausedRepairs(pausedRepairs([]string{"a", "b"}, []string{"s1"}), pausedRepairs([]string{"b", "c"}, []string{"s1", "s2"}))
+	existing := pausedRepairs([]string{"a", "b"}, []string{"s1"})
+	added := pausedRepairs([]string{"b", "c"}, []string{"s1", "s2"})
+	merged := mergePausedRepairs(existing, added)
 
 	asserts.Expect(merged).To(Equal(pausedRepairs([]string{"a", "b", "c"}, []string{"s1", "s2"})))
 }
@@ -110,9 +117,18 @@ func TestStatefulSetRolled(t *testing.T) {
 		expected bool
 	}{
 		{name: "nothing to roll", change: func(sts *appsv1.StatefulSet) {}, expected: true},
-		{name: "spec not observed yet", change: func(sts *appsv1.StatefulSet) { sts.Status.ObservedGeneration = 3 }, expected: false},
-		{name: "new revision not current yet", change: func(sts *appsv1.StatefulSet) { sts.Status.CurrentRevision = "rev-1" }, expected: false},
-		{name: "some pods not updated", change: func(sts *appsv1.StatefulSet) { sts.Status.UpdatedReplicas = 2 }, expected: false},
+		{
+			name:   "spec not observed yet",
+			change: func(sts *appsv1.StatefulSet) { sts.Status.ObservedGeneration = 3 },
+		},
+		{
+			name:   "new revision not current yet",
+			change: func(sts *appsv1.StatefulSet) { sts.Status.CurrentRevision = "rev-1" },
+		},
+		{
+			name:   "some pods not updated",
+			change: func(sts *appsv1.StatefulSet) { sts.Status.UpdatedReplicas = 2 },
+		},
 		{name: "a pod is not ready", change: func(sts *appsv1.StatefulSet) { sts.Status.ReadyReplicas = 2 }, expected: false},
 	}
 
@@ -144,7 +160,8 @@ func TestPauseRepairsBeforeRoll(t *testing.T) {
 		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(runs, nil)
 		mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(schedules, nil)
 		mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-a").DoAndReturn(func(ctx context.Context, id string) error {
-			asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(pausedRepairs([]string{"run-a"}, []string{"sched-1"})))
+			expected := pausedRepairs([]string{"run-a"}, []string{"sched-1"})
+			asserts.Expect(storedPausedRepairs(t, reconciler, cc)).To(Equal(expected))
 			return nil
 		})
 		mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", false).Return(nil)
@@ -244,7 +261,9 @@ func TestResumeRepairsAfterRoll(t *testing.T) {
 		{ID: "sched-user", State: reaper.RepairScheduleStatePaused},
 	}
 
-	newReconciler := func(t *testing.T, rolled bool) (*CassandraClusterReconciler, mockedClients, *dbv1alpha1.CassandraCluster) {
+	newReconciler := func(
+		t *testing.T, rolled bool,
+	) (*CassandraClusterReconciler, mockedClients, *dbv1alpha1.CassandraCluster) {
 		cc := pauseTestCluster()
 		cc.Status.PausedRepairs = recorded
 		objects := []client.Object{}
@@ -367,7 +386,8 @@ func TestUpdateStatefulSetPausesRepairsForARoll(t *testing.T) {
 			sts.Namespace = cc.Namespace
 			reconciler, mocked := newPauseTestReconciler(t, cc, sts)
 			if tc.expectPause {
-				mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return([]reaper.RepairRun{{ID: "run-a", State: reaper.RepairStateRunning}}, nil)
+				running := []reaper.RepairRun{{ID: "run-a", State: reaper.RepairStateRunning}}
+				mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(running, nil)
 				mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(nil, nil)
 				mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-a").Return(nil)
 			}
@@ -381,7 +401,8 @@ func TestUpdateStatefulSetPausesRepairsForARoll(t *testing.T) {
 			asserts.Expect(paused).To(Equal(tc.expectPause))
 			updated := &appsv1.StatefulSet{}
 			asserts.Expect(reconciler.Get(context.Background(), client.ObjectKeyFromObject(sts), updated)).To(Succeed())
-			asserts.Expect(updated.Labels).To(Equal(desired.Labels), "the statefulset is updated whether or not repairs were paused")
+			asserts.Expect(updated.Labels).To(Equal(desired.Labels),
+				"the statefulset is updated whether or not repairs were paused")
 		})
 	}
 }
@@ -389,7 +410,9 @@ func TestUpdateStatefulSetPausesRepairsForARoll(t *testing.T) {
 func TestResumeRepairsCountsWhatItResumed(t *testing.T) {
 	asserts := NewWithT(t)
 	_, _, mocked := createMockedReconciler(t)
-	recorded := pausedRepairs([]string{"run-a", "run-deleted", "run-resumed-already"}, []string{"sched-1", "sched-deleted"})
+	recorded := pausedRepairs(
+		[]string{"run-a", "run-deleted", "run-resumed-already"}, []string{"sched-1", "sched-deleted"},
+	)
 	mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return([]reaper.RepairRun{
 		{ID: "run-a", State: reaper.RepairStatePaused},
 		{ID: "run-resumed-already", State: reaper.RepairStateRunning},
