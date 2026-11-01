@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	testPreviousIP  = "10.9.9.9"
-	replaceArgFound = "replace_address=[-Dcassandra.replace_address_first_boot=" + testPreviousIP + "]"
-	replaceArgEmpty = "replace_address=[]"
-	fakeSSTableDump = `#!/bin/bash
+	testPreviousIP       = "10.9.9.9"
+	replaceArgFound      = "replace_address=[-Dcassandra.replace_address_first_boot=" + testPreviousIP + "]"
+	replaceArgEmpty      = "replace_address=[]"
+	fakeSSTableDumpError = "sstabledump: cannot read the sstable"
+	fakeSSTableDump      = `#!/bin/bash
 fixture="${1%-Data.db}.json"
-[[ -f "${fixture}" ]] || exit 1
+[[ -f "${fixture}" ]] || { echo "` + fakeSSTableDumpError + `" >&2; exit 1; }
 cat "${fixture}"
 `
 )
@@ -86,6 +87,7 @@ func TestReplaceAddressScript(t *testing.T) {
 		previousIP string
 		sstables   []testSSTable
 		wantArg    string
+		wantLog    string // expected somewhere in the script's output, e.g. an sstabledump error
 	}{
 		{
 			name:       "no previous IP",
@@ -160,6 +162,7 @@ func TestReplaceAddressScript(t *testing.T) {
 			previousIP: testPreviousIP,
 			sstables:   []testSSTable{{fails: true}},
 			wantArg:    replaceArgFound,
+			wantLog:    fakeSSTableDumpError, // not hidden, so the pod log shows why
 		},
 		{
 			name:       "sstabledump fails on one sstable, the other is COMPLETED",
@@ -169,6 +172,7 @@ func TestReplaceAddressScript(t *testing.T) {
 				{state: "COMPLETED", ts: "2026-10-31T20:58:11.008001Z"},
 			},
 			wantArg: replaceArgEmpty,
+			wantLog: fakeSSTableDumpError,
 		},
 	}
 
@@ -177,6 +181,7 @@ func TestReplaceAddressScript(t *testing.T) {
 			asserts := NewGomegaWithT(t)
 			out := runReplaceAddressScript(t, c.previousIP, c.sstables)
 			asserts.Expect(out).To(ContainSubstring(c.wantArg))
+			asserts.Expect(out).To(ContainSubstring(c.wantLog))
 		})
 	}
 }

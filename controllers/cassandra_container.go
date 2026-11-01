@@ -231,12 +231,13 @@ func cassandraContainerPorts(cc *dbv1alpha1.CassandraCluster) []v1.ContainerPort
 // system.local sstables exist before a bootstrap completes, so the check reads the recorded state: the
 // bootstrapped cell with the newest timestamp across all of them, since an older sstable can still hold
 // COMPLETED after the state changed (e.g. DECOMMISSIONED) until compaction merges them.
-// A failing sstabledump counts as not bootstrapped, which keeps the replace.
+// A failing sstabledump counts as not bootstrapped, which keeps the replace; its stderr is left
+// unredirected so the reason shows up in the pod log.
 const replaceAddressScript = `bootstrap_completed() {
   local sstable cell value ts nanos newest_nanos=0 newest_value=""
   for sstable in /var/lib/cassandra/data/system/local-*/*-Data.db; do
     [[ -e "${sstable}" ]] || continue
-    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" 2>/dev/null | grep '"name" : "bootstrapped"')
+    cell=$("${CASSANDRA_HOME}/tools/bin/sstabledump" "${sstable}" | grep '"name" : "bootstrapped"')
     value=$(sed -n 's/.*"value" : "\([A-Z_]*\)".*/\1/p' <<< "${cell}")
     ts=$(sed -n 's/.*"tstamp" : "\([^"]*\)".*/\1/p' <<< "${cell}")
     [[ -n "${ts}" ]] || continue
