@@ -316,11 +316,13 @@ func TestResumeRepairsAfterRoll(t *testing.T) {
 		asserts.Expect(result.RequeueAfter).To(BeZero())
 	})
 
-	t.Run("keeps the record when resuming fails, to try again", func(t *testing.T) {
+	t.Run("keeps the record when resuming fails, to try again, and still resumes the schedule", func(t *testing.T) {
 		asserts := NewWithT(t)
 		reconciler, mocked, cc := newReconciler(t, true)
 		mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return(runs, nil)
+		mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return(schedules, nil)
 		mocked.reaper.EXPECT().ResumeRepairRun(gomock.Any(), "run-a").Return(errors.New("reaper is down"))
+		mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", true).Return(nil)
 
 		_, err := reconciler.resumeRepairsAfterRoll(context.Background(), cc, mocked.reaper)
 
@@ -428,6 +430,43 @@ func TestResumeRepairsCountsWhatItResumed(t *testing.T) {
 	runs, schedules, err := resumeRepairs(context.Background(), mocked.reaper, recorded)
 
 	asserts.Expect(err).NotTo(HaveOccurred())
+	asserts.Expect(runs).To(Equal(1))
+	asserts.Expect(schedules).To(Equal(1))
+}
+
+func TestPauseRepairsReportsWhatItPaused(t *testing.T) {
+	asserts := NewWithT(t)
+	_, _, mocked := createMockedReconciler(t)
+	mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-a").Return(errors.New("reaper is down"))
+	mocked.reaper.EXPECT().PauseRepairRun(gomock.Any(), "run-b").Return(nil)
+	mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", false).Return(errors.New("reaper is down"))
+	mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-2", false).Return(nil)
+
+	paused, err := pauseRepairs(context.Background(), mocked.reaper,
+		pausedRepairs([]string{"run-a", "run-b"}, []string{"sched-1", "sched-2"}))
+
+	asserts.Expect(err).To(MatchError(ContainSubstring("run-a")), "the first error is the one returned")
+	asserts.Expect(paused).To(Equal(pausedRepairs([]string{"run-b"}, []string{"sched-2"})))
+}
+
+func TestResumeRepairsGoesOnAfterAFailure(t *testing.T) {
+	asserts := NewWithT(t)
+	_, _, mocked := createMockedReconciler(t)
+	recorded := pausedRepairs([]string{"run-a", "run-b"}, []string{"sched-1"})
+	mocked.reaper.EXPECT().RepairRuns(gomock.Any()).Return([]reaper.RepairRun{
+		{ID: "run-a", State: reaper.RepairStatePaused},
+		{ID: "run-b", State: reaper.RepairStatePaused},
+	}, nil)
+	mocked.reaper.EXPECT().RepairSchedules(gomock.Any()).Return([]reaper.RepairSchedule{
+		{ID: "sched-1", State: reaper.RepairScheduleStatePaused},
+	}, nil)
+	mocked.reaper.EXPECT().ResumeRepairRun(gomock.Any(), "run-a").Return(errors.New("gone wrong"))
+	mocked.reaper.EXPECT().ResumeRepairRun(gomock.Any(), "run-b").Return(nil)
+	mocked.reaper.EXPECT().SetRepairScheduleState(gomock.Any(), "sched-1", true).Return(nil)
+
+	runs, schedules, err := resumeRepairs(context.Background(), mocked.reaper, recorded)
+
+	asserts.Expect(err).To(MatchError(ContainSubstring("run-a")))
 	asserts.Expect(runs).To(Equal(1))
 	asserts.Expect(schedules).To(Equal(1))
 }

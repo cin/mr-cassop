@@ -62,9 +62,11 @@ The operator reports `RepairsPaused` and `RepairsResumed` events. Things to know
 
 * Only a pod template change made by the operator is covered. Node drains, `kubectl rollout restart`, scaling, maintenance mode and crashing pods do not pause repairs.
 * Pausing a run stops new segments from starting. Segments that are already running finish.
-* A run or schedule you paused yourself is never resumed by the operator. One that is no longer paused when the roll ends, because you resumed or deleted it, is left alone.
+* A run or schedule that was already paused before the roll started is never recorded, so the operator never resumes it. One that someone resumes or deletes during the roll is left alone when the roll ends. One that someone pauses again by hand during the roll is resumed with the others, because the operator can't tell the difference.
+* The operator starts no repairs of its own while it waits for the roll to finish, with one exception: the `system_auth` repair it starts after changing the replication of that keyspace for a new DC or region in a multi-region setup is not held back.
 * If Reaper can't be reached or a repair can't be paused, the operator reports a `RepairsPauseFailed` event and carries on with the roll.
 * If Reaper loses its repair runs and schedules by other means before the roll is over, for example when the operator re-initializes Reaper after losing contact with the nodes, there is nothing left to resume: the operator clears its record and reports in the `RepairsResumed` event how many it could resume.
+* The repairs are resumed when every pod of every Cassandra statefulset is `Ready` on the new revision. If a pod never becomes `Ready`, they stay paused.
 * The repairs stay paused for as long as the roll takes. Turning the option off during a roll does not strand them: they are still resumed afterwards.
 
 ### Monitoring

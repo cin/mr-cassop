@@ -13,11 +13,15 @@ import (
 )
 
 var _ = Describe("repairs during a rolling update", func() {
-	newCluster := func(pauseRepairs bool) *v1alpha1.CassandraCluster {
+	newCluster := func(pauseRepairs bool, dcNames ...string) *v1alpha1.CassandraCluster {
+		dcs := []v1alpha1.DC{}
+		for _, dcName := range dcNames {
+			dcs = append(dcs, v1alpha1.DC{Name: dcName, Replicas: proto.Int32(3)})
+		}
 		return &v1alpha1.CassandraCluster{
 			ObjectMeta: cassandraObjectMeta,
 			Spec: v1alpha1.CassandraClusterSpec{
-				DCs:                 []v1alpha1.DC{{Name: "dc1", Replicas: proto.Int32(3)}},
+				DCs:                 dcs,
 				ImagePullSecretName: "pull-secret-name",
 				AdminRoleSecretName: "admin-role",
 				Reaper:              &v1alpha1.Reaper{PauseRepairsDuringRoll: pauseRepairs},
@@ -57,10 +61,10 @@ var _ = Describe("repairs during a rolling update", func() {
 		}
 	}
 	// The operator under test has no statefulset controller to report that the pods rolled, so the test does.
-	markStatefulSetRolled := func(cc *v1alpha1.CassandraCluster) {
+	markStatefulSetRolled := func(cc *v1alpha1.CassandraCluster, dcName string) {
 		Eventually(func() error { // eventually so we handle conflict errors
 			sts := &appsv1.StatefulSet{}
-			key := types.NamespacedName{Name: names.DC(cc.Name, "dc1"), Namespace: cc.Namespace}
+			key := types.NamespacedName{Name: names.DC(cc.Name, dcName), Namespace: cc.Namespace}
 			if err := k8sClient.Get(ctx, key, sts); err != nil {
 				return err
 			}
@@ -71,6 +75,21 @@ var _ = Describe("repairs during a rolling update", func() {
 			sts.Status.ReadyReplicas = *sts.Spec.Replicas
 			return k8sClient.Status().Update(ctx, sts)
 		}, longTimeout, mediumRetry).Should(Succeed())
+	}
+	logLevelOfStatefulSet := func(cc *v1alpha1.CassandraCluster, dcName string) func() string {
+		return func() string {
+			sts := &appsv1.StatefulSet{}
+			key := types.NamespacedName{Name: names.DC(cc.Name, dcName), Namespace: cc.Namespace}
+			Expect(k8sClient.Get(ctx, key, sts)).To(Succeed())
+			container, found := getContainerByName(sts.Spec.Template.Spec, "cassandra")
+			Expect(found).To(BeTrue())
+			for _, env := range container.Env {
+				if env.Name == "LOG_LEVEL" {
+					return env.Value
+				}
+			}
+			return ""
+		}
 	}
 	changePodTemplate := func(cc *v1alpha1.CassandraCluster) {
 		Eventually(func() error {
@@ -95,7 +114,7 @@ var _ = Describe("repairs during a rolling update", func() {
 
 	Context("when the option is on", func() {
 		It("pauses the running repairs before the pods roll and resumes only those once the statefulset has rolled", func() {
-			cc := newCluster(true)
+			cc := newCluster(true, "dc1")
 			givenRunningRepairs()
 			createReadyCluster(cc)
 
@@ -115,7 +134,7 @@ var _ = Describe("repairs during a rolling update", func() {
 			Expect(mockReaperClient.clusterChecks).To(Equal(checksBeforeWaiting))
 
 			By("resuming only what the operator paused once the statefulset has rolled")
-			markStatefulSetRolled(cc)
+			markStatefulSetRolled(cc, "dc1")
 			Eventually(runState("run-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairStateRunning))
 			Eventually(scheduleState("schedule-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairScheduleStateActive))
 			Eventually(pausedInStatus(cc), longTimeout, mediumRetry).Should(Equal(v1alpha1.PausedRepairs{}))
@@ -125,9 +144,34 @@ var _ = Describe("repairs during a rolling update", func() {
 		})
 	})
 
+	Context("when there are several DCs", func() {
+		It("updates every DC in the same pass and resumes only once all of them have rolled", func() {
+			cc := newCluster(true, "dc1", "dc2")
+			givenRunningRepairs()
+			createReadyCluster(cc)
+
+			changePodTemplate(cc)
+
+			By("pausing the repairs and updating the pod template of both DCs")
+			Eventually(runState("run-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairStatePaused))
+			for _, dcName := range []string{"dc1", "dc2"} {
+				Eventually(logLevelOfStatefulSet(cc, dcName), longTimeout, mediumRetry).Should(Equal("debug"))
+			}
+
+			By("keeping the repairs paused while only one DC has rolled")
+			markStatefulSetRolled(cc, "dc1")
+			Consistently(runState("run-1"), shortTimeout, mediumRetry).Should(Equal(reaper.RepairStatePaused))
+
+			By("resuming them once the other DC has rolled too")
+			markStatefulSetRolled(cc, "dc2")
+			Eventually(runState("run-1"), longTimeout, mediumRetry).Should(Equal(reaper.RepairStateRunning))
+			Eventually(pausedInStatus(cc), longTimeout, mediumRetry).Should(Equal(v1alpha1.PausedRepairs{}))
+		})
+	})
+
 	Context("when the option is off", func() {
 		It("leaves the repairs running during a rolling update", func() {
-			cc := newCluster(false)
+			cc := newCluster(false, "dc1")
 			givenRunningRepairs()
 			createReadyCluster(cc)
 

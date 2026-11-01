@@ -9,9 +9,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dbv1alpha1 "github.com/cin/mr-cassop/api/v1alpha1"
 	"github.com/cin/mr-cassop/controllers/events"
@@ -63,13 +63,16 @@ func (r *CassandraClusterReconciler) recordAndPauseRepairs(
 		return false
 	}
 
-	if err := pauseRepairs(ctx, reaperClient, toPause); err != nil {
+	paused, err := pauseRepairs(ctx, reaperClient, toPause)
+	if err != nil {
 		r.Events.Warning(cc, events.EventRepairsPauseFailed,
 			fmt.Sprintf("Some repairs could not be paused before the rolling update: %s", err))
 	}
-	r.Events.Normal(cc, events.EventRepairsPaused, fmt.Sprintf(
-		"Paused %d repair run(s) and %d repair schedule(s) for the rolling update",
-		len(toPause.RunIDs), len(toPause.ScheduleIDs)))
+	if len(paused.RunIDs) > 0 || len(paused.ScheduleIDs) > 0 {
+		r.Events.Normal(cc, events.EventRepairsPaused, fmt.Sprintf(
+			"Paused %d repair run(s) and %d repair schedule(s) for the rolling update",
+			len(paused.RunIDs), len(paused.ScheduleIDs)))
+	}
 
 	return true
 }
@@ -123,45 +126,52 @@ func appendMissing(existing, added []string) []string {
 	return merged
 }
 
-// pauseRepairs pauses everything it can and returns the first error
+// pauseRepairs pauses everything it can. It returns what it did pause and the first error.
 func pauseRepairs(
 	ctx context.Context, reaperClient reaper.ReaperClient, toPause dbv1alpha1.PausedRepairs,
-) error {
+) (dbv1alpha1.PausedRepairs, error) {
 	var firstErr error
+	paused := dbv1alpha1.PausedRepairs{}
 	for _, runID := range toPause.RunIDs {
-		if err := reaperClient.PauseRepairRun(ctx, runID); err != nil && firstErr == nil {
-			firstErr = errors.Wrapf(err, "can't pause repair run %s", runID)
+		if err := reaperClient.PauseRepairRun(ctx, runID); err != nil {
+			firstErr = firstError(firstErr, errors.Wrapf(err, "can't pause repair run %s", runID))
+			continue
 		}
+		paused.RunIDs = append(paused.RunIDs, runID)
 	}
 	for _, scheduleID := range toPause.ScheduleIDs {
-		if err := reaperClient.SetRepairScheduleState(ctx, scheduleID, false); err != nil && firstErr == nil {
-			firstErr = errors.Wrapf(err, "can't pause repair schedule %s", scheduleID)
+		if err := reaperClient.SetRepairScheduleState(ctx, scheduleID, false); err != nil {
+			firstErr = firstError(firstErr, errors.Wrapf(err, "can't pause repair schedule %s", scheduleID))
+			continue
 		}
+		paused.ScheduleIDs = append(paused.ScheduleIDs, scheduleID)
 	}
 
-	return firstErr
+	return paused, firstErr
 }
 
-// recordPausedRepairs stores what the operator paused in the CR status and updates cc to match. It
-// updates the latest version of the CR, retrying on conflict, because cc is a snapshot from the
-// start of the reconcile.
+func firstError(first, next error) error {
+	if first != nil {
+		return first
+	}
+
+	return next
+}
+
+// recordPausedRepairs stores what the operator paused in the CR status and updates cc to match. It patches only
+// the status, so there is no read of a possibly stale cache and no resource version to conflict on. It patches a
+// copy, because the response overwrites the object, and cc carries the defaults applied to the spec.
 func (r *CassandraClusterReconciler) recordPausedRepairs(
 	ctx context.Context, cc *dbv1alpha1.CassandraCluster, paused dbv1alpha1.PausedRepairs,
 ) error {
-	latest := &dbv1alpha1.CassandraCluster{}
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, types.NamespacedName{Name: cc.Name, Namespace: cc.Namespace}, latest); err != nil {
-			return err
-		}
-		latest.Status.PausedRepairs = paused
-		return r.Status().Update(ctx, latest)
-	})
-	if err != nil {
+	updated := cc.DeepCopy()
+	updated.Status.PausedRepairs = paused
+	if err := r.Status().Patch(ctx, updated, client.MergeFrom(cc)); err != nil {
 		return errors.Wrap(err, "can't update the paused repairs in the status")
 	}
 
 	cc.Status.PausedRepairs = paused
-	cc.ResourceVersion = latest.ResourceVersion
+	cc.ResourceVersion = updated.ResourceVersion
 
 	return nil
 }
@@ -209,29 +219,38 @@ func (r *CassandraClusterReconciler) resumeAndForget(
 	return nil
 }
 
-// resumeRepairs resumes the recorded runs and schedules that are still paused and returns how many of
-// each it resumed. One that is gone, or that is in another state now, was dealt with by someone else
-// (or by a Reaper re-initialization) and is left alone.
+// resumeRepairs resumes the recorded runs and schedules that are still paused and returns how many of each it
+// resumed. One that is gone, or that is in another state now, was dealt with by someone else (or by a Reaper
+// re-initialization) and is left alone. A failure on one does not keep the others paused: it goes on and returns
+// the first error, and the record stays so the next reconcile tries again.
 func resumeRepairs(
 	ctx context.Context, reaperClient reaper.ReaperClient, paused dbv1alpha1.PausedRepairs,
 ) (int, int, error) {
+	runsResumed, runsErr := resumeRuns(ctx, reaperClient, paused.RunIDs)
+	schedulesResumed, schedulesErr := resumeSchedules(ctx, reaperClient, paused.ScheduleIDs)
+
+	return runsResumed, schedulesResumed, firstError(runsErr, schedulesErr)
+}
+
+func resumeRuns(ctx context.Context, reaperClient reaper.ReaperClient, runIDs []string) (int, error) {
 	runs, err := reaperClient.RepairRuns(ctx)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "can't list repair runs")
+		return 0, errors.Wrap(err, "can't list repair runs")
 	}
-	runsResumed := 0
+	resumed := 0
+	var firstErr error
 	for _, run := range runs {
-		if run.State == reaper.RepairStatePaused && slices.Contains(paused.RunIDs, run.ID) {
-			if err = reaperClient.ResumeRepairRun(ctx, run.ID); err != nil {
-				return runsResumed, 0, errors.Wrapf(err, "can't resume repair run %s", run.ID)
-			}
-			runsResumed++
+		if run.State != reaper.RepairStatePaused || !slices.Contains(runIDs, run.ID) {
+			continue
 		}
+		if err = reaperClient.ResumeRepairRun(ctx, run.ID); err != nil {
+			firstErr = firstError(firstErr, errors.Wrapf(err, "can't resume repair run %s", run.ID))
+			continue
+		}
+		resumed++
 	}
 
-	schedulesResumed, err := resumeSchedules(ctx, reaperClient, paused.ScheduleIDs)
-
-	return runsResumed, schedulesResumed, err
+	return resumed, firstErr
 }
 
 func resumeSchedules(ctx context.Context, reaperClient reaper.ReaperClient, scheduleIDs []string) (int, error) {
@@ -240,16 +259,19 @@ func resumeSchedules(ctx context.Context, reaperClient reaper.ReaperClient, sche
 		return 0, errors.Wrap(err, "can't list repair schedules")
 	}
 	resumed := 0
+	var firstErr error
 	for _, schedule := range schedules {
-		if schedule.State == reaper.RepairScheduleStatePaused && slices.Contains(scheduleIDs, schedule.ID) {
-			if err = reaperClient.SetRepairScheduleState(ctx, schedule.ID, true); err != nil {
-				return resumed, errors.Wrapf(err, "can't resume repair schedule %s", schedule.ID)
-			}
-			resumed++
+		if schedule.State != reaper.RepairScheduleStatePaused || !slices.Contains(scheduleIDs, schedule.ID) {
+			continue
 		}
+		if err = reaperClient.SetRepairScheduleState(ctx, schedule.ID, true); err != nil {
+			firstErr = firstError(firstErr, errors.Wrapf(err, "can't resume repair schedule %s", schedule.ID))
+			continue
+		}
+		resumed++
 	}
 
-	return resumed, nil
+	return resumed, firstErr
 }
 
 func (r *CassandraClusterReconciler) statefulSetsRolled(

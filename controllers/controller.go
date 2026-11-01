@@ -408,22 +408,21 @@ func (r *CassandraClusterReconciler) reconcileWithContext(ctx context.Context, r
 	return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 }
 
-// updateClusterStatus writes the readiness, and the paused repairs record, to the status of the CR. cc is the
-// object mutated during the reconcile and ccStatus the copy taken at its start, which is what gets written.
+// updateClusterStatus writes the readiness of the cluster to the status of the CR. snapshot is the copy of the CR
+// taken at the start of the reconcile and cc the object mutated during it. Only the fields that changed are
+// patched: the rest of the status, such as the paused repairs record written meanwhile, is left as it is.
 func (r *CassandraClusterReconciler) updateClusterStatus(
-	ctx context.Context, ccStatus, cc *v1alpha1.CassandraCluster, clusterReady bool,
+	ctx context.Context, snapshot, cc *v1alpha1.CassandraCluster, clusterReady bool,
 ) {
-	// the paused repairs record is written during the reconcile, which also changes the resource version
-	ccStatus.Status.PausedRepairs = cc.Status.PausedRepairs
-	ccStatus.ResourceVersion = cc.ResourceVersion
 	recreated := cc.Status.RecreatedFromExistingPVCs
-	if ccStatus.Status.Ready == clusterReady && ccStatus.Status.RecreatedFromExistingPVCs == recreated {
+	if snapshot.Status.Ready == clusterReady && snapshot.Status.RecreatedFromExistingPVCs == recreated {
 		return
 	}
 
-	ccStatus.Status.Ready = clusterReady
-	ccStatus.Status.RecreatedFromExistingPVCs = recreated
-	if statusErr := r.Status().Update(ctx, ccStatus); statusErr != nil {
+	updated := snapshot.DeepCopy()
+	updated.Status.Ready = clusterReady
+	updated.Status.RecreatedFromExistingPVCs = recreated
+	if statusErr := r.Status().Patch(ctx, updated, client.MergeFrom(snapshot)); statusErr != nil {
 		r.Log.Errorf("Failed to update cluster readiness state: %#v", statusErr)
 	}
 }
