@@ -156,6 +156,10 @@ type Reaper struct {
 	// a rolling update of the Cassandra statefulsets (a pod template change), and resume exactly those
 	// once every statefulset has finished rolling. Repairs paused by hand are left alone.
 	PauseRepairsDuringRoll bool `json:"pauseRepairsDuringRoll,omitempty"`
+	// Also pause the active repair schedules that were not created by the operator (for example by hand in
+	// Reaper) when pauseRepairsDuringRoll is on. When false, only the operator's own schedules are paused.
+	// Defaults to true, because a schedule that fires during the roll stalls like any other repair.
+	PauseOtherSchedulesDuringRoll *bool `json:"pauseOtherSchedulesDuringRoll,omitempty"`
 }
 
 type HostPort struct {
