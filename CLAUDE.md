@@ -59,7 +59,7 @@ helm lint ./mr-cassop && helm template mr-cassop ./mr-cassop --namespace mr-cass
 
 ## Git and PRs
 
-- Never push to `main`. Branch, push, open a PR. CI must be green; merging needs review by two maintainers.
+- Never push to `main`. Branch, push, open a PR. CI must be green before merging. There is one contributor, so no reviewer is required: the "two maintainers" rule in CONTRIBUTING.md is not enforced (no branch protection), so don't list review counts as an open item.
 - PR title goes into release notes, so make it a clear one-liner. Add `Resolves #N`, a label (`enhancement`, `bug`; CONTRIBUTING also lists `breaking-change`, which doesn't exist in the repo yet), and document upgrade steps if users must act.
 - Note behavior changes (startup, scale up/down, decommission, upgrade) in the PR description, and ask the user before making one.
 - A function over 20 lines needs its exception justified in the PR description or a comment above it.
