@@ -186,6 +186,12 @@ func (r *reaperClient) DeleteCluster(ctx context.Context) error {
 	}
 
 	for _, repairSchedule := range repairSchedules {
+		// Reaper refuses to delete an ACTIVE schedule (409), so pause it first.
+		err = r.SetRepairScheduleState(ctx, repairSchedule.ID, false)
+		if err != nil {
+			return errors.Wrapf(err, "can't pause repair schedule %s for keyspace %s", repairSchedule.ID, repairSchedule.KeyspaceName)
+		}
+
 		err = r.DeleteRepairSchedule(ctx, repairSchedule.ID)
 		if err != nil {
 			return errors.Wrapf(err, "can't delete repair schedule %s for keyspace %s", repairSchedule.ID, repairSchedule.KeyspaceName)
