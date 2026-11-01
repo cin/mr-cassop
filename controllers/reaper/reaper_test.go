@@ -307,3 +307,26 @@ func TestDeleteClusterPausesSchedulesBeforeDeleting(t *testing.T) {
 	asserts.Expect(clusterDeleted).To(BeTrue())
 	asserts.Expect(calls).To(ContainElements("PUT /repair_schedule/s1", "DELETE /repair_schedule/s1"))
 }
+
+func TestDeleteClusterLeavesSchedulesOwnedByOthers(t *testing.T) {
+	asserts := NewWithT(t)
+
+	var calls []string
+	rc := newTestReaperClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_run":
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repair_schedule":
+			_, _ = w.Write([]byte(`[{"id":"ours","owner":"mr-cassop","state":"ACTIVE"},{"id":"theirs","owner":"alice","state":"ACTIVE"}]`))
+		}
+	})
+
+	err := rc.DeleteCluster(context.Background())
+
+	asserts.Expect(err).To(HaveOccurred())
+	asserts.Expect(err.Error()).To(ContainSubstring(`theirs (owner "alice")`))
+	asserts.Expect(calls).To(ContainElements("PUT /repair_schedule/ours", "DELETE /repair_schedule/ours"))
+	asserts.Expect(calls).NotTo(ContainElement(ContainSubstring("/repair_schedule/theirs")))
+	asserts.Expect(calls).NotTo(ContainElement("DELETE /cluster/test-cluster"))
+}

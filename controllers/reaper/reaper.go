@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -166,7 +167,34 @@ func (r *reaperClient) Clusters(ctx context.Context) ([]string, error) {
 }
 
 func (r *reaperClient) DeleteCluster(ctx context.Context) error {
-	// ensure no repair are running
+	if err := r.deleteRepairRuns(ctx); err != nil {
+		return err
+	}
+
+	if err := r.deleteOperatorRepairSchedules(ctx); err != nil {
+		return err
+	}
+
+	route := r.url("/cluster/" + r.clusterName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, route, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return err
+	}
+	b, _ := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return &requestFailedWithStatus{code: resp.StatusCode, message: string(b)}
+	}
+
+	return nil
+}
+
+// deleteRepairRuns ensures no repair runs exist, each deleted with its own owner.
+func (r *reaperClient) deleteRepairRuns(ctx context.Context) error {
 	repairRuns, err := r.getRepairRuns(ctx, "")
 	if err != nil {
 		return err
@@ -179,39 +207,38 @@ func (r *reaperClient) DeleteCluster(ctx context.Context) error {
 		}
 	}
 
-	// ensure no repair schedules exist
+	return nil
+}
+
+// deleteOperatorRepairSchedules pauses and deletes the schedules the operator owns. Schedules owned by
+// anyone else are left untouched, but Reaper refuses to remove a cluster that still has schedules, so
+// they are reported in the returned error instead of failing later with a bare 409.
+func (r *reaperClient) deleteOperatorRepairSchedules(ctx context.Context) error {
 	repairSchedules, err := r.RepairSchedules(ctx)
 	if err != nil {
 		return err
 	}
 
+	foreign := make([]string, 0)
 	for _, repairSchedule := range repairSchedules {
+		if repairSchedule.Owner != OwnerCassandraOperator {
+			foreign = append(foreign, fmt.Sprintf("%s (owner %q)", repairSchedule.ID, repairSchedule.Owner))
+			continue
+		}
+
 		// Reaper refuses to delete an ACTIVE schedule (409), so pause it first.
-		err = r.SetRepairScheduleState(ctx, repairSchedule.ID, false)
-		if err != nil {
+		if err = r.SetRepairScheduleState(ctx, repairSchedule.ID, false); err != nil {
 			return errors.Wrapf(err, "can't pause repair schedule %s for keyspace %s", repairSchedule.ID, repairSchedule.KeyspaceName)
 		}
 
-		err = r.DeleteRepairSchedule(ctx, repairSchedule.ID)
-		if err != nil {
+		if err = r.DeleteRepairSchedule(ctx, repairSchedule.ID); err != nil {
 			return errors.Wrapf(err, "can't delete repair schedule %s for keyspace %s", repairSchedule.ID, repairSchedule.KeyspaceName)
 		}
 	}
 
-	route := r.url("/cluster/" + r.clusterName)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, route, nil)
-	if err != nil {
-		return err
-	}
-	req = req.WithContext(ctx)
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return err
-	}
-	b, _ := io.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return &requestFailedWithStatus{code: resp.StatusCode, message: string(b)}
+	if len(foreign) > 0 {
+		return errors.Errorf("reaper can't remove cluster %s while it has repair schedules not owned by the operator, delete them in reaper first: %s",
+			r.clusterName, strings.Join(foreign, ", "))
 	}
 
 	return nil
