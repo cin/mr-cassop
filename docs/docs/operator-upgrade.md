@@ -51,3 +51,14 @@ reconcile; no pod is restarted. A node drain is then held back while a Cassandra
 `policy` `poddisruptionbudgets` permissions, which the chart upgrade applies.
 
 To keep the previous behavior, set `podDisruptionBudget.defaultEnabled: false` in the Helm values, or `enabled: false` on a cluster.
+
+### Distroless operator and Prober images (unreleased)
+
+The operator and Prober images are now built on `gcr.io/distroless/static-debian13:nonroot` instead of `debian:trixie-slim`.
+They are about 80 MB smaller and contain no shell, package manager or libc. Nothing changes for the chart or the
+`CassandraCluster`; the Prober pod restarts once with the new image.
+
+- `kubectl exec` into the operator or Prober pod no longer works, because there is no shell. Use an ephemeral container
+  instead, for example `kubectl debug -it <pod> --image=busybox --target=<container>`.
+- The Prober now runs as UID/GID `65532` (the base image's `nonroot` user) instead of `901`. It has no volumes and writes no
+  files, so no action is needed. The operator keeps running as `901`, which the chart sets in the pod `securityContext`.
