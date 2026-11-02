@@ -21,6 +21,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GO111MODULE=on \
 
 # The operator writes client TLS material and webhook certs under $HOME. Distroless sets no HOME and
 # has no home directory for its nonroot user, so it is created here and HOME is set explicitly.
+# The directory is world-writable because the image's own user is 65532 but the
+# chart, and older manifests, run the operator as 901 without mounting a volume at $HOME.
 RUN mkdir -p /home/mr-cassop
 
 # The binary is static (CGO_ENABLED=0) and runs no shell commands, so it needs no libc, shell or
@@ -31,7 +33,7 @@ FROM gcr.io/distroless/static-debian13:nonroot
 
 WORKDIR /
 
-COPY --from=builder --chown=65532:65532 /home/mr-cassop /home/mr-cassop
+COPY --from=builder --chown=65532:65532 --chmod=0777 /home/mr-cassop /home/mr-cassop
 COPY --from=builder /workspace/bin/mr-cassop .
 
 ENV HOME=/home/mr-cassop
