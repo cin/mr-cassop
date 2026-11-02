@@ -14,24 +14,17 @@ ARG TARGETARCH=amd64
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GO111MODULE=on \
     go build \
     -ldflags "-X main.Version=$VERSION" \
-    -a \
     -o prober .
 
-FROM debian:trixie-slim
+# The binary is static (CGO_ENABLED=0), writes no files and runs no shell commands, so it needs no
+# libc, shell or package manager. distroless/static ships the CA certificates. The image runs as
+# its own nonroot user (UID/GID 65532), which is in the image's passwd and group files so the
+# primary group resolves too. On Kubernetes with containerd (seen on kind), a numeric USER that is
+# missing from those files, such as 901:901, runs with GID 0; plain docker run gives the right GID.
+FROM gcr.io/distroless/static-debian13:nonroot
 
 WORKDIR /
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y ca-certificates && \
-    update-ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN groupadd --gid 901 prober && \
-    useradd --uid 901 --gid 901 --create-home prober
-
-USER prober
-
 COPY --from=builder /build/prober/prober .
 
-CMD ["./prober"]
+ENTRYPOINT ["/prober"]
