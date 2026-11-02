@@ -321,7 +321,7 @@ func jolokiaContainer(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1.Secre
 		container.Env = []v1.EnvVar{
 			{
 				Name:  "CATALINA_OPTS",
-				Value: tlsJVMArgs(cc, clientTLSSecret),
+				Value: jmxClientTLSJVMArgs(cc, clientTLSSecret),
 			},
 		}
 
