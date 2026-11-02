@@ -548,6 +548,17 @@ func cassandraClientTLSVolume(cc *dbv1alpha1.CassandraCluster) v1.Volume {
 	}
 }
 
+// jmxClientEndpointIdentificationOff turns off the hostname check in the JVM's RMI-over-SSL client.
+// JMX clients (Jolokia, Reaper) connect to a node by pod IP, and the node certificate is shared by every
+// node (CN=localhost, SAN DNS:localhost), so the check can never pass. The server certificate must still
+// chain to the cluster CA, and with requireClientAuth the node verifies the client certificate as well.
+const jmxClientEndpointIdentificationOff = "-Djdk.rmi.ssl.client.enableEndpointIdentification=false"
+
+// jmxClientTLSJVMArgs is tlsJVMArgs plus the setting JMX clients that connect by IP need.
+func jmxClientTLSJVMArgs(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1.Secret) string {
+	return tlsJVMArgs(cc, clientTLSSecret) + " " + jmxClientEndpointIdentificationOff
+}
+
 func tlsJVMArgs(cc *dbv1alpha1.CassandraCluster, clientTLSSecret *v1.Secret) string {
 	return fmt.Sprintf("-Djavax.net.ssl.keyStore=%s/%s -Djavax.net.ssl.keyStorePassword=%s -Djavax.net.ssl.trustStore=%s/%s -Djavax.net.ssl.trustStorePassword=%s",
 		cassandraClientTLSDir, cc.Spec.Encryption.Client.NodeTLSSecret.KeystoreFileKey, strings.TrimRight(string(clientTLSSecret.Data[cc.Spec.Encryption.Client.NodeTLSSecret.KeystorePasswordKey]), "\r\n"),

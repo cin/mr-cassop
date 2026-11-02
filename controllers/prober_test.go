@@ -46,3 +46,53 @@ func TestReconcileProberServiceSelectorMatchesPodLabels(t *testing.T) {
 	// The Service's own metadata labels are informational and may still inherit the CR's labels.
 	asserts.Expect(svc.Labels).To(HaveKeyWithValue("app.kubernetes.io/managed-by", "argocd"))
 }
+
+// Regression test for the TLS JMX hostname check: Jolokia connects to a node's JMX by pod IP, but the
+// node certificate is shared by all nodes (CN=localhost, SAN DNS:localhost), so a JVM that checks the
+// hostname on the RMI-over-SSL connection can never connect and the Prober marks every pod unready.
+func TestJolokiaContainerTLSOptions(t *testing.T) {
+	g := NewWithT(t)
+
+	cc := &dbv1alpha1.CassandraCluster{}
+	cc.Spec.Encryption.Client.NodeTLSSecret = dbv1alpha1.NodeTLSSecret{
+		KeystoreFileKey:       "keystore.p12",
+		KeystorePasswordKey:   "keystore.password",
+		TruststoreFileKey:     "truststore.p12",
+		TruststorePasswordKey: "truststore.password",
+	}
+	secret := &v1.Secret{Data: map[string][]byte{
+		"keystore.password":   []byte("ks-pass\n"),
+		"truststore.password": []byte("ts-pass"),
+	}}
+
+	t.Run("client TLS disabled", func(t *testing.T) {
+		container := jolokiaContainer(cc, secret)
+		g.Expect(container.Env).To(BeEmpty())
+		g.Expect(container.VolumeMounts).To(BeEmpty())
+	})
+
+	t.Run("client TLS enabled", func(t *testing.T) {
+		tlsCC := cc.DeepCopy()
+		tlsCC.Spec.Encryption.Client.Enabled = true
+
+		container := jolokiaContainer(tlsCC, secret)
+		g.Expect(container.Env).To(HaveLen(1))
+		g.Expect(container.Env[0].Name).To(Equal("CATALINA_OPTS"))
+		opts := container.Env[0].Value
+		g.Expect(opts).To(ContainSubstring("-Djavax.net.ssl.keyStore=" + cassandraClientTLSDir + "/keystore.p12"))
+		g.Expect(opts).To(ContainSubstring("-Djavax.net.ssl.keyStorePassword=ks-pass "))
+		g.Expect(opts).To(ContainSubstring("-Djavax.net.ssl.trustStorePassword=ts-pass"))
+		g.Expect(opts).To(ContainSubstring("-Djdk.rmi.ssl.client.enableEndpointIdentification=false"))
+	})
+}
+
+// The setting only belongs on JMX clients. The Cassandra container is the JMX server and shares
+// tlsJVMArgs with the clients, so it must not carry the client-side option.
+func TestTLSJVMArgsDoNotDisableEndpointIdentification(t *testing.T) {
+	g := NewWithT(t)
+
+	cc := &dbv1alpha1.CassandraCluster{}
+	secret := &v1.Secret{}
+	g.Expect(tlsJVMArgs(cc, secret)).ToNot(ContainSubstring("enableEndpointIdentification"))
+	g.Expect(jmxClientTLSJVMArgs(cc, secret)).To(ContainSubstring("enableEndpointIdentification=false"))
+}
